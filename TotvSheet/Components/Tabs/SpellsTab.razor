@@ -160,7 +160,7 @@
         await Save();
     }
 
-    private void RollSpellAttack() => Dice.D20("Spell attack", C.SpellAttack());
+    private void RollSpellAttack() => Dice.D20("Spell attack", C.SpellAttack(), kind: RollKind.Attack);
 
     private async Task SetExpended(int idx, int value)
     {

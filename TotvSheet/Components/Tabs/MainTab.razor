@@ -17,7 +17,7 @@
             <div class="flex justify-center">
                 <Pips Count="Rules.MaxLuck" Large="true" Variant="luck" Label="Luck" @bind-Value="C.Luck" @bind-Value:after="Save" />
             </div>
-            <p class="muted text-xs text-center mt-1.5">Gain 1 when you fail a d20 test. Spend from the roll tray for +1 each.</p>
+            <p class="muted text-xs text-center mt-1.5">Gain 1 on a missed attack or failed save (once per turn; at 5 it resets to a d4). Spend from the roll tray: +1 each, or 3 to reroll.</p>
         </Box>
     </div>
 
@@ -226,7 +226,7 @@
     private void RollInitiative() => Dice.D20("Initiative", C.Initiative());
 
     private void Attack(Weapon w) =>
-        Dice.D20($"{w.Name} attack", C.AttackBonus(w), DamageExpr(w), $"{w.Name} damage ({w.DamageType})");
+        Dice.D20($"{w.Name} attack", C.AttackBonus(w), DamageExpr(w), $"{w.Name} damage ({w.DamageType})", RollKind.Attack);
 
     private void Damage(Weapon w) => Dice.Roll($"{w.Name} damage ({w.DamageType})", DamageExpr(w));
 
@@ -250,7 +250,7 @@
 
     private async Task RollDeathSave()
     {
-        var r = Dice.D20("Death save", 0);
+        var r = Dice.D20("Death save", 0, kind: RollKind.Save);
         if (r.Natural == 20) { C.CurrentHp = 1; C.DeathSuccesses = 0; C.DeathFailures = 0; }
         else if (r.Natural == 1) C.DeathFailures = Math.Min(3, C.DeathFailures + 2);
         else if (r.Natural >= 10) C.DeathSuccesses = Math.Min(3, C.DeathSuccesses + 1);

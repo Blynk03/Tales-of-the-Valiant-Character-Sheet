@@ -43,7 +43,7 @@
     };
 
     private void RollCheck() => Dice.D20($"{Rules.AbilityNames[A]} check", C.Mod(A));
-    private void RollSave() => Dice.D20($"{Rules.AbilityNames[A]} save", C.SaveBonus(A));
+    private void RollSave() => Dice.D20($"{Rules.AbilityNames[A]} save", C.SaveBonus(A), kind: RollKind.Save);
     private void RollSkill(string name) => Dice.D20($"{name} check", C.SkillBonus(name));
 
     private async Task ToggleSave()

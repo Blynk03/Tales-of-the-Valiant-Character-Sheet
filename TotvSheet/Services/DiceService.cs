@@ -20,6 +20,13 @@ public class RollResult
     public bool IsD20 { get; set; }
     public RollMode Mode { get; set; }
     public bool LuckGained { get; set; }
+    public RollKind Kind { get; set; } = RollKind.Check;
+    /// <summary>The d20 before it was rerolled with Luck.</summary>
+    public int? RerolledFrom { get; set; }
+    /// <summary>Luck spent on rerolls (not added to the total).</summary>
+    public int LuckOnReroll { get; set; }
+    /// <summary>When Luck was gained at the maximum: the d4 it was reset to.</summary>
+    public int? LuckResetTo { get; set; }
     /// <summary>For attack rolls: the damage to roll next from the tray.</summary>
     public string? DamageExpression { get; set; }
     public string? DamageLabel { get; set; }
@@ -29,6 +36,10 @@ public class RollResult
     public int Total => Dice.Sum() + Modifier + LuckSpent;
     public bool IsCrit => IsD20 && Natural == 20;
     public bool IsFumble => IsD20 && Natural == 1;
+    /// <summary>Luck can't change a natural 1.</summary>
+    public bool CanSpendLuck => IsD20 && !IsFumble;
+    /// <summary>Only attacks and saves (and custom d20 rolls, which could be either) can earn Luck.</summary>
+    public bool CanEarnLuck => IsD20 && Kind is RollKind.Attack or RollKind.Save or RollKind.Other;
 }
 
 /// <summary>Rolls dice and keeps a short history shown in the roll tray.</summary>
@@ -46,12 +57,13 @@ public class DiceService
     public int Die(int sides) => _rng.Next(1, sides + 1);
 
     /// <summary>A d20 test (check, save, attack) using the current advantage mode.</summary>
-    public RollResult D20(string label, int modifier, string? damageExpression = null, string? damageLabel = null)
+    public RollResult D20(string label, int modifier, string? damageExpression = null, string? damageLabel = null,
+        RollKind kind = RollKind.Check)
     {
         int a = Die(20), b = Die(20);
         var result = new RollResult
         {
-            Label = label, IsD20 = true, Modifier = modifier, Mode = Mode,
+            Label = label, IsD20 = true, Modifier = modifier, Mode = Mode, Kind = kind,
             DamageExpression = damageExpression, DamageLabel = damageLabel,
         };
         switch (Mode)
@@ -106,13 +118,53 @@ public class DiceService
     public RollResult RollPool(DicePool pool)
     {
         var label = $"Custom roll · {pool.ToDisplay()}";
-        return pool.IsSingleD20 ? D20(label, pool.Modifier) : Roll(label, pool.ToExpression());
+        return pool.IsSingleD20 ? D20(label, pool.Modifier, kind: RollKind.Other) : Roll(label, pool.ToExpression());
     }
 
     /// <summary>Repeats a roll from the history. d20 tests use the current advantage setting.</summary>
     public RollResult Reroll(RollResult r) => r.IsD20
-        ? D20(r.Label, r.Modifier, r.DamageExpression, r.DamageLabel)
+        ? D20(r.Label, r.Modifier, r.DamageExpression, r.DamageLabel, r.Kind)
         : Roll(r.Label, r.BaseExpression, r.Critical);
+
+    /// <summary>Spend Luck to reroll the d20 of an existing roll. The new die replaces the old one.</summary>
+    public bool LuckReroll(Character c, RollResult r)
+    {
+        if (!r.CanSpendLuck || c.Luck < Rules.LuckRerollCost) return false;
+        c.Luck -= Rules.LuckRerollCost;
+        r.RerolledFrom ??= r.Natural;
+        r.LuckOnReroll += Rules.LuckRerollCost;
+        r.Dice[0] = Die(20);
+        r.Dropped = null; // a reroll is a single d20
+        Changed?.Invoke();
+        return true;
+    }
+
+    /// <summary>Spend 1 Luck for +1 on a d20 roll.</summary>
+    public bool SpendLuck(Character c, RollResult r)
+    {
+        if (!r.CanSpendLuck || c.Luck <= 0) return false;
+        c.Luck--;
+        r.LuckSpent++;
+        Changed?.Invoke();
+        return true;
+    }
+
+    /// <summary>Gain 1 Luck after a missed attack or failed save, once per turn.
+    /// At the maximum, Luck resets to a d4 roll instead.</summary>
+    public bool GainLuck(Character c, RollResult r)
+    {
+        if (!r.CanEarnLuck || r.LuckGained || c.LuckGainedThisTurn) return false;
+        if (c.Luck >= Rules.MaxLuck)
+        {
+            c.Luck = Die(4);
+            r.LuckResetTo = c.Luck;
+        }
+        else c.Luck++;
+        r.LuckGained = true;
+        c.LuckGainedThisTurn = true;
+        Changed?.Invoke();
+        return true;
+    }
 
     public void Notify() => Changed?.Invoke();
 

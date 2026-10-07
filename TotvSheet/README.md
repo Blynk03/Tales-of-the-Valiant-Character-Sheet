@@ -29,10 +29,10 @@ dotnet publish -c Release
 | Area | Where |
 | --- | --- |
 | Five sheet tabs (Main, Equipment & Features, Magic Items & Holdings, Character, Spells) | `Components/Tabs/` |
-| Character creation wizard (name → lineage → heritage → background → class & skills → abilities → equipment → talent → review) | `Pages/Create.razor` |
-| Level up dialog (HP average/roll, subclass pick, ability increase, talent, new features and spell slots) | `Components/LevelUpDialog.razor` |
+| Character creation wizard (name → lineage → heritage with skill and language choices → background with skill and talent choices → class & skills → abilities: ToV standard array, 32-point buy or rolled with +2/+1 → equipment → talent → review) | `Pages/Create.razor` |
+| Level up dialog (HP average/roll, subclass pick, Improvement: +2, +1/+1 or +1 and a talent from the class list, new features, scaling feature uses and spell slots, including subclass spellcasting) | `Components/LevelUpDialog.razor` |
 | Content library / settings (add, edit, customize, copy, delete, enable/disable sources, import/export, JSON editor) | `Pages/Settings.razor`, `Components/Editors/ObjectEditor.razor` |
-| Roll tray (advantage/disadvantage, spend Luck +1, gain Luck on a failure, attack → damage/crit, re-roll from history) | `Components/RollTray.razor` |
+| Roll tray (advantage/disadvantage; Luck per the Player's Guide: gain on a missed attack or failed save once per turn, reset to d4 at 5, spend +1 or 3 to reroll, never on a natural 1; attack → damage/crit, re-roll from history) | `Components/RollTray.razor` |
 | Dice picker (pick d4–d100, modifier, typed rolls like `2d8+1d6+3`) | `Models/DicePool.cs`, `Components/RollTray.razor` |
 | All derived values (modifiers, saves, skills, passives, AC, attack/damage, spell DC) | `Models/Rules.cs` |
 | Creation, level up, rests, damage and healing rules | `Services/CharacterBuilder.cs` |

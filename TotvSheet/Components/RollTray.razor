@@ -86,18 +86,36 @@
             <div class="flex flex-wrap gap-1.5 mt-2">
                 @if (r.IsD20)
                 {
-                    <button type="button" class="btn btn-sm btn-gold" disabled="@(C.Luck <= 0)" @onclick="() => SpendLuck(r)"
-                            title="Spend 1 Luck to add +1 to this roll">Spend Luck +1 · @C.Luck</button>
-                    <button type="button" class="btn btn-sm" disabled="@(r.LuckGained || C.Luck >= Rules.MaxLuck)" @onclick="() => GainLuck(r)"
-                            title="You gain 1 Luck when you fail a d20 test">Failed · +1 Luck</button>
+                    <button type="button" class="btn btn-sm btn-gold" disabled="@(!r.CanSpendLuck || C.Luck <= 0)" @onclick="() => SpendLuck(r)"
+                            title="Spend 1 Luck to add +1 to this roll">Luck +1 · @C.Luck</button>
+                    <button type="button" class="btn btn-sm btn-gold" disabled="@(!r.CanSpendLuck || C.Luck < Rules.LuckRerollCost)" @onclick="() => LuckReroll(r)"
+                            title="Spend @Rules.LuckRerollCost Luck to reroll the d20">Reroll d20 · @Rules.LuckRerollCost Luck</button>
+                    if (r.CanEarnLuck)
+                    {
+                        <button type="button" class="btn btn-sm" disabled="@(r.LuckGained || C.LuckGainedThisTurn)" @onclick="() => GainLuck(r)"
+                                title="@(C.LuckGainedThisTurn && !r.LuckGained ? "You've already gained Luck this turn" : "Gain 1 Luck (once per turn)")">@GainText(r) · +1 Luck</button>
+                    }
                 }
                 <button type="button" class="btn btn-sm" title="Roll the same thing again" @onclick="() => Reroll(r)">↻ Again</button>
+                <button type="button" class="btn btn-sm" title="Start a new turn so Luck can be gained again" @onclick="NewTurn">New turn</button>
                 @if (r.DamageExpression is not null)
                 {
                     <button type="button" class="btn btn-sm btn-primary" @onclick="() => RollDamage(r, false)">Roll damage</button>
                     <button type="button" class="btn btn-sm" @onclick="() => RollDamage(r, true)">Crit damage</button>
                 }
             </div>
+            if (r.IsFumble)
+            {
+                <p class="text-xs muted mt-1">Luck can't change a natural 1.</p>
+            }
+            if (r.LuckResetTo is int reset)
+            {
+                <p class="text-xs mt-1" style="color:var(--good)">Luck was full, so it reset to a d4 roll: <span class="num">@reset</span>.</p>
+            }
+            else if (C.LuckGainedThisTurn)
+            {
+                <p class="text-xs muted mt-1">Luck gained this turn. Press New turn when your next turn starts.</p>
+            }
 
             if (Dice.History.Count > 1)
             {
@@ -107,7 +125,7 @@
                         var past = h;
                         <li class="flex items-center gap-2">
                             <span class="num w-8 text-right">@past.Total</span>
-                            <span class="muted truncate flex-1">@past.Label</span>
+                            <span class="muted truncate flex-1" title="@Breakdown(past)">@past.Label@LuckNote(past)</span>
                             <button type="button" class="icon-btn reroll" title="Re-roll @past.Label" aria-label="Re-roll @past.Label" @onclick="() => Reroll(past)">↻</button>
                         </li>
                     }
@@ -146,7 +164,9 @@
     private static string Breakdown(RollResult r)
     {
         var dice = r.IsD20
-            ? $"d20 [{r.Natural}]" + (r.Dropped is int d ? $" ({r.Mode.ToString().ToLower()}, dropped {d})" : "")
+            ? (r.RerolledFrom is int was
+                ? $"d20 [{was} → {r.Natural}] (rerolled with {r.LuckOnReroll} Luck)"
+                : $"d20 [{r.Natural}]" + (r.Dropped is int d ? $" ({r.Mode.ToString().ToLower()}, dropped {d})" : ""))
             : GroupedDice(r) + (r.Critical ? " (crit)" : "");
         var mod = r.Modifier != 0 && r.IsD20 ? $" {Rules.Signed(r.Modifier)}" : (!r.IsD20 && r.Modifier != 0 ? $" {Rules.Signed(r.Modifier)}" : "");
         var luck = r.LuckSpent > 0 ? $" +{r.LuckSpent} Luck" : "";
@@ -230,19 +250,41 @@
 
     private void Reroll(RollResult r) => Dice.Reroll(r);
 
+    /// <summary>Short note in the history when Luck changed a roll, e.g. " · d20 7→15, +1 Luck".</summary>
+    private static string LuckNote(RollResult r)
+    {
+        var parts = new List<string>();
+        if (r.RerolledFrom is int was) parts.Add($"d20 {was}→{r.Natural} ({r.LuckOnReroll} Luck)");
+        if (r.LuckSpent > 0) parts.Add($"+{r.LuckSpent} Luck");
+        return parts.Count == 0 ? "" : " · " + string.Join(", ", parts);
+    }
+
+    private static string GainText(RollResult r) => r.Kind switch
+    {
+        RollKind.Attack => "Missed",
+        RollKind.Save => "Failed",
+        _ => "Missed / failed",
+    };
+
     private async Task SpendLuck(RollResult r)
     {
-        if (C.Luck <= 0) return;
-        C.Luck--;
-        r.LuckSpent++;
-        await Changed.InvokeAsync();
+        if (Dice.SpendLuck(C, r)) await Changed.InvokeAsync();
+    }
+
+    private async Task LuckReroll(RollResult r)
+    {
+        if (Dice.LuckReroll(C, r)) await Changed.InvokeAsync();
     }
 
     private async Task GainLuck(RollResult r)
     {
-        if (C.Luck >= Rules.MaxLuck || r.LuckGained) return;
-        C.Luck++;
-        r.LuckGained = true;
+        if (Dice.GainLuck(C, r)) await Changed.InvokeAsync();
+    }
+
+    private async Task NewTurn()
+    {
+        if (!C.LuckGainedThisTurn) return;
+        C.LuckGainedThisTurn = false;
         await Changed.InvokeAsync();
     }
 

@@ -1,0 +1,30 @@
+@* Pick N skills from a list. Skills the character already has are shown as granted and can't be picked again. *@
+<div class="flex flex-wrap gap-1.5" role="group" aria-label="Skill choices">
+    @foreach (var s in Options)
+    {
+        var skill = s;
+        var owned = Owned?.Contains(skill) == true && !Selected.Contains(skill);
+        var picked = Selected.Contains(skill);
+        <button type="button" class="btn btn-sm @(picked || owned ? "btn-primary" : "")" aria-pressed="@(picked ? "true" : "false")"
+                disabled="@(owned || (!picked && Selected.Count >= Choices))"
+                title="@(owned ? OwnedNote : "")" @onclick="() => Toggle(skill)">
+            @skill@(owned ? " ✓" : "")
+        </button>
+    }
+</div>
+<p class="muted text-sm mt-1">@Selected.Count of @Choices chosen.</p>
+
+@code {
+    [Parameter, EditorRequired] public List<string> Options { get; set; } = new();
+    [Parameter] public int Choices { get; set; }
+    [Parameter, EditorRequired] public HashSet<string> Selected { get; set; } = new();
+    [Parameter] public HashSet<string>? Owned { get; set; }
+    [Parameter] public string OwnedNote { get; set; } = "Already granted";
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private async Task Toggle(string skill)
+    {
+        if (!Selected.Remove(skill) && Selected.Count < Choices) Selected.Add(skill);
+        await Changed.InvokeAsync();
+    }
+}

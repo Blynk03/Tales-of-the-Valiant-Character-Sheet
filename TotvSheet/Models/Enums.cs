@@ -11,3 +11,6 @@ public enum ArmorCategory { None, Light, Medium, Heavy }
 public enum TalentCategory { Magic, Martial, Technical }
 
 public enum RollMode { Normal, Advantage, Disadvantage }
+
+/// <summary>What a d20 roll was for. Luck is gained only on a missed attack or a failed save.</summary>
+public enum RollKind { Check, Save, Attack, Other }

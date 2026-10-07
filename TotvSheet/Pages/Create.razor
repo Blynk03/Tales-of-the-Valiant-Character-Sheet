@@ -61,31 +61,97 @@
                     @foreach (var h in Content.Heritages)
                     {
                         var her = h;
-                        <button type="button" class="choice @(ch.Heritage?.Id == her.Id ? "selected" : "")" @onclick="() => ch.Heritage = her">
+                        <button type="button" class="choice @(ch.Heritage?.Id == her.Id ? "selected" : "")" @onclick="() => PickHeritage(her)">
                             <div class="flex items-center gap-2"><span class="font-semibold">@her.Name</span><span class="chip ml-auto">@her.Source</span></div>
-                            <div class="text-sm muted">Languages: @her.Languages</div>
+                            <div class="text-sm muted">Languages: @her.Languages@(her.LanguageChoices > 0 ? $" + {her.LanguageChoices} of your choice" : "")</div>
                             <div class="text-sm mt-1">@her.Description</div>
                             <TraitList Traits="her.Traits" />
                         </button>
                     }
                 </div>
+                if (ch.Heritage is { } herChosen)
+                {
+                    if (herChosen.SkillProficiencies.Count > 0)
+                    {
+                        <p class="mt-4 text-sm"><span class="lbl">Granted skills:</span> @string.Join(", ", herChosen.SkillProficiencies)</p>
+                    }
+                    if (herChosen.SkillChoices > 0 && herChosen.SkillOptions.Count > 0)
+                    {
+                        <h3 class="box-title text-left mt-5">@herChosen.Name skills: choose @HeritageSkillsNeeded()</h3>
+                        <SkillPicker Options="herChosen.SkillOptions" Choices="HeritageSkillsNeeded()" Selected="ch.HeritageSkills"
+                                     Owned="herChosen.SkillProficiencies.ToHashSet()" OwnedNote="Already granted by your heritage" Changed="PruneSkills" />
+                    }
+                    if (herChosen.LanguageChoices > 0)
+                    {
+                        <h3 class="box-title text-left mt-5">Extra languages: choose @herChosen.LanguageChoices</h3>
+                        <div class="grid sm:grid-cols-2 gap-2">
+                            @for (int i = 0; i < herChosen.LanguageChoices; i++)
+                            {
+                                var li = i;
+                                <input class="field" aria-label="Language @(li + 1)" placeholder="Language @(li + 1)" autocomplete="off"
+                                       value="@(li < ch.HeritageLanguages.Count ? ch.HeritageLanguages[li] : "")" @onchange="e => SetLanguage(li, e.Value?.ToString())" />
+                            }
+                        </div>
+                        <p class="muted text-xs mt-1">See the heritage's traits for typical choices.</p>
+                    }
+                }
                 break;
 
             case 3:
                 <h2 class="box-title text-left">Choose a background</h2>
-                <p class="muted text-sm mb-3">What you did before adventuring: skills, tools, equipment and your ability increases.</p>
+                <p class="muted text-sm mb-3">What you did before adventuring: skills, tools, equipment and a talent.</p>
                 <div class="grid sm:grid-cols-2 gap-2">
                     @foreach (var b in Content.Backgrounds)
                     {
                         var bg = b;
                         <button type="button" class="choice @(ch.Background?.Id == bg.Id ? "selected" : "")" @onclick="() => PickBackground(bg)">
                             <div class="flex items-center gap-2"><span class="font-semibold">@bg.Name</span><span class="chip ml-auto">@bg.Source</span></div>
-                            <div class="text-sm muted">Skills: @string.Join(", ", bg.SkillProficiencies)@(string.IsNullOrEmpty(bg.ToolProficiencies) ? "" : $" · Tools: {bg.ToolProficiencies}")</div>
+                            <div class="text-sm muted">Skills: @BackgroundSkillText(bg)@(string.IsNullOrEmpty(bg.ToolProficiencies) ? "" : $" · Tools: {bg.ToolProficiencies}")</div>
                             <div class="text-sm mt-1">@bg.Description</div>
                             <TraitList Traits="bg.Traits" />
                         </button>
                     }
                 </div>
+                if (ch.Background is { } bgChosen)
+                {
+                    if (bgChosen.SkillProficiencies.Count > 0)
+                    {
+                        <p class="mt-4 text-sm"><span class="lbl">Granted skills:</span> @string.Join(", ", bgChosen.SkillProficiencies)</p>
+                    }
+                    if (bgChosen.SkillChoices > 0 && bgChosen.SkillOptions.Count > 0)
+                    {
+                        <h3 class="box-title text-left mt-4">@bgChosen.Name skills: choose @BackgroundSkillsNeeded()</h3>
+                        <SkillPicker Options="bgChosen.SkillOptions" Choices="BackgroundSkillsNeeded()" Selected="ch.BackgroundSkills"
+                                     Owned="OwnedSkills(includeBackground: false)" OwnedNote="Already granted by your heritage or background" Changed="PruneSkills" />
+                    }
+                    if (bgChosen.TalentOptions.Count > 0)
+                    {
+                        <h3 class="box-title text-left mt-5">@bgChosen.Name talent: choose 1</h3>
+                        <div class="grid sm:grid-cols-3 gap-2" role="radiogroup" aria-label="Background talent">
+                            @foreach (var tid in bgChosen.TalentOptions)
+                            {
+                                var talentId = tid;
+                                var opt = Content.Talent(talentId);
+                                if (opt is null)
+                                {
+                                    <div class="choice opacity-60" title="Not in your enabled content">
+                                        <div class="font-semibold">@talentId</div>
+                                        <div class="text-xs muted">Unavailable: add or enable this talent in Content.</div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    var optTalent = opt;
+                                    <button type="button" role="radio" aria-checked="@(ch.BackgroundTalent?.Id == optTalent.Id ? "true" : "false")"
+                                            class="choice @(ch.BackgroundTalent?.Id == optTalent.Id ? "selected" : "")" @onclick="() => ch.BackgroundTalent = optTalent">
+                                        <div class="flex items-center gap-2"><span class="font-semibold">@optTalent.Name</span><span class="chip ml-auto">@optTalent.Category</span></div>
+                                        <div class="text-sm muted">@optTalent.Description</div>
+                                    </button>
+                                }
+                            }
+                        </div>
+                    }
+                }
                 break;
 
             case 4:
@@ -108,11 +174,11 @@
                         @foreach (var s in chosen.SkillOptions)
                         {
                             var skill = s;
-                            var fromBg = ch.Background?.SkillProficiencies.Contains(skill) == true;
+                            var fromBg = OwnedSkills(includeBackground: true).Contains(skill);
                             var picked = ch.ClassSkills.Contains(skill);
                             <button type="button" class="btn btn-sm @(picked || fromBg ? "btn-primary" : "")"
                                     disabled="@(fromBg || (!picked && ch.ClassSkills.Count >= chosen.SkillChoices))"
-                                    title="@(fromBg ? "Already granted by your background" : "")" @onclick="() => ToggleSkill(skill)">@skill</button>
+                                    title="@(fromBg ? "Already granted by your heritage or background" : "")" @onclick="() => ToggleSkill(skill)">@skill</button>
                         }
                     </div>
                     <p class="muted text-sm mt-1">@ch.ClassSkills.Count of @chosen.SkillChoices chosen.</p>
@@ -134,10 +200,21 @@
                 }
                 if (method == "roll")
                 {
-                    <p class="text-sm mb-2">
+                    <div class="text-sm mb-2">
                         <button type="button" class="btn btn-sm btn-gold" @onclick="RollPool">Roll six scores</button>
-                        <span class="ml-2 num">@string.Join(", ", pool)</span>
-                    </p>
+                        @if (rolls.Count > 0)
+                        {
+                            <ul class="flex flex-wrap gap-1.5 mt-2" aria-label="Rolled scores">
+                                @foreach (var roll in rolls)
+                                {
+                                    <li class="chip num" title="4d6, lowest die dropped">
+                                        <span class="font-semibold">@roll.Take(3).Sum()</span>
+                                        <span class="muted">[@string.Join(", ", roll.Take(3))<s class="ml-1">@roll[3]</s>]</span>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </div>
                 }
                 if (method is "standard" or "roll")
                 {
@@ -164,9 +241,9 @@
                             else if (method == "pointbuy")
                             {
                                 <div class="flex items-center justify-center gap-1">
-                                    <button type="button" class="icon-btn" disabled="@(ch.BaseScores[(int)ab] <= 8)" @onclick="() => Bump(ab, -1)">−</button>
+                                    <button type="button" class="icon-btn" aria-label="Lower @ab" disabled="@(ch.BaseScores[(int)ab] <= Rules.PointBuyMin)" @onclick="() => Bump(ab, -1)">−</button>
                                     <span class="num text-xl w-8">@ch.BaseScores[(int)ab]</span>
-                                    <button type="button" class="icon-btn" disabled="@(ch.BaseScores[(int)ab] >= 15 || PointsLeft() < Rules.PointBuyCost(ch.BaseScores[(int)ab] + 1) - Rules.PointBuyCost(ch.BaseScores[(int)ab]))" @onclick="() => Bump(ab, 1)">+</button>
+                                    <button type="button" class="icon-btn" aria-label="Raise @ab" disabled="@(!CanRaise(ab))" @onclick="() => Bump(ab, 1)">+</button>
                                 </div>
                             }
                             else
@@ -182,30 +259,33 @@
                     }
                 </div>
 
-                <h3 class="box-title text-left mt-5">Background increases</h3>
-                <p class="muted text-sm mb-2">Your background raises one ability by 2 and another by 1.</p>
-                <div class="grid sm:grid-cols-2 gap-3">
-                    <div>
-                        <label class="lbl">+2 to</label>
-                        <select class="select" value="@(ch.PlusTwo?.ToString() ?? "")" @onchange="e => ch.PlusTwo = ParseAbility(e.Value)">
-                            <option value="">—</option>
-                            @foreach (var a in BonusOptions())
-                            {
-                                <option value="@a" disabled="@(ch.PlusOne == a)">@Rules.AbilityNames[a]</option>
-                            }
-                        </select>
+                if (method == "roll")
+                {
+                    <h3 class="box-title text-left mt-5">Rolled score bonus</h3>
+                    <p class="muted text-sm mb-2">Add +2 to one score of @Rules.RolledPlusTwoMax or lower, and +1 to a different score of @Rules.RolledPlusOneMax or lower.</p>
+                    <div class="grid sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="lbl" for="plus-two">+2 to</label>
+                            <select id="plus-two" class="select" value="@(ch.PlusTwo?.ToString() ?? "")" @onchange="e => ch.PlusTwo = ParseAbility(e.Value)">
+                                <option value="">—</option>
+                                @foreach (var a in Rules.Abilities)
+                                {
+                                    <option value="@a" disabled="@(ch.PlusOne == a || ch.BaseScores[(int)a] > Rules.RolledPlusTwoMax)">@Rules.AbilityNames[a] (@ch.BaseScores[(int)a])</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label class="lbl" for="plus-one">+1 to</label>
+                            <select id="plus-one" class="select" value="@(ch.PlusOne?.ToString() ?? "")" @onchange="e => ch.PlusOne = ParseAbility(e.Value)">
+                                <option value="">—</option>
+                                @foreach (var a in Rules.Abilities)
+                                {
+                                    <option value="@a" disabled="@(ch.PlusTwo == a || ch.BaseScores[(int)a] > Rules.RolledPlusOneMax)">@Rules.AbilityNames[a] (@ch.BaseScores[(int)a])</option>
+                                }
+                            </select>
+                        </div>
                     </div>
-                    <div>
-                        <label class="lbl">+1 to</label>
-                        <select class="select" value="@(ch.PlusOne?.ToString() ?? "")" @onchange="e => ch.PlusOne = ParseAbility(e.Value)">
-                            <option value="">—</option>
-                            @foreach (var a in BonusOptions())
-                            {
-                                <option value="@a" disabled="@(ch.PlusTwo == a)">@Rules.AbilityNames[a]</option>
-                            }
-                        </select>
-                    </div>
-                </div>
+                }
                 break;
 
             case 6:
@@ -244,9 +324,9 @@
 
             case 7:
                 <h2 class="box-title text-left">Talent</h2>
-                if (Content.Talent(ch.Background?.TalentId ?? "") is { } bgTalent)
+                foreach (var bgTalent in new[] { Content.Talent(ch.Background?.TalentId ?? ""), ch.BackgroundTalent }.OfType<TalentDef>().DistinctBy(t => t.Id))
                 {
-                    <p class="mb-3">Your background grants <span class="font-semibold">@bgTalent.Name</span>. <span class="muted text-sm">@bgTalent.Description</span></p>
+                    <p class="mb-2">Your background grants <span class="font-semibold">@bgTalent.Name</span>. <span class="muted text-sm">@bgTalent.Description</span></p>
                 }
                 <p class="muted text-sm mb-2">Pick an additional talent if your lineage or GM grants one, or skip this step.</p>
                 <div class="grid sm:grid-cols-2 gap-2">
@@ -334,6 +414,7 @@
     private string method = "standard";
     private List<int> pool = Rules.StandardArray.ToList();
     private int?[] assign = new int?[6];
+    private List<int[]> rolls = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -349,12 +430,18 @@
     {
         1 when ch.Lineage is null => "Choose a lineage.",
         2 when ch.Heritage is null => "Choose a heritage.",
+        2 when ch.HeritageSkills.Count < HeritageSkillsNeeded() => $"Choose {HeritageSkillsNeeded() - ch.HeritageSkills.Count} more heritage skill(s).",
+        2 when ch.HeritageLanguages.Count(l => !string.IsNullOrWhiteSpace(l)) < (ch.Heritage?.LanguageChoices ?? 0) => "Fill in your extra languages.",
         3 when ch.Background is null => "Choose a background.",
+        3 when ch.BackgroundSkills.Count < BackgroundSkillsNeeded() => $"Choose {BackgroundSkillsNeeded() - ch.BackgroundSkills.Count} more background skill(s).",
+        3 when NeedsBackgroundTalent() => "Choose a background talent.",
         4 when ch.Class is null => "Choose a class.",
         4 when ch.ClassSkills.Count < SkillsNeeded() => $"Choose {SkillsNeeded() - ch.ClassSkills.Count} more skill(s).",
+        5 when method == "roll" && pool.Count == 0 => "Roll your scores.",
         5 when (method is "standard" or "roll") && assign.Any(a => a is null) => "Assign a value to every ability.",
         5 when method == "pointbuy" && PointsLeft() < 0 => "You've spent too many points.",
-        5 when ch.PlusTwo is null || ch.PlusOne is null => "Pick your background increases.",
+        5 when method == "roll" && (ch.PlusTwo is null || ch.PlusOne is null) => "Pick your +2 and +1.",
+        5 when method == "roll" && !RolledBonusValid() => "The +2 needs a score of 16 or lower and the +1 a score of 17 or lower.",
         _ => null
     };
 
@@ -378,23 +465,90 @@
         if (ch.Heritage is null) yield return "No heritage chosen.";
         if (ch.Background is null) yield return "No background chosen.";
         if (ch.Class is null) yield return "No class chosen.";
-        if (ch.PlusTwo is null || ch.PlusOne is null) yield return "Background ability increases not chosen.";
+        if (ch.BackgroundSkills.Count < BackgroundSkillsNeeded()) yield return "Background skills not chosen.";
+        if (NeedsBackgroundTalent()) yield return "Background talent not chosen.";
+        if (ch.HeritageSkills.Count < HeritageSkillsNeeded()) yield return "Heritage skills not chosen.";
+        if (method == "roll" && (ch.PlusTwo is null || ch.PlusOne is null || !RolledBonusValid())) yield return "Rolled score bonus not chosen.";
     }
 
     private int SkillsNeeded()
     {
         if (ch.Class is null) return 0;
-        // Skills already granted by the background can't be picked again, so don't require more than are available.
-        var available = ch.Class.SkillOptions.Count(s => ch.Background?.SkillProficiencies.Contains(s) != true);
+        // Skills already granted elsewhere can't be picked again, so don't require more than are available.
+        var owned = OwnedSkills(includeBackground: true);
+        var available = ch.Class.SkillOptions.Count(s => !owned.Contains(s));
         return Math.Min(ch.Class.SkillChoices, available);
+    }
+
+    /// <summary>A talent pick is required only when at least one option exists in the enabled content.</summary>
+    private bool NeedsBackgroundTalent() =>
+        ch.Background is { } bg && ch.BackgroundTalent is null && bg.TalentOptions.Any(id => Content.Talent(id) is not null);
+
+    /// <summary>After an earlier step's skills change, drop later picks that are now granted twice.</summary>
+    private void PruneSkills()
+    {
+        var beforeBg = OwnedSkills(includeBackground: false);
+        ch.BackgroundSkills.RemoveWhere(beforeBg.Contains);
+        var all = OwnedSkills(includeBackground: true);
+        ch.ClassSkills.RemoveWhere(all.Contains);
+    }
+
+    private int HeritageSkillsNeeded() =>
+        ch.Heritage is { } h
+            ? Math.Min(h.SkillChoices, h.SkillOptions.Count(s => !h.SkillProficiencies.Contains(s) || ch.HeritageSkills.Contains(s)))
+            : 0;
+
+    private int BackgroundSkillsNeeded()
+    {
+        if (ch.Background is not { } bg) return 0;
+        var owned = OwnedSkills(includeBackground: false);
+        return Math.Min(bg.SkillChoices, bg.SkillOptions.Count(s => !owned.Contains(s) || ch.BackgroundSkills.Contains(s)));
+    }
+
+    /// <summary>Skills already granted before the current step: heritage picks and,
+    /// optionally, the background's fixed and chosen skills.</summary>
+    private HashSet<string> OwnedSkills(bool includeBackground)
+    {
+        var set = new HashSet<string>(ch.HeritageSkills);
+        if (ch.Heritage is { } her) set.UnionWith(her.SkillProficiencies);
+        if (ch.Background is { } bg)
+        {
+            set.UnionWith(bg.SkillProficiencies);
+            if (includeBackground) set.UnionWith(ch.BackgroundSkills);
+        }
+        return set;
+    }
+
+    private static string BackgroundSkillText(BackgroundDef bg)
+    {
+        var parts = new List<string>();
+        if (bg.SkillProficiencies.Count > 0) parts.Add(string.Join(", ", bg.SkillProficiencies));
+        if (bg.SkillChoices > 0 && bg.SkillOptions.Count > 0) parts.Add($"choose {bg.SkillChoices} of {string.Join(", ", bg.SkillOptions)}");
+        return parts.Count == 0 ? "—" : string.Join("; ", parts);
+    }
+
+    private void PickHeritage(HeritageDef her)
+    {
+        if (ch.Heritage?.Id == her.Id) return;
+        ch.Heritage = her;
+        ch.HeritageSkills.Clear();
+        ch.HeritageLanguages = new List<string>();
+        PruneSkills();
+    }
+
+    private void SetLanguage(int index, string? value)
+    {
+        while (ch.HeritageLanguages.Count <= index) ch.HeritageLanguages.Add("");
+        ch.HeritageLanguages[index] = value ?? "";
     }
 
     private void PickBackground(BackgroundDef bg)
     {
+        if (ch.Background?.Id == bg.Id) return;
         ch.Background = bg;
-        ch.ClassSkills.RemoveWhere(s => bg.SkillProficiencies.Contains(s));
-        if (ch.PlusTwo is Ability p2 && !BonusOptions().Contains(p2)) ch.PlusTwo = null;
-        if (ch.PlusOne is Ability p1 && !BonusOptions().Contains(p1)) ch.PlusOne = null;
+        ch.BackgroundSkills.Clear();
+        ch.BackgroundTalent = null;
+        PruneSkills();
     }
 
     private void PickClass(ClassDef cls)
@@ -425,8 +579,17 @@
 
     // ---------- ability scores ----------
 
-    private IEnumerable<Ability> BonusOptions() =>
-        ch.Background is { AbilityOptions.Count: > 0 } bg ? bg.AbilityOptions : (IEnumerable<Ability>)Rules.Abilities;
+    private bool RolledBonusValid() =>
+        ch.PlusTwo is Ability two && ch.PlusOne is Ability one && two != one
+        && ch.BaseScores[(int)two] <= Rules.RolledPlusTwoMax
+        && ch.BaseScores[(int)one] <= Rules.RolledPlusOneMax;
+
+    private bool CanRaise(Ability a)
+    {
+        var score = ch.BaseScores[(int)a];
+        if (score >= Rules.PointBuyMax) return false;
+        return PointsLeft() >= Rules.PointBuyCost(score + 1) - Rules.PointBuyCost(score);
+    }
 
     private static Ability? ParseAbility(object? v) =>
         Enum.TryParse<Ability>(v?.ToString(), out var a) ? a : null;
@@ -435,6 +598,8 @@
     {
         method = m;
         assign = new int?[6];
+        ch.PlusTwo = null; // the +2/+1 bonus only applies to rolled scores
+        ch.PlusOne = null;
         switch (m)
         {
             case "standard":
@@ -443,6 +608,7 @@
                 break;
             case "roll":
                 pool = new List<int>();
+                rolls = new List<int[]>();
                 break;
             case "pointbuy":
                 ch.BaseScores = new[] { 8, 8, 8, 8, 8, 8 };
@@ -456,11 +622,14 @@
 
     private void RollPool()
     {
-        pool = Enumerable.Range(0, 6).Select(n =>
-        {
-            var dice = Enumerable.Range(0, 4).Select(m => Dice.Die(6)).OrderByDescending(d => d).ToList();
-            return dice.Take(3).Sum();
-        }).OrderByDescending(v => v).ToList();
+        // Each roll is kept highest-first so the last die is the dropped one.
+        rolls = Enumerable.Range(0, 6)
+            .Select(n => Enumerable.Range(0, 4).Select(m => Dice.Die(6)).OrderByDescending(d => d).ToArray())
+            .OrderByDescending(r => r.Take(3).Sum())
+            .ToList();
+        pool = rolls.Select(r => r.Take(3).Sum()).ToList();
+        ch.PlusTwo = null;
+        ch.PlusOne = null;
         assign = new int?[6];
         for (int i = 0; i < 6; i++) assign[i] = i;
         ApplyAssignments();
@@ -470,6 +639,9 @@
     {
         assign[(int)a] = int.TryParse(raw, out var i) ? i : null;
         ApplyAssignments();
+        // A re-assignment can push a score past the bonus limits; clear any choice that no longer fits.
+        if (ch.PlusTwo is Ability two && ch.BaseScores[(int)two] > Rules.RolledPlusTwoMax) ch.PlusTwo = null;
+        if (ch.PlusOne is Ability one && ch.BaseScores[(int)one] > Rules.RolledPlusOneMax) ch.PlusOne = null;
     }
 
     private void ApplyAssignments()
@@ -482,7 +654,7 @@
     private int PointsLeft() => Rules.PointBuyBudget - ch.BaseScores.Sum(s => Rules.PointBuyCost(s));
 
     private void Bump(Ability a, int delta) =>
-        ch.BaseScores[(int)a] = Math.Clamp(ch.BaseScores[(int)a] + delta, 8, 15);
+        ch.BaseScores[(int)a] = Math.Clamp(ch.BaseScores[(int)a] + delta, Rules.PointBuyMin, Rules.PointBuyMax);
 
     // ---------- finish ----------
 

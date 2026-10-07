@@ -8,8 +8,12 @@ const ABIL = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
 const ABN = { STR: 'Strength', DEX: 'Dexterity', CON: 'Constitution', INT: 'Intelligence', WIS: 'Wisdom', CHA: 'Charisma' };
 const SKILLS = [['Athletics','STR'],['Acrobatics','DEX'],['Sleight of Hand','DEX'],['Stealth','DEX'],['Arcana','INT'],['History','INT'],['Investigation','INT'],['Nature','INT'],['Religion','INT'],['Animal Handling','WIS'],['Insight','WIS'],['Medicine','WIS'],['Perception','WIS'],['Survival','WIS'],['Deception','CHA'],['Intimidation','CHA'],['Performance','CHA'],['Persuasion','CHA']];
 const XP = [0,0,300,900,2700,6500,14000,23000,34000,48000,64000,85000,100000,120000,140000,165000,195000,225000,265000,305000,355000];
-const STD = [15,14,13,12,10,8];
-const MAX_LUCK = 5;
+const STD = [16,14,14,13,10,8];          // ToV standard array
+const PB_BUDGET = 32, PB_MIN = 8, PB_MAX = 18; // ToV point buy
+const PB_COST = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9, 16: 11, 17: 13, 18: 16 };
+const ROLL_PLUS2_MAX = 16, ROLL_PLUS1_MAX = 17; // rolled scores: +2 to a score <= 16, +1 to another <= 17
+const MAX_LUCK = 5, LUCK_REROLL = 3;
+const HOMEBREW = 'Homebrew';
 const KINDS = [['lineages','Lineages','Lineage'],['heritages','Heritages','Heritage'],['backgrounds','Backgrounds','Background'],['classes','Classes','Class'],['subclasses','Subclasses','Subclass'],['talents','Talents','Talent'],['spells','Spells','Spell'],['items','Items','Item']];
 const DEFAULT_ACTIONS = 'Attack, Cast a Spell, Dash, Disengage, Dodge, Help, Hide, Ready, Search, Use an Object';
 
@@ -52,14 +56,25 @@ const dmgExpr = (c, w) => { const m = dmgMod(c, w); return m === 0 ? w.damage : 
 const spellDC = c => c.spellAbility ? 8 + P(c) + M(c, c.spellAbility) : 0;
 const spellAtk = c => c.spellAbility ? P(c) + M(c, c.spellAbility) : 0;
 const attuned = c => c.magicItems.filter(m => m.attuned).length;
+/** Max uses of a feature, following its usesFrom formula (PB, CHA, PB+1...) when set. */
+function usesMax(c, f) {
+  const m = /^\s*(PB|STR|DEX|CON|INT|WIS|CHA)\s*(?:([+-])\s*(\d+))?\s*$/.exec(String(f.usesFrom || '').toUpperCase());
+  if (!m) return f.usesMax || 0;
+  const base = m[1] === 'PB' ? P(c) : M(c, m[1]);
+  return Math.max(1, base + (m[3] ? (m[2] === '-' ? -1 : 1) * +m[3] : 0));
+}
 
 // ---------- content ----------
 const emptyLib = () => ({ lineages: [], heritages: [], backgrounds: [], classes: [], subclasses: [], talents: [], spells: [], items: [] });
-function lib(kind) {
+/** Built-in entries are samples: once enabled book content (a user entry whose source isn't
+    Homebrew) exists for a kind, the samples of that kind are hidden from lists. */
+function lib(kind, keepSamples) {
   const user = S.user[kind] || [], ids = new Set(user.map(u => u.id));
-  return SEED[kind].filter(x => !ids.has(x.id)).concat(user).filter(e => !S.disabled.includes(e.source)).sort((a, b) => a.name.localeCompare(b.name));
+  const hasBook = !keepSamples && user.some(u => !S.disabled.includes(u.source) && String(u.source).toLowerCase() !== HOMEBREW.toLowerCase());
+  return (hasBook ? [] : SEED[kind].filter(x => !ids.has(x.id))).concat(user).filter(e => !S.disabled.includes(e.source)).sort((a, b) => a.name.localeCompare(b.name));
 }
-const find = (kind, id) => lib(kind).find(x => x.id === id);
+// Lookups by id keep samples, so characters built from a retired sample still work.
+const find = (kind, id) => lib(kind, true).find(x => x.id === id);
 function allEntries(kind) {
   const user = S.user[kind] || [], uids = new Set(user.map(u => u.id)), cids = new Set(SEED[kind].map(c => c.id));
   return SEED[kind].filter(c => !uids.has(c.id)).map(e => ({ e, user: false, over: false }))
@@ -75,7 +90,7 @@ function allSources() {
 function newChar() {
   return { id: uid(), updated: new Date().toISOString(), name: '', playerName: '', level: 1, experience: 0,
     lineageId: '', lineageName: '', heritageId: '', heritageName: '', backgroundId: '', backgroundName: '', classId: '', className: '', subclassId: '', subclassName: '',
-    scores: [10,10,10,10,10,10], saveProficiencies: [false,false,false,false,false,false], skills: {}, luck: 0,
+    scores: [10,10,10,10,10,10], saveProficiencies: [false,false,false,false,false,false], skills: {}, luck: 0, luckGainedThisTurn: false,
     speed: '30 ft.', initiativeBonus: 0, maxHp: 0, currentHp: 0, tempHp: 0, hitDie: 8, hitDiceUsed: 0, deathSuccesses: 0, deathFailures: 0, exhaustion: 0, conditions: '',
     lightArmor: false, mediumArmor: false, heavyArmor: false, shields: false, simpleWeapons: false, martialWeapons: false, languages: '', otherProficiencies: '',
     talents: [], features: [], actionsRef: DEFAULT_ACTIONS, bonusActionsRef: 'Offhand attack (light weapon), class features', reactionsRef: 'Opportunity Attack, readied action',
@@ -84,7 +99,32 @@ function newChar() {
     portraitUrl: '', age: '', height: '', weight: '', eyes: '', skin: '', hair: '', appearanceNotes: '', personality: '', backstory: '', homeland: '', motivation: '', allies: '', otherNotes: '',
     spellcasterClass: '', spellAbility: null, slotsTotal: [0,0,0,0,0,0,0,0,0], slotsExpended: [0,0,0,0,0,0,0,0,0], spells: [], rituals: [] };
 }
-const toFeature = (f, source, level) => ({ name: f.name, level: level ?? f.level, source, description: f.description, usesMax: f.usesMax || 0, usesSpent: 0, recharge: f.recharge || '' });
+const toFeature = (f, source, level) => ({ name: f.name, level: level ?? f.level, source, description: f.description, usesMax: f.usesMax || 0, usesSpent: 0, usesFrom: f.usesFrom || '', recharge: f.recharge || '' });
+/** Sets a feature's max uses by name; spent uses stay spent, so remaining uses change by the same amount. */
+function applyResources(c, resources, source, level) {
+  (resources || []).filter(r => r.name).forEach(r => {
+    const f = [...c.features].reverse().find(x => x.name === r.name);
+    if (!f) c.features.push({ name: r.name, level, source, description: '', usesMax: r.usesMax, usesSpent: 0, usesFrom: '', recharge: r.recharge || '' });
+    else { f.usesFrom = ''; f.usesMax = r.usesMax; f.usesSpent = Math.min(f.usesSpent, r.usesMax); }
+  });
+}
+/** Slots at a level: the class table first, otherwise the subclass table (latest entry at or below the level). */
+function slotsAt(cls, sub, n) {
+  const d = levelDef(cls, n); if (d && d.spellSlots && d.spellSlots.length) return d.spellSlots;
+  const rows = ((sub && sub.spellSlots) || []).filter(r => r.level <= n && r.slots && r.slots.length).sort((a, b) => b.level - a.level);
+  return rows.length ? rows[0].slots : null;
+}
+/** Talent lists open to the character: class lists plus subclass extras. Empty = every list. */
+function talentCats(cls, sub) {
+  const set = new Set((cls && cls.talentCategories) || []);
+  if (set.size && sub) (sub.talentCategories || []).forEach(x => set.add(x));
+  return [...set];
+}
+const availableTalents = (c, cats) => lib('talents').filter(t => (!cats.length || cats.includes(t.category)) && (t.repeatable || !c.talents.some(k => k.name === t.name)));
+function resourceChanges(c, cls, n) {
+  const d = levelDef(cls, n);
+  return ((d && d.resources) || []).map(r => { const f = [...c.features].reverse().find(x => x.name === r.name); return { name: r.name, from: f ? usesMax(c, f) : 0, to: r.usesMax }; }).filter(x => x.from !== x.to);
+}
 const addTalent = (c, t) => c.talents.push({ name: t.name, category: t.category, description: t.description });
 function addItem(c, i) {
   if (i.type === 'Weapon') c.weapons.push({ name: i.name, damage: i.damage || '1d4', damageType: i.damageType, range: i.range, properties: i.properties, options: '', finesse: !!i.finesse, ranged: !!i.ranged, proficient: i.weaponCategory === 'Martial' ? c.martialWeapons : c.simpleWeapons, magicBonus: 0, abilityOverride: null });
@@ -100,14 +140,20 @@ function buildCharacter(w) {
   ABIL.forEach((a, i) => c.scores[i] = finalScore(w, a));
   const lin = find('lineages', w.lineage), her = find('heritages', w.heritage), bg = find('backgrounds', w.background), cls = find('classes', w.cls);
   if (lin) { c.lineageId = lin.id; c.lineageName = lin.name; c.speed = lin.speed + ' ft.'; other.push('Size: ' + lin.size); lin.traits.forEach(t => c.features.push(toFeature(t, lin.name))); }
-  if (her) { c.heritageId = her.id; c.heritageName = her.name; c.languages = her.languages; her.traits.forEach(t => c.features.push(toFeature(t, her.name))); }
+  if (her) {
+    c.heritageId = her.id; c.heritageName = her.name;
+    c.languages = (her.languages || '').split(',').map(x => x.trim()).filter(Boolean).concat((w.herLangs || []).map(x => (x || '').trim()).filter(Boolean)).join(', ');
+    (her.skillProficiencies || []).concat(w.herSkills || []).forEach(s => c.skills[s] = 'Proficient');
+    her.traits.forEach(t => c.features.push(toFeature(t, her.name)));
+  }
   if (bg) {
     c.backgroundId = bg.id; c.backgroundName = bg.name;
-    bg.skillProficiencies.forEach(s => c.skills[s] = 'Proficient');
+    bg.skillProficiencies.concat(w.bgSkills || []).forEach(s => c.skills[s] = 'Proficient');
     if (bg.toolProficiencies) other.push(bg.toolProficiencies);
     bg.traits.forEach(t => c.features.push(toFeature(t, bg.name)));
     (bg.equipment || '').split(/[,;\n]/).map(s => s.trim()).filter(Boolean).forEach(n => c.gear.push({ name: n, quantity: 1, notes: '' }));
     const t = find('talents', bg.talentId); if (t) addTalent(c, t);
+    const bt = w.bgTalent && find('talents', w.bgTalent); if (bt && !c.talents.some(x => x.name === bt.name)) addTalent(c, bt);
   }
   if (cls) {
     c.classId = cls.id; c.className = cls.name; c.hitDie = cls.hitDie;
@@ -119,7 +165,7 @@ function buildCharacter(w) {
     w.skills.forEach(s => c.skills[s] = 'Proficient');
     if (cls.spellcastingAbility) { c.spellAbility = cls.spellcastingAbility; c.spellcasterClass = cls.name; }
     const l1 = cls.levels.find(l => l.level === 1);
-    if (l1) { l1.features.forEach(f => c.features.push(toFeature(f, cls.name, 1))); applySlots(c, l1.spellSlots); }
+    if (l1) { l1.features.forEach(f => c.features.push(toFeature(f, cls.name, 1))); applySlots(c, l1.spellSlots); applyResources(c, l1.resources, cls.name, 1); }
     c.maxHp = Math.max(1, cls.hitDie + M(c, 'CON')); c.currentHp = c.maxHp;
     if (w.gold) c.coins.gp += cls.startingGold; else w.items.forEach(id => { const i = find('items', id); if (i) addItem(c, i); });
   }
@@ -144,13 +190,18 @@ function applyLevelUp(c, lu) {
   const gain = hpGain(c, lu);
   if (d && d.grantsAbilityIncrease) {
     const raise = (a, v) => { const i = ABIL.indexOf(a); c.scores[i] = Math.min(20, c.scores[i] + v); };
-    if (lu.mode === 'two' && lu.a) raise(lu.a, 2); else { if (lu.a) raise(lu.a, 1); if (lu.b) raise(lu.b, 1); }
+    if (lu.mode === 'two' && lu.a) raise(lu.a, 2);
+    else if (lu.mode === 'talent') { if (lu.a) raise(lu.a, 1); const it = lu.impTalent && find('talents', lu.impTalent); if (it) addTalent(c, it); }
+    else { if (lu.a) raise(lu.a, 1); if (lu.b) raise(lu.b, 1); }
   }
   const feats = gained(c, cls, needsSub(c, cls, n) ? sub : null, n);
   c.level = n; c.maxHp += gain; c.currentHp += gain; c.features.push(...feats);
   if (sub && !c.subclassId) { c.subclassId = sub.id; c.subclassName = sub.name; }
   if (d && d.grantsTalent && lu.talent) { const t = find('talents', lu.talent); if (t) addTalent(c, t); }
-  if (d) applySlots(c, d.spellSlots);
+  const csub = find('subclasses', c.subclassId), slots = slotsAt(cls, csub, n);
+  if (slots) applySlots(c, slots);
+  if (csub && csub.spellcastingAbility && !c.spellAbility) { c.spellAbility = csub.spellcastingAbility; c.spellcasterClass = `${c.className} (${csub.name})`; }
+  if (d) applyResources(c, d.resources, cls.name, n);
   if (c.experience < XP[Math.min(n, 20)]) c.experience = XP[Math.min(n, 20)];
 }
 function takeDamage(c, n) { if (n <= 0) return; const t = Math.min(c.tempHp, n); c.tempHp -= t; c.currentHp = Math.max(0, c.currentHp - (n - t)); }
@@ -158,9 +209,10 @@ function heal(c, n) { if (n <= 0) return; if (c.currentHp === 0) { c.deathSucces
 
 // ---------- dice ----------
 function pushRoll(r) { S.dice.history.unshift(r); S.dice.history = S.dice.history.slice(0, 20); S.trayOpen = true; }
-function d20(label, modv, dmg, dmgLabel) {
+// kind: 'check' | 'save' | 'attack' | 'other'. Luck is earned only on a missed attack or failed save.
+function d20(label, modv, dmg, dmgLabel, kind) {
   const a = die(20), b = die(20), mode = S.dice.mode;
-  const r = { label, d20: true, mode, sides: [20], dice: [mode === 'adv' ? Math.max(a, b) : mode === 'dis' ? Math.min(a, b) : a], dropped: mode === 'adv' ? Math.min(a, b) : mode === 'dis' ? Math.max(a, b) : null, mod: modv, luck: 0, gained: false, dmg, dmgLabel };
+  const r = { label, d20: true, kind: kind || 'check', mode, sides: [20], dice: [mode === 'adv' ? Math.max(a, b) : mode === 'dis' ? Math.min(a, b) : a], dropped: mode === 'adv' ? Math.min(a, b) : mode === 'dis' ? Math.max(a, b) : null, mod: modv, luck: 0, gained: false, dmg, dmgLabel };
   S.dice.mode = 'normal'; pushRoll(r); return r;
 }
 function rollExpr(label, expr, crit) {
@@ -173,7 +225,9 @@ function rollExpr(label, expr, crit) {
   pushRoll(r); return r;
 }
 const total = r => r.dice.reduce((s, x) => s + x, 0) + r.mod + r.luck;
-const reroll = r => r.d20 ? d20(r.label, r.mod, r.dmg, r.dmgLabel) : rollExpr(r.label, r.base || r.expr, r.crit);
+const canSpendLuck = r => r.d20 && r.dice[0] !== 1;  // Luck can't change a natural 1
+const canEarnLuck = r => r.d20 && ['attack', 'save', 'other'].includes(r.kind);
+const reroll = r => r.d20 ? d20(r.label, r.mod, r.dmg, r.dmgLabel, r.kind) : rollExpr(r.label, r.base || r.expr, r.crit);
 function grouped(r) {
   if (!r.sides || r.sides.length !== r.dice.length) return `${esc(r.expr)} [${r.dice.join(', ')}]`;
   const order = [], g = {}; r.dice.forEach((v, i) => { const k = r.sides[i]; if (!g[k]) { g[k] = []; order.push(k); } g[k].push(v); });
@@ -347,7 +401,7 @@ function mainTab(c) {
   <div class="flex flex-col gap-3">
     ${box('Proficiency Bonus', `<div class="text-center num text-3xl" style="color:var(--ink)">${sg(P(c))}</div><div class="text-center muted text-xs">from level ${c.level}</div>`)}
     ${abilityBlock(c, 'STR')}${abilityBlock(c, 'DEX')}${abilityBlock(c, 'CON')}
-    ${box('Luck', `<div class="flex justify-center">${pips('setLuck', MAX_LUCK, c.luck, 'luck', true, 'Luck')}</div><p class="muted text-xs text-center mt-1.5">Gain 1 when you fail a d20 test. Spend from the roll tray for +1 each.</p>`)}
+    ${box('Luck', `<div class="flex justify-center">${pips('setLuck', MAX_LUCK, c.luck, 'luck', true, 'Luck')}</div><p class="muted text-xs text-center mt-1.5">Gain 1 on a missed attack or failed save (once per turn; at 5 it resets to a d4). Spend from the roll tray: +1 each, or 3 to reroll.</p>`)}
   </div>
   <div class="flex flex-col gap-3">${abilityBlock(c, 'INT')}${abilityBlock(c, 'WIS')}${abilityBlock(c, 'CHA')}</div>
   <div class="flex flex-col gap-3 md:col-span-2 xl:col-span-1 min-w-0">
@@ -398,7 +452,7 @@ function featuresTab(c) {
     <div class="flex gap-2 items-center mt-0.5"><span class="lbl">Level</span>${num(`c.features.${i}.level`, f.level, 'w-10 text-center', 'aria-label="Level"')}<span class="chip truncate">${esc(f.source)}</span></div></div>
     <button class="icon-btn" data-act="rm" data-a="features.${i}" title="Remove feature">✕</button></div>
     ${area(`c.features.${i}.description`, f.description, 2, 'style="min-height:3rem" aria-label="Description"')}
-    ${f.usesMax > 0 ? `<div class="flex items-center gap-2 mt-1"><span class="lbl">Used</span>${pips('setUses:' + i, f.usesMax, f.usesSpent, '', false, 'Use')}<span class="muted text-xs ml-auto">${esc(f.recharge)}</span></div>` : ''}</div>`).join('');
+    ${usesMax(c, f) > 0 ? `<div class="flex items-center gap-2 mt-1"><span class="lbl">Used</span>${pips('setUses:' + i, usesMax(c, f), f.usesSpent, '', false, 'Use')}<span class="muted text-xs ml-auto">${esc(f.recharge)}</span></div>` : ''}</div>`).join('');
   const weapons = c.weapons.map((w, i) => `<tr><td>${inp(`c.weapons.${i}.name`, w.name, 'font-semibold', 'aria-label="Name"')}</td><td>${inp(`c.weapons.${i}.damage`, w.damage, 'num w-16', 'aria-label="Damage dice"')}</td>
     <td>${inp(`c.weapons.${i}.damageType`, w.damageType, 'w-24', 'aria-label="Damage type"')}</td><td>${inp(`c.weapons.${i}.range`, w.range, 'w-20', 'aria-label="Range"')}</td>
     <td>${inp(`c.weapons.${i}.properties`, w.properties, 'text-sm', 'placeholder="Properties"')}${inp(`c.weapons.${i}.options`, w.options, 'text-sm', 'placeholder="Weapon options"')}</td>
@@ -495,6 +549,12 @@ function spellsTab(c) {
   </div>`;
 }
 
+function luckNote(r) {
+  const parts = [];
+  if (r.rerolledFrom != null) parts.push(`d20 ${r.rerolledFrom}→${r.dice[0]} (${r.luckReroll} Luck)`);
+  if (r.luck) parts.push(`+${r.luck} Luck`);
+  return parts.length ? ' · ' + parts.join(', ') : '';
+}
 function tray(c) {
   const r = S.dice.history[0], m = S.dice.mode;
   const mb = (k, l) => `<button class="btn btn-sm ${m === k ? 'btn-primary' : ''}" data-act="mode" data-a="${k}">${l}</button>`;
@@ -503,13 +563,17 @@ function tray(c) {
     if (!r) inner = '<p class="muted text-sm mt-2">Click any bonus on the sheet to roll it.</p>';
     else {
       const nat = r.d20 ? r.dice[0] : 0, crit = r.d20 && nat === 20, fum = r.d20 && nat === 1;
-      const bd = (r.d20 ? `d20 [${nat}]` + (r.dropped != null ? ` (${r.mode === 'adv' ? 'advantage' : 'disadvantage'}, dropped ${r.dropped})` : '') : grouped(r)) + (r.mod ? ' ' + sg(r.mod) : '') + (r.luck ? ` +${r.luck} Luck` : '') + (crit ? ' · natural 20!' : fum ? ' · natural 1' : '');
+      const bd = (r.d20 ? (r.rerolledFrom != null ? `d20 [${r.rerolledFrom} → ${nat}] (rerolled with ${r.luckReroll} Luck)` : `d20 [${nat}]` + (r.dropped != null ? ` (${r.mode === 'adv' ? 'advantage' : 'disadvantage'}, dropped ${r.dropped})` : '')) : grouped(r)) + (r.mod ? ' ' + sg(r.mod) : '') + (r.luck ? ` +${r.luck} Luck` : '') + (crit ? ' · natural 20!' : fum ? ' · natural 1' : '');
       inner = `<div class="flex items-end gap-3 mt-2"><div class="tray-total num ${crit ? 'crit' : fum ? 'fumble' : ''}">${total(r)}</div><div class="min-w-0 pb-0.5"><div class="font-semibold truncate">${esc(r.label)}</div><div class="muted text-sm">${bd}</div></div></div>
-        <div class="flex flex-wrap gap-1.5 mt-2">${r.d20 ? `<button class="btn btn-sm btn-gold" data-act="spendLuck" ${c.luck <= 0 ? 'disabled' : ''} title="Spend 1 Luck to add +1 to this roll">Spend Luck +1 · ${c.luck}</button>
-        <button class="btn btn-sm" data-act="gainLuck" ${r.gained || c.luck >= MAX_LUCK ? 'disabled' : ''} title="You gain 1 Luck when you fail a d20 test">Failed · +1 Luck</button>` : ''}
+        <div class="flex flex-wrap gap-1.5 mt-2">${r.d20 ? `<button class="btn btn-sm btn-gold" data-act="spendLuck" ${!canSpendLuck(r) || c.luck <= 0 ? 'disabled' : ''} title="Spend 1 Luck to add +1 to this roll">Luck +1 · ${c.luck}</button>
+        <button class="btn btn-sm btn-gold" data-act="luckReroll" ${!canSpendLuck(r) || c.luck < LUCK_REROLL ? 'disabled' : ''} title="Spend ${LUCK_REROLL} Luck to reroll the d20">Reroll d20 · ${LUCK_REROLL} Luck</button>
+        ${canEarnLuck(r) ? `<button class="btn btn-sm" data-act="gainLuck" ${r.gained || c.luckGainedThisTurn ? 'disabled' : ''} title="${c.luckGainedThisTurn && !r.gained ? "You've already gained Luck this turn" : 'Gain 1 Luck (once per turn)'}">${r.kind === 'attack' ? 'Missed' : r.kind === 'save' ? 'Failed' : 'Missed / failed'} · +1 Luck</button>` : ''}` : ''}
         <button class="btn btn-sm" data-act="reroll" data-a="0" title="Roll the same thing again">↻ Again</button>
+        <button class="btn btn-sm" data-act="newTurn" title="Start a new turn so Luck can be gained again">New turn</button>
         ${r.dmg ? `<button class="btn btn-sm btn-primary" data-act="rollDmg" data-a="0">Roll damage</button><button class="btn btn-sm" data-act="rollDmg" data-a="1">Crit damage</button>` : ''}</div>
-        ${S.dice.history.length > 1 ? `<ul class="mt-2 pt-2 text-sm" style="border-top:1px solid var(--ink-faint)">${S.dice.history.slice(1, 5).map((h, i) => `<li class="flex items-center gap-2"><span class="num w-8 text-right">${total(h)}</span><span class="muted truncate flex-1">${esc(h.label)}</span><button class="icon-btn reroll" data-act="reroll" data-a="${i + 1}" title="Re-roll ${esc(h.label)}" aria-label="Re-roll ${esc(h.label)}">↻</button></li>`).join('')}</ul>` : ''}`;
+        ${fum ? '<p class="text-xs muted mt-1">Luck can\'t change a natural 1.</p>' : ''}
+        ${r.luckResetTo != null ? `<p class="text-xs mt-1" style="color:var(--good)">Luck was full, so it reset to a d4 roll: <span class="num">${r.luckResetTo}</span>.</p>` : c.luckGainedThisTurn ? '<p class="text-xs muted mt-1">Luck gained this turn. Press New turn when your next turn starts.</p>' : ''}
+        ${S.dice.history.length > 1 ? `<ul class="mt-2 pt-2 text-sm" style="border-top:1px solid var(--ink-faint)">${S.dice.history.slice(1, 5).map((h, i) => `<li class="flex items-center gap-2"><span class="num w-8 text-right">${total(h)}</span><span class="muted truncate flex-1">${esc(h.label)}${luckNote(h)}</span><button class="icon-btn reroll" data-act="reroll" data-a="${i + 1}" title="Re-roll ${esc(h.label)}" aria-label="Re-roll ${esc(h.label)}">↻</button></li>`).join('')}</ul>` : ''}`;
     }
   }
   const p = S.pool, pc = poolCount(p);
@@ -527,20 +591,44 @@ function tray(c) {
 
 // ---------- creation wizard ----------
 const STEPS = ['Name', 'Lineage', 'Heritage', 'Background', 'Class', 'Abilities', 'Equipment', 'Talent', 'Review'];
-function newWizard() { return { step: 0, name: '', playerName: '', lineage: '', heritage: '', background: '', cls: '', skills: [], method: 'standard', pool: STD.slice(), assign: [0, 1, 2, 3, 4, 5], base: STD.slice(), plus2: null, plus1: null, items: [], gold: false, talent: '' }; }
-function skillsNeeded(w) { const cls = find('classes', w.cls); if (!cls) return 0; const bg = find('backgrounds', w.background); return Math.min(cls.skillChoices, cls.skillOptions.filter(s => !(bg && bg.skillProficiencies.includes(s))).length); }
-const pbCost = s => s <= 8 ? 0 : s <= 13 ? s - 8 : s === 14 ? 7 : 9;
-const pointsLeft = w => 27 - w.base.reduce((t, s) => t + pbCost(s), 0);
-function bonusOpts(w) { const bg = find('backgrounds', w.background); return bg && bg.abilityOptions && bg.abilityOptions.length ? bg.abilityOptions : ABIL; }
+function newWizard() { return { step: 0, name: '', playerName: '', lineage: '', heritage: '', background: '', cls: '', skills: [], method: 'standard', pool: STD.slice(), assign: [0, 1, 2, 3, 4, 5], base: STD.slice(), plus2: null, plus1: null, items: [], gold: false, talent: '', rolls: [], bgSkills: [], bgTalent: '', herSkills: [], herLangs: [] }; }
+/** Skills granted before the class step: heritage (fixed + picked) and, optionally, the background's. */
+function ownedSkills(w, includeBg) {
+  const her = find('heritages', w.heritage), bg = find('backgrounds', w.background);
+  const set = new Set((w.herSkills || []).concat((her && her.skillProficiencies) || []));
+  if (bg) { bg.skillProficiencies.forEach(x => set.add(x)); if (includeBg) (w.bgSkills || []).forEach(x => set.add(x)); }
+  return set;
+}
+function skillsNeeded(w) { const cls = find('classes', w.cls); if (!cls) return 0; const owned = ownedSkills(w, true); return Math.min(cls.skillChoices, cls.skillOptions.filter(s => !owned.has(s)).length); }
+function bgSkillsNeeded(w) { const bg = find('backgrounds', w.background); if (!bg || !bg.skillChoices) return 0; const owned = ownedSkills(w, false); return Math.min(bg.skillChoices, (bg.skillOptions || []).filter(s => !owned.has(s) || w.bgSkills.includes(s)).length); }
+function herSkillsNeeded(w) { const h = find('heritages', w.heritage); if (!h || !h.skillChoices) return 0; const fixed = h.skillProficiencies || []; return Math.min(h.skillChoices, (h.skillOptions || []).filter(s => !fixed.includes(s) || w.herSkills.includes(s)).length); }
+/** After an earlier step's skills change, drop later picks that are now granted twice. */
+function pruneSkills(w) { const before = ownedSkills(w, false); w.bgSkills = w.bgSkills.filter(s => !before.has(s)); const all = ownedSkills(w, true); w.skills = w.skills.filter(s => !all.has(s)); }
+function needsBgTalent(w) { const bg = find('backgrounds', w.background); return !!bg && !w.bgTalent && (bg.talentOptions || []).some(id => find('talents', id)); }
+const rolledOk = w => !!w.plus2 && !!w.plus1 && w.plus2 !== w.plus1 && w.base[ABIL.indexOf(w.plus2)] <= ROLL_PLUS2_MAX && w.base[ABIL.indexOf(w.plus1)] <= ROLL_PLUS1_MAX;
+const pbCost = s => PB_COST[Math.max(PB_MIN, Math.min(PB_MAX, s))];
+const pointsLeft = w => PB_BUDGET - w.base.reduce((t, s) => t + pbCost(s), 0);
+const bgSkillText = b => [b.skillProficiencies.length ? b.skillProficiencies.map(esc).join(', ') : '', b.skillChoices && (b.skillOptions || []).length ? `choose ${b.skillChoices} of ${b.skillOptions.map(esc).join(', ')}` : ''].filter(Boolean).join('; ') || '—';
+/** A row of skill toggles. owned = already granted elsewhere. */
+function skillPicker(act, options, need, picked, owned, note) {
+  return `<div class="flex flex-wrap gap-1.5" role="group" aria-label="Skill choices">${options.map(sk => { const has = owned.has(sk) && !picked.includes(sk), on = picked.includes(sk);
+    return `<button class="btn btn-sm ${on || has ? 'btn-primary' : ''}" data-act="${act}" data-a="${esc(sk)}" aria-pressed="${on}" ${has || (!on && picked.length >= need) ? 'disabled' : ''} title="${has ? esc(note) : ''}">${esc(sk)}${has ? ' ✓' : ''}</button>`; }).join('')}</div><p class="muted text-sm mt-1">${picked.length} of ${need} chosen.</p>`;
+}
 function stepProblem(w, s) {
   if (s === 1 && !w.lineage) return 'Choose a lineage.';
   if (s === 2 && !w.heritage) return 'Choose a heritage.';
+  if (s === 2 && w.herSkills.length < herSkillsNeeded(w)) return `Choose ${herSkillsNeeded(w) - w.herSkills.length} more heritage skill(s).`;
+  if (s === 2 && w.herLangs.filter(x => (x || '').trim()).length < ((find('heritages', w.heritage) || {}).languageChoices || 0)) return 'Fill in your extra languages.';
   if (s === 3 && !w.background) return 'Choose a background.';
+  if (s === 3 && w.bgSkills.length < bgSkillsNeeded(w)) return `Choose ${bgSkillsNeeded(w) - w.bgSkills.length} more background skill(s).`;
+  if (s === 3 && needsBgTalent(w)) return 'Choose a background talent.';
   if (s === 4 && !w.cls) return 'Choose a class.';
   if (s === 4 && w.skills.length < skillsNeeded(w)) return `Choose ${skillsNeeded(w) - w.skills.length} more skill(s).`;
+  if (s === 5 && w.method === 'roll' && !w.pool.length) return 'Roll your scores.';
   if (s === 5 && (w.method === 'standard' || w.method === 'roll') && w.assign.some(a => a == null)) return 'Assign a value to every ability.';
   if (s === 5 && w.method === 'pointbuy' && pointsLeft(w) < 0) return "You've spent too many points.";
-  if (s === 5 && (!w.plus2 || !w.plus1)) return 'Pick your background increases.';
+  if (s === 5 && w.method === 'roll' && (!w.plus2 || !w.plus1)) return 'Pick your +2 and +1.';
+  if (s === 5 && w.method === 'roll' && !rolledOk(w)) return 'The +2 needs a score of 16 or lower and the +1 a score of 17 or lower.';
   return null;
 }
 function maxReach(w) { let m = 0; for (let s = 0; s < STEPS.length - 1; s++) { if (stepProblem(w, s)) break; m = s + 1; } return Math.max(m, w.step); }
@@ -551,41 +639,53 @@ function createView() {
   const w = S.wiz, s = w.step; let inner = '';
   if (s === 0) inner = `<h2 class="box-title text-left">Who are you?</h2><div class="grid sm:grid-cols-2 gap-4"><div><label class="lbl" for="wn">Character name</label><input id="wn" class="field text-xl display" data-f="w.name" data-t="s" value="${esc(w.name)}" autocomplete="off"></div><div><label class="lbl" for="wp">Player name</label><input id="wp" class="field text-xl" data-f="w.playerName" data-t="s" value="${esc(w.playerName)}"></div></div>`;
   else if (s === 1) inner = `<h2 class="box-title text-left">Choose a lineage</h2><p class="muted text-sm mb-3">Your lineage is your ancestry: size, speed and inborn traits.</p><div class="grid sm:grid-cols-2 gap-2">${lib('lineages').map(l => choice(w.lineage === l.id, 'wLineage', l.id, `<div class="flex items-center gap-2"><b>${esc(l.name)}</b><span class="chip ml-auto">${esc(l.source)}</span></div><div class="text-sm muted">${esc(l.size)} · ${l.speed} ft.</div><div class="text-sm mt-1">${esc(l.description)}</div>${traitList(l.traits)}`)).join('')}</div>`;
-  else if (s === 2) inner = `<h2 class="box-title text-left">Choose a heritage</h2><p class="muted text-sm mb-3">Your heritage is the culture you were raised in: languages and learned traits.</p><div class="grid sm:grid-cols-2 gap-2">${lib('heritages').map(h => choice(w.heritage === h.id, 'wHeritage', h.id, `<div class="flex items-center gap-2"><b>${esc(h.name)}</b><span class="chip ml-auto">${esc(h.source)}</span></div><div class="text-sm muted">Languages: ${esc(h.languages)}</div><div class="text-sm mt-1">${esc(h.description)}</div>${traitList(h.traits)}`)).join('')}</div>`;
-  else if (s === 3) inner = `<h2 class="box-title text-left">Choose a background</h2><p class="muted text-sm mb-3">What you did before adventuring: skills, tools, equipment and your ability increases.</p><div class="grid sm:grid-cols-2 gap-2">${lib('backgrounds').map(b => choice(w.background === b.id, 'wBackground', b.id, `<div class="flex items-center gap-2"><b>${esc(b.name)}</b><span class="chip ml-auto">${esc(b.source)}</span></div><div class="text-sm muted">Skills: ${b.skillProficiencies.map(esc).join(', ')}${b.toolProficiencies ? ' · Tools: ' + esc(b.toolProficiencies) : ''}</div><div class="text-sm mt-1">${esc(b.description)}</div>${traitList(b.traits)}`)).join('')}</div>`;
+  else if (s === 2) { inner = `<h2 class="box-title text-left">Choose a heritage</h2><p class="muted text-sm mb-3">Your heritage is the culture you were raised in: languages and learned traits.</p><div class="grid sm:grid-cols-2 gap-2">${lib('heritages').map(h => choice(w.heritage === h.id, 'wHeritage', h.id, `<div class="flex items-center gap-2"><b>${esc(h.name)}</b><span class="chip ml-auto">${esc(h.source)}</span></div><div class="text-sm muted">Languages: ${esc(h.languages)}${h.languageChoices ? ` + ${h.languageChoices} of your choice` : ''}</div><div class="text-sm mt-1">${esc(h.description)}</div>${traitList(h.traits)}`)).join('')}</div>`;
+    const h = find('heritages', w.heritage);
+    if (h && (h.skillProficiencies || []).length) inner += `<p class="mt-4 text-sm"><span class="lbl">Granted skills:</span> ${h.skillProficiencies.map(esc).join(', ')}</p>`;
+    if (h && h.skillChoices && (h.skillOptions || []).length) inner += `<h3 class="box-title text-left mt-5">${esc(h.name)} skills: choose ${herSkillsNeeded(w)}</h3>` + skillPicker('wHerSkill', h.skillOptions, herSkillsNeeded(w), w.herSkills, new Set(h.skillProficiencies || []), 'Already granted by your heritage');
+    if (h && h.languageChoices) inner += `<h3 class="box-title text-left mt-5">Extra languages: choose ${h.languageChoices}</h3><div class="grid sm:grid-cols-2 gap-2">${Array.from({ length: h.languageChoices }, (_, i) => `<input class="field" data-f="w.herLangs.${i}" data-t="s" aria-label="Language ${i + 1}" placeholder="Language ${i + 1}" autocomplete="off" value="${esc(w.herLangs[i] || '')}">`).join('')}</div><p class="muted text-xs mt-1">See the heritage's description and traits for typical choices.</p>`;
+  }
+  else if (s === 3) { inner = `<h2 class="box-title text-left">Choose a background</h2><p class="muted text-sm mb-3">What you did before adventuring: skills, tools, equipment and a talent.</p><div class="grid sm:grid-cols-2 gap-2">${lib('backgrounds').map(b => choice(w.background === b.id, 'wBackground', b.id, `<div class="flex items-center gap-2"><b>${esc(b.name)}</b><span class="chip ml-auto">${esc(b.source)}</span></div><div class="text-sm muted">Skills: ${bgSkillText(b)}${b.toolProficiencies ? ' · Tools: ' + esc(b.toolProficiencies) : ''}</div><div class="text-sm mt-1">${esc(b.description)}</div>${traitList(b.traits)}`)).join('')}</div>`;
+    const b = find('backgrounds', w.background);
+    if (b && b.skillProficiencies.length) inner += `<p class="mt-4 text-sm"><span class="lbl">Granted skills:</span> ${b.skillProficiencies.map(esc).join(', ')}</p>`;
+    if (b && b.skillChoices && (b.skillOptions || []).length) inner += `<h3 class="box-title text-left mt-4">${esc(b.name)} skills: choose ${bgSkillsNeeded(w)}</h3>` + skillPicker('wBgSkill', b.skillOptions, bgSkillsNeeded(w), w.bgSkills, ownedSkills(w, false), 'Already granted by your heritage or background');
+    if (b && (b.talentOptions || []).length) inner += `<h3 class="box-title text-left mt-5">${esc(b.name)} talent: choose 1</h3><div class="grid sm:grid-cols-3 gap-2" role="radiogroup" aria-label="Background talent">${b.talentOptions.map(id => { const t = find('talents', id);
+      return t ? `<button class="choice ${w.bgTalent === t.id ? 'selected' : ''}" role="radio" aria-checked="${w.bgTalent === t.id}" data-act="wBgTalent" data-a="${esc(t.id)}"><div class="flex items-center gap-2"><b>${esc(t.name)}</b><span class="chip ml-auto">${esc(t.category)}</span></div><div class="text-sm muted">${esc(t.description)}</div></button>`
+        : `<div class="choice" style="opacity:.6" title="Not in your enabled content"><b>${esc(id)}</b><div class="text-xs muted">Unavailable: add or enable this talent in Content.</div></div>`; }).join('')}</div>`;
+  }
   else if (s === 4) {
     const cls = find('classes', w.cls), bg = find('backgrounds', w.background);
     inner = `<h2 class="box-title text-left">Choose a class</h2><div class="grid sm:grid-cols-2 gap-2">${lib('classes').map(k => choice(w.cls === k.id, 'wClass', k.id, `<div class="flex items-center gap-2"><b>${esc(k.name)}</b><span class="chip ml-auto">${esc(k.source)}</span></div><div class="text-sm muted">d${k.hitDie} hit die · Saves: ${k.savingThrows.join(', ')}${k.spellcastingAbility ? ' · Casts with ' + k.spellcastingAbility : ''}</div><div class="text-sm mt-1">${esc(k.description)}</div>`)).join('')}</div>`;
-    if (cls) inner += `<h3 class="box-title text-left mt-5">Choose ${cls.skillChoices} skills</h3><div class="flex flex-wrap gap-1.5">${cls.skillOptions.map(sk => { const fromBg = bg && bg.skillProficiencies.includes(sk), picked = w.skills.includes(sk); return `<button class="btn btn-sm ${picked || fromBg ? 'btn-primary' : ''}" data-act="wSkill" data-a="${esc(sk)}" ${fromBg || (!picked && w.skills.length >= cls.skillChoices) ? 'disabled' : ''} title="${fromBg ? 'Already granted by your background' : ''}">${esc(sk)}</button>`; }).join('')}</div><p class="muted text-sm mt-1">${w.skills.length} of ${cls.skillChoices} chosen.</p>`;
+    if (cls) inner += `<h3 class="box-title text-left mt-5">Choose ${cls.skillChoices} skills</h3><div class="flex flex-wrap gap-1.5">${cls.skillOptions.map(sk => { const fromBg = ownedSkills(w, true).has(sk), picked = w.skills.includes(sk); return `<button class="btn btn-sm ${picked || fromBg ? 'btn-primary' : ''}" data-act="wSkill" data-a="${esc(sk)}" ${fromBg || (!picked && w.skills.length >= cls.skillChoices) ? 'disabled' : ''} title="${fromBg ? 'Already granted by your heritage or background' : ''}">${esc(sk)}</button>`; }).join('')}</div><p class="muted text-sm mt-1">${w.skills.length} of ${cls.skillChoices} chosen.</p>`;
   } else if (s === 5) {
     const mb = (k, l) => `<button class="btn btn-sm ${w.method === k ? 'btn-primary' : ''}" data-act="wMethod" data-a="${k}">${l}</button>`;
     const fin = a => finalScore(w, a);
     inner = `<h2 class="box-title text-left">Ability scores</h2><div class="flex flex-wrap gap-1.5 mb-3">${mb('standard', 'Standard array')}${mb('pointbuy', 'Point buy')}${mb('roll', 'Roll 4d6')}${mb('manual', 'Manual')}</div>
-      ${w.method === 'pointbuy' ? `<p class="text-sm mb-2">Points left: <b class="num ${pointsLeft(w) < 0 ? 'fumble' : ''}">${pointsLeft(w)}</b> of 27</p>` : ''}
-      ${w.method === 'roll' ? `<p class="text-sm mb-2"><button class="btn btn-sm btn-gold" data-act="wRoll">Roll six scores</button> <span class="ml-2 num">${w.pool.join(', ')}</span></p>` : ''}
+      ${w.method === 'pointbuy' ? `<p class="text-sm mb-2">Points left: <b class="num ${pointsLeft(w) < 0 ? 'fumble' : ''}">${pointsLeft(w)}</b> of ${PB_BUDGET}</p>` : ''}
+      ${w.method === 'roll' ? `<div class="text-sm mb-2"><button class="btn btn-sm btn-gold" data-act="wRoll">Roll six scores</button>${w.rolls.length ? `<ul class="flex flex-wrap gap-1.5 mt-2" aria-label="Rolled scores">${w.rolls.map(r => `<li class="chip num" title="4d6, lowest die dropped"><b>${r[0] + r[1] + r[2]}</b> <span class="muted">[${r.slice(0, 3).join(', ')} <s>${r[3]}</s>]</span></li>`).join('')}</ul>` : ''}</div>` : ''}
       ${w.method === 'standard' || w.method === 'roll' ? '<p class="muted text-sm mb-2">Assign each value to one ability.</p>' : ''}
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">${ABIL.map((a, i) => {
         let ctl;
         if (w.method === 'standard' || w.method === 'roll') ctl = `<select class="select num text-center" data-f="w.assign.${i}" data-t="ni" aria-label="${ABN[a]}"><option value="">—</option>${w.pool.map((v, pi) => `<option value="${pi}" ${w.assign[i] === pi ? 'selected' : ''} ${w.assign.includes(pi) && w.assign[i] !== pi ? 'disabled' : ''}>${v}</option>`).join('')}</select>`;
-        else if (w.method === 'pointbuy') ctl = `<div class="flex items-center justify-center gap-1"><button class="icon-btn" data-act="wBump" data-a="${i}:-1" ${w.base[i] <= 8 ? 'disabled' : ''} aria-label="Lower">−</button><span class="num text-xl w-8 text-center">${w.base[i]}</span><button class="icon-btn" data-act="wBump" data-a="${i}:1" ${w.base[i] >= 15 || pointsLeft(w) < pbCost(w.base[i] + 1) - pbCost(w.base[i]) ? 'disabled' : ''} aria-label="Raise">+</button></div>`;
+        else if (w.method === 'pointbuy') ctl = `<div class="flex items-center justify-center gap-1"><button class="icon-btn" data-act="wBump" data-a="${i}:-1" ${w.base[i] <= PB_MIN ? 'disabled' : ''} aria-label="Lower ${a}">−</button><span class="num text-xl w-8 text-center">${w.base[i]}</span><button class="icon-btn" data-act="wBump" data-a="${i}:1" ${w.base[i] >= PB_MAX || pointsLeft(w) < pbCost(w.base[i] + 1) - pbCost(w.base[i]) ? 'disabled' : ''} aria-label="Raise ${a}">+</button></div>`;
         else ctl = `<input type="number" min="1" max="20" class="field num text-center text-xl" data-f="w.base.${i}" data-t="n" value="${w.base[i]}" aria-label="${ABN[a]}">`;
         return `<div class="field-box"><div class="lbl">${ABN[a]}</div>${ctl}<div class="mt-1 text-sm">${w.plus2 === a ? '<span class="chip user">+2</span> ' : ''}${w.plus1 === a ? '<span class="chip user">+1</span> ' : ''}<span class="num">= ${fin(a)} (${sg(mod(fin(a)))})</span></div></div>`;
       }).join('')}</div>
-      <h3 class="box-title text-left mt-5">Background increases</h3><p class="muted text-sm mb-2">Your background raises one ability by 2 and another by 1.</p>
-      <div class="grid sm:grid-cols-2 gap-3"><div><label class="lbl">+2 to</label><select class="select" data-f="w.plus2" data-t="ab"><option value="">—</option>${bonusOpts(w).map(a => `<option value="${a}" ${w.plus2 === a ? 'selected' : ''} ${w.plus1 === a ? 'disabled' : ''}>${ABN[a]}</option>`).join('')}</select></div>
-      <div><label class="lbl">+1 to</label><select class="select" data-f="w.plus1" data-t="ab"><option value="">—</option>${bonusOpts(w).map(a => `<option value="${a}" ${w.plus1 === a ? 'selected' : ''} ${w.plus2 === a ? 'disabled' : ''}>${ABN[a]}</option>`).join('')}</select></div></div>`;
+      ${w.method === 'roll' ? `<h3 class="box-title text-left mt-5">Rolled score bonus</h3><p class="muted text-sm mb-2">Add +2 to one score of ${ROLL_PLUS2_MAX} or lower, and +1 to a different score of ${ROLL_PLUS1_MAX} or lower.</p>
+      <div class="grid sm:grid-cols-2 gap-3"><div><label class="lbl" for="plus-two">+2 to</label><select id="plus-two" class="select" data-f="w.plus2" data-t="ab"><option value="">—</option>${ABIL.map((a, i) => `<option value="${a}" ${w.plus2 === a ? 'selected' : ''} ${w.plus1 === a || w.base[i] > ROLL_PLUS2_MAX ? 'disabled' : ''}>${ABN[a]} (${w.base[i]})</option>`).join('')}</select></div>
+      <div><label class="lbl" for="plus-one">+1 to</label><select id="plus-one" class="select" data-f="w.plus1" data-t="ab"><option value="">—</option>${ABIL.map((a, i) => `<option value="${a}" ${w.plus1 === a ? 'selected' : ''} ${w.plus2 === a || w.base[i] > ROLL_PLUS1_MAX ? 'disabled' : ''}>${ABN[a]} (${w.base[i]})</option>`).join('')}</select></div></div>` : ''}`;
   } else if (s === 6) {
     const cls = find('classes', w.cls), bg = find('backgrounds', w.background);
     inner = `<h2 class="box-title text-left">Starting equipment</h2>` + (cls ? `<div class="flex flex-wrap gap-1.5 mb-3"><button class="btn btn-sm ${!w.gold ? 'btn-primary' : ''}" data-act="wGold" data-a="0">Take ${esc(cls.name)} gear</button><button class="btn btn-sm ${w.gold ? 'btn-primary' : ''}" data-act="wGold" data-a="1">Take ${cls.startingGold} gp instead</button></div>
       ${!w.gold ? `<div class="grid sm:grid-cols-2 gap-1.5">${cls.startingEquipment.map(id => { const it = find('items', id); const on = w.items.includes(id); return `<button class="choice flex items-center gap-2 ${on ? 'selected' : ''}" data-act="wItem" data-a="${esc(id)}"><span class="pip ${on ? 'on' : ''}" aria-hidden="true"></span><b>${esc(it ? it.name : id)}</b><span class="muted text-sm ml-auto">${esc(itemSummary(it))}</span></button>`; }).join('')}</div>` : ''}` : '<p class="muted">Choose a class first.</p>')
       + (bg && bg.equipment ? `<p class="mt-3 text-sm"><span class="lbl">From your background:</span> ${esc(bg.equipment)}</p>` : '');
   } else if (s === 7) {
-    const bg = find('backgrounds', w.background), bt = bg && find('talents', bg.talentId);
-    inner = `<h2 class="box-title text-left">Talent</h2>${bt ? `<p class="mb-3">Your background grants <b>${esc(bt.name)}</b>. <span class="muted text-sm">${esc(bt.description)}</span></p>` : ''}<p class="muted text-sm mb-2">Pick an additional talent if your lineage or GM grants one, or skip this step.</p>
+    const bg = find('backgrounds', w.background), bts = bg ? [find('talents', bg.talentId), find('talents', w.bgTalent)].filter((t, i, a) => t && a.findIndex(x => x && x.id === t.id) === i) : [];
+    inner = `<h2 class="box-title text-left">Talent</h2>${bts.map(bt => `<p class="mb-2">Your background grants <b>${esc(bt.name)}</b>. <span class="muted text-sm">${esc(bt.description)}</span></p>`).join('')}<p class="muted text-sm mb-2">Pick an additional talent if your lineage or GM grants one, or skip this step.</p>
       <div class="grid sm:grid-cols-2 gap-2">${lib('talents').map(t => choice(w.talent === t.id, 'wTalent', t.id, `<div class="flex items-center gap-2"><b>${esc(t.name)}</b><span class="chip ml-auto">${esc(t.category)}</span></div><div class="text-sm muted">${esc(t.description)}</div>${t.prerequisite ? `<div class="text-xs mt-0.5">Prerequisite: ${esc(t.prerequisite)}</div>` : ''}`)).join('')}</div>`;
   } else {
     const p = buildCharacter(w);
-    const probs = [!w.lineage && 'No lineage chosen.', !w.heritage && 'No heritage chosen.', !w.background && 'No background chosen.', !w.cls && 'No class chosen.', (!w.plus2 || !w.plus1) && 'Background ability increases not chosen.'].filter(Boolean);
+    const probs = [!w.lineage && 'No lineage chosen.', !w.heritage && 'No heritage chosen.', !w.background && 'No background chosen.', !w.cls && 'No class chosen.', w.bgSkills.length < bgSkillsNeeded(w) && 'Background skills not chosen.', needsBgTalent(w) && 'Background talent not chosen.', w.herSkills.length < herSkillsNeeded(w) && 'Heritage skills not chosen.', w.method === 'roll' && !rolledOk(w) && 'Rolled score bonus not chosen.'].filter(Boolean);
     inner = `<h2 class="box-title text-left">Review</h2><div class="grid sm:grid-cols-2 gap-4"><div><div class="display font-extrabold text-2xl" style="color:var(--ink)">${esc(p.name)}</div><div>${esc(p.className)} 1 · ${esc(p.lineageName)} · ${esc(p.heritageName)} · ${esc(p.backgroundName)}</div>
       <div class="grid grid-cols-6 gap-1 mt-3 text-center">${ABIL.map((a, i) => `<div class="field-box" style="padding:.25rem"><div class="lbl">${a}</div><div class="num">${p.scores[i]}</div><div class="text-xs muted">${sg(mod(p.scores[i]))}</div></div>`).join('')}</div>
       <div class="flex gap-4 mt-3"><span>HP <b class="num">${p.maxHp}</b></span><span>AC <b class="num">${ac(p, !!wornShield(p))}</b></span><span>Speed <b class="num">${esc(p.speed)}</b></span></div></div>
@@ -611,10 +711,17 @@ function levelModal(c) {
   if (ns && subs.length && !sub) missing = 'Choose a subclass.';
   else if (d && d.grantsAbilityIncrease && !lu.a) missing = 'Choose an ability to increase.';
   else if (d && d.grantsAbilityIncrease && lu.mode === 'one' && !lu.b) missing = 'Choose a second ability.';
+  else if (d && d.grantsAbilityIncrease && lu.mode === 'talent' && !lu.impTalent) missing = 'Choose a talent for your Improvement.';
   else if (d && d.grantsTalent && !lu.talent) missing = 'Choose a talent.';
   else if (lu.roll && lu.rolled == null) missing = 'Roll your hit die.';
   lu._ok = !missing;
-  const slots = d && d.spellSlots && d.spellSlots.length ? d.spellSlots.map((v, i) => v ? `${circ(i + 1)} ×${v}${c.slotsTotal[i] !== v ? ' (new)' : ''}` : '').filter(Boolean).join(', ') : '';
+  const cats = talentCats(cls, find('subclasses', c.subclassId) || (ns ? sub : null)), avail = availableTalents(c, cats);
+  const catText = cats.length ? cats.slice().sort().join(' or ') + ' list' : 'any list';
+  const talentSelect = (field, value, other) => `<select class="select" data-f="lu.${field}" data-t="s" aria-label="Talent"><option value="">Select a talent…</option>${['Magic', 'Martial', 'Technical'].filter(cat => avail.some(x => x.category === cat)).map(cat => `<optgroup label="${cat}">${avail.filter(x => x.category === cat).map(x => `<option value="${esc(x.id)}" ${value === x.id ? 'selected' : ''} ${other === x.id ? 'disabled' : ''}>${esc(x.name)}</option>`).join('')}</optgroup>`).join('')}</select>`;
+  const it = lu.impTalent && find('talents', lu.impTalent);
+  const rc = resourceChanges(c, cls, n);
+  const slotList = slotsAt(cls, find('subclasses', c.subclassId) || (ns ? sub : null), n);
+  const slots = slotList ? slotList.map((v, i) => v ? `${circ(i + 1)} ×${v}${c.slotsTotal[i] !== v ? ' (new)' : ''}` : '').filter(Boolean).join(', ') : '';
   const t = lu.talent && find('talents', lu.talent);
   return `<div class="modal-back" data-act="closeModal" data-self="1"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="lvl-title">
     <div class="modal-head"><h2 id="lvl-title" class="display font-extrabold text-xl" style="color:var(--ink)">Level up to ${n}</h2><span class="muted">${esc(c.className)}</span><button class="icon-btn ml-auto text-xl" data-act="closeModal" title="Close">✕</button></div>
@@ -626,13 +733,14 @@ function levelModal(c) {
         <p class="mt-1.5">Max HP <span class="num">${c.maxHp}</span> → <span class="num" style="color:var(--good)">${c.maxHp + hpGain(c, lu)}</span></p></section>
       ${ns ? `<section><h3 class="box-title text-left">Choose your subclass</h3>${subs.length ? '' : `<p class="muted text-sm">No subclasses for ${esc(c.className)} in your content yet. You can add one in Content, or continue without.</p>`}
         <div class="grid sm:grid-cols-2 gap-2">${subs.map(x => choice(lu.sub === x.id, 'luSub', x.id, `<b>${esc(x.name)}</b><div class="muted text-sm">${esc(x.description)}</div>`)).join('')}</div></section>` : ''}
-      ${d && d.grantsAbilityIncrease ? `<section><h3 class="box-title text-left">Ability score increase</h3><div class="flex gap-2 mb-2"><button class="btn btn-sm ${lu.mode === 'two' ? 'btn-primary' : ''}" data-act="luMode" data-a="two">+2 to one</button><button class="btn btn-sm ${lu.mode === 'one' ? 'btn-primary' : ''}" data-act="luMode" data-a="one">+1 to two</button></div>
-        <div class="grid grid-cols-3 sm:grid-cols-6 gap-1.5">${ABIL.map((a, i) => { const picked = lu.a === a || lu.b === a; const add = lu.mode === 'two' && lu.a === a ? 2 : picked ? 1 : 0; return `<button class="choice text-center ${picked ? 'selected' : ''}" data-act="luAb" data-a="${a}" ${c.scores[i] >= 20 ? 'disabled' : ''}><div class="lbl">${a}</div><div class="num text-lg">${c.scores[i]}${add ? ' → ' + Math.min(20, c.scores[i] + add) : ''}</div></button>`; }).join('')}</div></section>` : ''}
-      ${d && d.grantsTalent ? `<section><h3 class="box-title text-left">Choose a talent</h3><select class="select" data-f="lu.talent" data-t="s"><option value="">Select a talent…</option>${['Magic', 'Martial', 'Technical'].map(cat => `<optgroup label="${cat}">${lib('talents').filter(x => x.category === cat).map(x => `<option value="${esc(x.id)}" ${lu.talent === x.id ? 'selected' : ''} ${c.talents.some(ct => ct.name === x.name) ? 'disabled' : ''}>${esc(x.name)}</option>`).join('')}</optgroup>`).join('')}</select>
+      ${d && d.grantsAbilityIncrease ? `<section><h3 class="box-title text-left">Improvement</h3><div class="flex flex-wrap gap-2 mb-2"><button class="btn btn-sm ${lu.mode === 'two' ? 'btn-primary' : ''}" data-act="luMode" data-a="two">+2 to one</button><button class="btn btn-sm ${lu.mode === 'one' ? 'btn-primary' : ''}" data-act="luMode" data-a="one">+1 to two</button><button class="btn btn-sm ${lu.mode === 'talent' ? 'btn-primary' : ''}" data-act="luMode" data-a="talent">+1 and a talent</button></div>
+        <div class="grid grid-cols-3 sm:grid-cols-6 gap-1.5">${ABIL.map((a, i) => { const picked = lu.a === a || lu.b === a; const add = lu.mode === 'two' && lu.a === a ? 2 : picked ? 1 : 0; return `<button class="choice text-center ${picked ? 'selected' : ''}" data-act="luAb" data-a="${a}" ${c.scores[i] >= 20 ? 'disabled' : ''}><div class="lbl">${a}</div><div class="num text-lg">${c.scores[i]}${add ? ' → ' + Math.min(20, c.scores[i] + add) : ''}</div></button>`; }).join('')}</div>
+        ${lu.mode === 'talent' ? `<label class="lbl" style="display:block;margin-top:.75rem">Talent (${catText})</label>${talentSelect('impTalent', lu.impTalent, lu.talent)}${it ? `<p class="text-sm muted mt-1">${esc(it.description)}${it.prerequisite ? ' Prerequisite: ' + esc(it.prerequisite) + '.' : ''}</p>` : ''}` : ''}</section>` : ''}
+      ${d && d.grantsTalent ? `<section><h3 class="box-title text-left">Choose a talent</h3>${talentSelect('talent', lu.talent, lu.impTalent)}
         ${t ? `<p class="text-sm muted mt-1">${esc(t.description)}${t.prerequisite ? ' Prerequisite: ' + esc(t.prerequisite) + '.' : ''}</p>` : ''}</section>` : ''}
       <section class="gain"><h3 class="box-title text-left">What you gain</h3><ul style="display:grid;gap:.3rem">
         ${profFor(n) !== P(c) ? `<li>Proficiency bonus <span class="num">${sg(P(c))}</span> → <span class="num" style="color:var(--good)">${sg(profFor(n))}</span></li>` : ''}
-        <li>Hit dice <span class="num">${c.level}</span> → <span class="num">${n}</span> (d${c.hitDie})</li>${slots ? `<li>Spell slots: ${slots}</li>` : ''}
+        <li>Hit dice <span class="num">${c.level}</span> → <span class="num">${n}</span> (d${c.hitDie})</li>${slots ? `<li>Spell slots: ${slots}</li>` : ''}${rc.map(x => `<li><b>${esc(x.name)}</b> uses <span class="num">${x.from}</span> → <span class="num" style="color:var(--good)">${x.to}</span></li>`).join('')}
         ${g.map(f => `<li><b>${esc(f.name)}</b> <span class="chip">${esc(f.source)}</span> <span class="text-sm muted">${esc(f.description)}</span></li>`).join('') || '<li class="muted text-sm">No new features at this level.</li>'}</ul></section>
     </div>
     <div class="modal-foot">${missing ? `<span class="text-sm muted">${missing}</span>` : ''}<button class="btn ml-auto" data-act="closeModal">Cancel</button><button class="btn btn-primary" data-act="luApply" ${missing ? 'disabled' : ''}>Level up</button></div>
@@ -641,19 +749,30 @@ function levelModal(c) {
 
 // ---------- settings ----------
 const ENUMS = { category: ['Magic', 'Martial', 'Technical'], type: ['Weapon', 'Armor', 'Shield', 'Gear'], armorCategory: ['None', 'Light', 'Medium', 'Heavy'], spellcastingAbility: ABIL };
-const ENUM_LISTS = { savingThrows: ABIL, abilityOptions: ABIL };
-const TEMPLATES = { traits: () => ({ name: '', level: 1, description: '', usesMax: 0, recharge: '' }), features: () => ({ name: '', level: 1, description: '', usesMax: 0, recharge: '' }), levels: (list) => ({ level: list.length + 1, features: [], grantsTalent: false, grantsAbilityIncrease: false, spellSlots: [] }) };
+const ENUM_LISTS = { savingThrows: ABIL, talentCategories: ['Magic', 'Martial', 'Technical'] };
+const TEMPLATES = { traits: () => ({ name: '', level: 1, description: '', usesMax: 0, usesFrom: '', recharge: '' }), features: () => ({ name: '', level: 1, description: '', usesMax: 0, usesFrom: '', recharge: '' }),
+  levels: (list) => ({ level: list.length + 1, features: [], grantsTalent: false, grantsAbilityIncrease: false, spellSlots: [], resources: [] }),
+  resources: () => ({ name: '', usesMax: 1, recharge: '' }), spellSlots: (list) => ({ level: list.length ? list[list.length - 1].level + 1 : 1, slots: [] }) };
+const ADD_LABEL = { levels: 'level', traits: 'trait', features: 'feature', resources: 'resource', spellSlots: 'slot row' };
 const BLANK = {
   lineages: () => ({ id: '', name: 'New lineage', source: 'Homebrew', description: '', size: 'Medium', speed: 30, traits: [] }),
-  heritages: () => ({ id: '', name: 'New heritage', source: 'Homebrew', description: '', languages: 'Common', traits: [] }),
-  backgrounds: () => ({ id: '', name: 'New background', source: 'Homebrew', description: '', skillProficiencies: [], toolProficiencies: '', abilityOptions: [], equipment: '', talentId: '', traits: [] }),
-  classes: () => ({ id: '', name: 'New class', source: 'Homebrew', description: '', hitDie: 8, savingThrows: [], armorProficiencies: [], weaponProficiencies: [], otherProficiencies: '', skillOptions: [], skillChoices: 2, spellcastingAbility: null, subclassLevel: 3, startingEquipment: [], startingGold: 0, levels: Array.from({ length: 20 }, (_, i) => ({ level: i + 1, features: [], grantsTalent: false, grantsAbilityIncrease: false, spellSlots: [] })) }),
-  subclasses: () => ({ id: '', name: 'New subclass', source: 'Homebrew', description: '', classId: '', features: [] }),
-  talents: () => ({ id: '', name: 'New talent', source: 'Homebrew', description: '', category: 'Martial', prerequisite: '' }),
+  heritages: () => ({ id: '', name: 'New heritage', source: 'Homebrew', description: '', languages: 'Common', languageChoices: 0, skillProficiencies: [], skillOptions: [], skillChoices: 0, traits: [] }),
+  backgrounds: () => ({ id: '', name: 'New background', source: 'Homebrew', description: '', skillProficiencies: [], skillOptions: [], skillChoices: 0, toolProficiencies: '', equipment: '', talentId: '', talentOptions: [], traits: [] }),
+  classes: () => ({ id: '', name: 'New class', source: 'Homebrew', description: '', hitDie: 8, savingThrows: [], armorProficiencies: [], weaponProficiencies: [], otherProficiencies: '', skillOptions: [], skillChoices: 2, spellcastingAbility: null, subclassLevel: 3, talentCategories: [], startingEquipment: [], startingGold: 0, levels: Array.from({ length: 20 }, (_, i) => ({ level: i + 1, features: [], grantsTalent: false, grantsAbilityIncrease: false, spellSlots: [], resources: [] })) }),
+  subclasses: () => ({ id: '', name: 'New subclass', source: 'Homebrew', description: '', classId: '', features: [], talentCategories: [], spellcastingAbility: null, spellSlots: [] }),
+  talents: () => ({ id: '', name: 'New talent', source: 'Homebrew', description: '', category: 'Martial', prerequisite: '', repeatable: false }),
   spells: () => ({ id: '', name: 'New spell', source: 'Homebrew', description: '', circle: 1, school: '', tradition: '', castingTime: '1 action', range: '', components: '', duration: 'Instantaneous', concentration: false, ritual: false }),
   items: () => ({ id: '', name: 'New item', source: 'Homebrew', description: '', type: 'Gear', weaponCategory: '', damage: '', damageType: '', range: '', properties: '', finesse: false, ranged: false, baseAC: 0, armorCategory: 'None', cost: '', weight: '' })
 };
-const HINTS = { id: 'Unique key. Reusing a built-in id overrides that entry.', source: "Book or homebrew label, e.g. 'Player's Guide', 'Homebrew'.", skillProficiencies: 'Skill names exactly as on the sheet.', abilityOptions: 'Abilities this background lets you raise.', talentId: 'Talent id granted at level 1 (optional).', armorProficiencies: 'Any of: Light, Medium, Heavy, Shields.', weaponProficiencies: 'Any of: Simple, Martial.', startingEquipment: 'Item ids from the Items list.', spellSlots: 'Total slots for circles 1-9, e.g. 4, 3, 2.', usesMax: '0 if it has no limited uses.', recharge: 'Short Rest, Long Rest or blank.', classId: 'Id of the parent class.', circle: '0 for cantrips.', subclassLevel: 'Level at which the subclass is chosen.' };
+const HINTS = { id: 'Unique key. Reusing a built-in id overrides that entry.', source: "Book or homebrew label, e.g. 'Player's Guide', 'Homebrew'.", skillProficiencies: 'Skills always granted, exactly as on the sheet.', skillOptions: 'Skills the player can choose from.', skillChoices: 'How many of the skill options to choose.', talentId: 'Talent id always granted at level 1 (optional).', talentOptions: 'Talent ids the player chooses one from (optional).', languageChoices: 'How many extra languages the player picks.', talentCategories: 'Talent lists for Improvement levels (subclass: lists it adds).', resources: 'Feature uses that change at this level, e.g. Rage 3.', usesFrom: 'Optional: PB, or STR/DEX/CON/INT/WIS/CHA for that modifier, with an optional +N (e.g. PB+1). Min 1.', repeatable: 'Tick if the talent can be taken more than once.', slots: 'Total slots for circles 1-9, e.g. 3, 2.', armorProficiencies: 'Any of: Light, Medium, Heavy, Shields.', weaponProficiencies: 'Any of: Simple, Martial.', startingEquipment: 'Item ids from the Items list.', spellSlots: 'Total slots for circles 1-9, e.g. 4, 3, 2.', usesMax: '0 if it has no limited uses.', recharge: 'Short Rest, Long Rest or blank.', classId: 'Id of the parent class.', circle: '0 for cantrips.', subclassLevel: 'Level at which the subclass is chosen.' };
+/** Fills fields added in later versions so they show up in the editor. */
+function withDefaults(kind, e) {
+  const d = Object.assign(BLANK[kind](), e);
+  delete d.abilityOptions; // backgrounds no longer raise abilities
+  if (kind === 'classes') d.levels.forEach(l => { if (!l.resources) l.resources = []; });
+  ['traits', 'features'].forEach(k => (d[k] || []).forEach(f => { if (f.usesFrom == null) f.usesFrom = ''; }));
+  return d;
+}
 const label = k => k.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, x => x.toUpperCase());
 function itemTitle(o, i, key) {
   if (key === 'levels') { const ex = []; if (o.features.length) ex.push(o.features.map(f => f.name || 'feature').join(', ')); if (o.grantsTalent) ex.push('talent'); if (o.grantsAbilityIncrease) ex.push('ability increase'); return `Level ${o.level}${ex.length ? ' — ' + ex.join(' · ') : ''}`; }
@@ -666,9 +785,9 @@ function editor(obj, path, depth) {
     let ctl;
     if (ENUMS[k]) ctl = `<select class="select" data-f="${f}" data-t="${k === 'spellcastingAbility' ? 'ab' : 's'}">${k === 'spellcastingAbility' ? '<option value="">None</option>' : ''}${ENUMS[k].map(o => `<option ${v === o ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
     else if (ENUM_LISTS[k]) ctl = `<div class="flex flex-wrap gap-1">${ENUM_LISTS[k].map(o => `<button class="btn btn-sm ${v.includes(o) ? 'btn-primary' : ''}" data-act="edToggle" data-a="${f}|${o}">${o}</button>`).join('')}</div>`;
-    else if (k === 'spellSlots') ctl = `<input class="field num" data-f="${f}" data-t="csvn" value="${esc(v.join(', '))}" placeholder="e.g. 4, 3, 2">`;
-    else if (Array.isArray(v) && (v.length === 0 ? !TEMPLATES[k] : typeof v[0] === 'string')) ctl = `<input class="field" data-f="${f}" data-t="csv" value="${esc(v.join(', '))}" placeholder="Comma separated">`;
-    else if (Array.isArray(v)) ctl = `<div class="flex flex-col gap-1.5">${v.map((o, i) => `<details class="ed-item" ${S.open && S.open[`${f}.${i}`] ? 'open' : ''} data-open="${f}.${i}"><summary><span class="font-semibold">${esc(itemTitle(o, i, k))}</span><button class="icon-btn ml-auto" data-act="edRemove" data-a="${f}|${i}" title="Remove">✕</button></summary><div class="p-2 pt-1">${editor(o, `${f}.${i}`, depth + 1)}</div></details>`).join('')}<button class="btn btn-sm" style="align-self:flex-start" data-act="edAdd" data-a="${f}|${k}">+ Add ${k === 'levels' ? 'level' : k === 'traits' ? 'trait' : 'feature'}</button></div>`;
+    else if (k === 'slots' || (k === 'spellSlots' && (v.length ? typeof v[0] === 'number' : depth > 0))) ctl = `<input class="field num" data-f="${f}" data-t="csvn" value="${esc(v.join(', '))}" placeholder="e.g. 4, 3, 2">`;
+    else if (Array.isArray(v) && (v.length === 0 ? !TEMPLATES[k] || (k === 'spellSlots' && depth > 0) : typeof v[0] === 'string')) ctl = `<input class="field" data-f="${f}" data-t="csv" value="${esc(v.join(', '))}" placeholder="Comma separated">`;
+    else if (Array.isArray(v)) ctl = `<div class="flex flex-col gap-1.5">${v.map((o, i) => `<details class="ed-item" ${S.open && S.open[`${f}.${i}`] ? 'open' : ''} data-open="${f}.${i}"><summary><span class="font-semibold">${esc(itemTitle(o, i, k))}</span><button class="icon-btn ml-auto" data-act="edRemove" data-a="${f}|${i}" title="Remove">✕</button></summary><div class="p-2 pt-1">${editor(o, `${f}.${i}`, depth + 1)}</div></details>`).join('')}<button class="btn btn-sm" style="align-self:flex-start" data-act="edAdd" data-a="${f}|${k}">+ Add ${ADD_LABEL[k] || 'item'}</button></div>`;
     else if (typeof v === 'boolean') ctl = `<input type="checkbox" data-f="${f}" data-t="b" ${v ? 'checked' : ''}>`;
     else if (typeof v === 'number') ctl = `<input type="number" class="field num" style="width:7rem" data-f="${f}" data-t="n" value="${v}">`;
     else if (k === 'description') ctl = `<textarea class="area" rows="3" data-f="${f}" data-t="s">${esc(v)}</textarea>`;
@@ -749,7 +868,12 @@ function bindChange(el) {
   const { obj, key } = resolve(el.dataset.f);
   obj[key] = coerce(el);
   const head = el.dataset.f.split('.')[0];
-  if (head === 'w' && el.dataset.f.startsWith('w.assign')) S.wiz.base = S.wiz.assign.map(a => a != null && a < S.wiz.pool.length ? S.wiz.pool[a] : 8);
+  if (head === 'w' && el.dataset.f.startsWith('w.assign')) {
+    const w = S.wiz; w.base = w.assign.map(a => a != null && a < w.pool.length ? w.pool[a] : 8);
+    // a re-assignment can push a score past the rolled-bonus limits
+    if (w.plus2 && w.base[ABIL.indexOf(w.plus2)] > ROLL_PLUS2_MAX) w.plus2 = null;
+    if (w.plus1 && w.base[ABIL.indexOf(w.plus1)] > ROLL_PLUS1_MAX) w.plus1 = null;
+  }
   if (head === 'c') { S.notice = ''; save(); }
 }
 
@@ -764,7 +888,7 @@ const A = {
   exportChar(id) { const c = S.chars.find(x => x.id === id); S.modal = { title: `Export ${c.name}`, json: JSON.stringify(c, null, 2) }; },
   tab(k) { S.tab = k; S.castMsg = ''; },
   rollCheck(a) { d20(`${ABN[a]} check`, M(cur(), a)); },
-  rollSave(a) { d20(`${ABN[a]} save`, saveB(cur(), a)); },
+  rollSave(a) { d20(`${ABN[a]} save`, saveB(cur(), a), null, null, 'save'); },
   rollSkill(s) { d20(`${s} check`, skB(cur(), s)); },
   rollInit() { d20('Initiative', initB(cur())); },
   toggleSave(i) { const c = cur(); c.saveProficiencies[+i] = !c.saveProficiencies[+i]; save(); },
@@ -774,11 +898,11 @@ const A = {
   setDS(n) { const c = cur(); c.deathSuccesses = c.deathSuccesses === +n ? +n - 1 : +n; save(); },
   setDF(n) { const c = cur(); c.deathFailures = c.deathFailures === +n ? +n - 1 : +n; save(); },
   setEx(n) { const c = cur(); c.exhaustion = c.exhaustion === +n ? +n - 1 : +n; save(); },
-  attack(i) { const c = cur(), w = c.weapons[+i]; d20(`${w.name} attack`, atkB(c, w), dmgExpr(c, w), `${w.name} damage (${w.damageType})`); },
+  attack(i) { const c = cur(), w = c.weapons[+i]; d20(`${w.name} attack`, atkB(c, w), dmgExpr(c, w), `${w.name} damage (${w.damageType})`, 'attack'); },
   damage(i) { const c = cur(), w = c.weapons[+i]; rollExpr(`${w.name} damage (${w.damageType})`, dmgExpr(c, w)); },
   hp(kind) { const c = cur(), n = S.hpAmt || 0; if (kind === 'dmg') takeDamage(c, n); else if (kind === 'heal') heal(c, n); else c.tempHp = Math.max(c.tempHp, n); S.hpAmt = 0; save(); },
   hitDie() { const c = cur(); const r = rollExpr('Hit die', `1d${c.hitDie}${sg(M(c, 'CON'))}`); c.hitDiceUsed++; heal(c, Math.max(0, total(r))); save(); },
-  deathSave() { const c = cur(), r = d20('Death save', 0), n = r.dice[0]; if (n === 20) { c.currentHp = 1; c.deathSuccesses = 0; c.deathFailures = 0; } else if (n === 1) c.deathFailures = Math.min(3, c.deathFailures + 2); else if (n >= 10) c.deathSuccesses = Math.min(3, c.deathSuccesses + 1); else c.deathFailures = Math.min(3, c.deathFailures + 1); save(); },
+  deathSave() { const c = cur(), r = d20('Death save', 0, null, null, 'save'), n = r.dice[0]; if (n === 20) { c.currentHp = 1; c.deathSuccesses = 0; c.deathFailures = 0; } else if (n === 1) c.deathFailures = Math.min(3, c.deathFailures + 2); else if (n >= 10) c.deathSuccesses = Math.min(3, c.deathSuccesses + 1); else c.deathFailures = Math.min(3, c.deathFailures + 1); save(); },
   addTalent() { const t = find('talents', S.pick.talent); if (t) { addTalent(cur(), t); save(); } S.pick.talent = ''; },
   rm(p) { const [list, i] = p.split('.'); cur()[list].splice(+i, 1); save(); },
   mode(m) { S.dice.mode = m; },
@@ -787,16 +911,28 @@ const A = {
   addDie(sd) { if (poolCount(S.pool) >= MAX_DICE) { S.pool.err = `Roll up to ${MAX_DICE} dice at a time.`; return; } S.pool.dice[sd] = (S.pool.dice[sd] || 0) + 1; syncPool(); },
   rmDie(sd) { const n = S.pool.dice[sd] || 0; if (n <= 1) delete S.pool.dice[sd]; else S.pool.dice[sd] = n - 1; syncPool(); },
   modStep(d) { S.pool.mod = Math.max(-MOD_STEP_LIMIT, Math.min(MOD_STEP_LIMIT, S.pool.mod + +d)); syncPool(); },
-  poolRoll() { const p = S.pool; if (!poolCount(p) || p.err) return; const label = 'Custom roll · ' + poolDisplay(p); if (poolCount(p) === 1 && p.dice[20]) d20(label, p.mod); else rollExpr(label, poolExpr(p)); },
+  poolRoll() { const p = S.pool; if (!poolCount(p) || p.err) return; const label = 'Custom roll · ' + poolDisplay(p); if (poolCount(p) === 1 && p.dice[20]) d20(label, p.mod, null, null, 'other'); else rollExpr(label, poolExpr(p)); },
   poolClear() { S.pool = { dice: {}, mod: 0, text: '', err: '' }; },
   reroll(i) { const r = S.dice.history[+i]; if (r) reroll(r); },
-  spendLuck() { const c = cur(), r = S.dice.history[0]; if (c.luck > 0 && r) { c.luck--; r.luck++; save(); } },
-  gainLuck() { const c = cur(), r = S.dice.history[0]; if (c.luck < MAX_LUCK && r && !r.gained) { c.luck++; r.gained = true; save(); } },
+  spendLuck() { const c = cur(), r = S.dice.history[0]; if (r && canSpendLuck(r) && c.luck > 0) { c.luck--; r.luck++; save(); } },
+  luckReroll() {
+    const c = cur(), r = S.dice.history[0];
+    if (!r || !canSpendLuck(r) || c.luck < LUCK_REROLL) return;
+    c.luck -= LUCK_REROLL; if (r.rerolledFrom == null) r.rerolledFrom = r.dice[0];
+    r.luckReroll = (r.luckReroll || 0) + LUCK_REROLL; r.dice[0] = die(20); r.dropped = null; save();
+  },
+  gainLuck() {
+    const c = cur(), r = S.dice.history[0];
+    if (!r || !canEarnLuck(r) || r.gained || c.luckGainedThisTurn) return;
+    if (c.luck >= MAX_LUCK) { c.luck = die(4); r.luckResetTo = c.luck; } else c.luck++;
+    r.gained = true; c.luckGainedThisTurn = true; save();
+  },
+  newTurn() { const c = cur(); if (c.luckGainedThisTurn) { c.luckGainedThisTurn = false; save(); } },
   rollDmg(crit) { const r = S.dice.history[0]; if (r && r.dmg) rollExpr(r.dmgLabel, r.dmg, crit === '1'); },
   shortRest() { cur().features.forEach(f => { if (/short/i.test(f.recharge)) f.usesSpent = 0; }); save(); S.notice = 'Short rest taken. Spend hit dice from the Hit Points box to heal.'; },
-  longRest() { S.modal = { confirm: 'Take a long rest? HP, spell slots and feature uses are restored.', yes: 'Take long rest', then() { const c = cur(); c.currentHp = c.maxHp; c.tempHp = 0; c.hitDiceUsed = Math.max(0, c.hitDiceUsed - Math.max(1, Math.floor(c.level / 2))); c.deathSuccesses = 0; c.deathFailures = 0; c.exhaustion = Math.max(0, c.exhaustion - 1); c.slotsExpended = c.slotsExpended.map(() => 0); c.features.forEach(f => { if (f.usesMax > 0) f.usesSpent = 0; }); save(); S.notice = 'Long rest taken.'; } }; },
+  longRest() { S.modal = { confirm: 'Take a long rest? HP, spell slots and feature uses are restored.', yes: 'Take long rest', then() { const c = cur(); c.currentHp = c.maxHp; c.tempHp = 0; c.hitDiceUsed = Math.max(0, c.hitDiceUsed - Math.max(1, Math.floor(c.level / 2))); c.deathSuccesses = 0; c.deathFailures = 0; c.exhaustion = Math.max(0, c.exhaustion - 1); c.slotsExpended = c.slotsExpended.map(() => 0); c.features.forEach(f => { if (usesMax(c, f) > 0) f.usesSpent = 0; }); save(); S.notice = 'Long rest taken.'; } }; },
   // equipment
-  addFeature() { const c = cur(); c.features.push({ name: 'New feature', level: c.level, source: 'Custom', description: '', usesMax: 0, usesSpent: 0, recharge: '' }); save(); },
+  addFeature() { const c = cur(); c.features.push({ name: 'New feature', level: c.level, source: 'Custom', description: '', usesMax: 0, usesSpent: 0, usesFrom: '', recharge: '' }); save(); },
   addWeapon() { cur().weapons.push({ name: 'New weapon', damage: '1d6', damageType: '', range: '', properties: '', options: '', finesse: false, ranged: false, proficient: true, magicBonus: 0, abilityOverride: null }); save(); },
   addArmor() { cur().armor.push({ name: 'New armor', baseAC: 11, category: 'Light', isShield: false, properties: '', magicBonus: 0, equipped: false }); save(); },
   addGear() { cur().gear.push({ name: '', quantity: 1, notes: '' }); save(); },
@@ -807,7 +943,7 @@ const A = {
   addMount() { cur().mounts.push({ name: '', type: '', speed: '', carryingCapacity: '', notes: '' }); save(); },
   addVehicle() { cur().vehicles.push({ name: '', type: '', proficient: false, ac: 0, maxHp: 0, currentHp: 0, speedRound: '', speedTravel: '', crew: '', passengers: '', cargo: '', notes: '' }); save(); },
   // spells
-  spellAtk() { d20('Spell attack', spellAtk(cur())); },
+  spellAtk() { d20('Spell attack', spellAtk(cur()), null, null, 'attack'); },
   prep(i) { const s = cur().spells[+i]; s.prepared = !s.prepared; save(); },
   cast(i) { const c = cur(), s = c.spells[+i], slot = slotFor(c, s); if (slot == null) return; if (slot > 0) c.slotsExpended[slot - 1]++; S.castMsg = slot === 0 ? `Cast ${s.name}.` : `Cast ${s.name} using a ${circ(slot)}-circle slot.${s.concentration ? ' Concentration started.' : ''}`; save(); },
   addSpell() { const s = find('spells', S.pick.spell); if (s) { cur().spells.push({ name: s.name, circle: s.circle, castingTime: s.castingTime, range: s.range, components: s.components, duration: s.duration, concentration: s.concentration, prepared: false, description: s.description }); save(); } S.pick.spell = ''; },
@@ -815,12 +951,18 @@ const A = {
   addRitual() { const s = find('spells', S.pick.ritual); if (s) { cur().rituals.push({ name: s.name, circle: Math.max(1, s.circle), castingTime: s.castingTime + ' + 10 minutes', materials: s.components, duration: s.duration }); save(); } S.pick.ritual = ''; },
   addCustomRitual() { cur().rituals.push({ name: 'New ritual', circle: 1, castingTime: '', materials: '', duration: '' }); save(); },
   // level up
-  openLevel() { S.lu = { roll: false, rolled: null, sub: '', mode: 'two', a: null, b: null, talent: '' }; S.modal = 'level'; },
+  openLevel() { S.lu = { roll: false, rolled: null, sub: '', mode: 'two', a: null, b: null, talent: '', impTalent: '' }; S.modal = 'level'; },
   luAvg() { S.lu.roll = false; },
   luRoll() { const c = cur(); S.lu.roll = true; S.lu.rolled = total(rollExpr(`Level ${c.level + 1} hit die`, `1d${c.hitDie}`)); },
-  luSub(id) { S.lu.sub = id; },
+  luSub(id) {
+    const lu = S.lu, c = cur(); lu.sub = id;
+    // the new subclass can change which talent lists are open
+    const avail = availableTalents(c, talentCats(find('classes', c.classId), find('subclasses', id))).map(t => t.id);
+    if (lu.talent && !avail.includes(lu.talent)) lu.talent = '';
+    if (lu.impTalent && !avail.includes(lu.impTalent)) lu.impTalent = '';
+  },
   luMode(m) { S.lu.mode = m; S.lu.a = null; S.lu.b = null; },
-  luAb(a) { const lu = S.lu; if (lu.mode === 'two') { lu.a = lu.a === a ? null : a; return; } if (lu.a === a) lu.a = null; else if (lu.b === a) lu.b = null; else if (!lu.a) lu.a = a; else lu.b = a; },
+  luAb(a) { const lu = S.lu; if (lu.mode === 'two' || lu.mode === 'talent') { lu.a = lu.a === a ? null : a; return; } if (lu.a === a) lu.a = null; else if (lu.b === a) lu.b = null; else if (!lu.a) lu.a = a; else lu.b = a; },
   luApply() { if (!S.lu._ok) return; const c = cur(); applyLevelUp(c, S.lu); S.modal = null; save(); S.notice = `${c.name} is now level ${c.level}. New features are on the Equipment & Features tab.`; },
   closeModal() { S.modal = null; },
   confirmYes() { const m = S.modal; S.modal = null; if (m && m.then) m.then(); },
@@ -828,13 +970,21 @@ const A = {
   // wizard
   wStep(i) { S.wiz.step = Math.max(0, Math.min(STEPS.length - 1, +i)); window.scrollTo(0, 0); },
   wLineage(id) { S.wiz.lineage = id; },
-  wHeritage(id) { S.wiz.heritage = id; },
-  wBackground(id) { const w = S.wiz, bg = find('backgrounds', id); w.background = id; w.skills = w.skills.filter(s => !bg.skillProficiencies.includes(s)); const o = bonusOpts(w); if (w.plus2 && !o.includes(w.plus2)) w.plus2 = null; if (w.plus1 && !o.includes(w.plus1)) w.plus1 = null; },
+  wHeritage(id) { const w = S.wiz; if (w.heritage === id) return; w.heritage = id; w.herSkills = []; w.herLangs = []; pruneSkills(w); },
+  wHerSkill(sk) { const w = S.wiz, i = w.herSkills.indexOf(sk); if (i >= 0) w.herSkills.splice(i, 1); else if (w.herSkills.length < herSkillsNeeded(w)) w.herSkills.push(sk); pruneSkills(w); },
+  wBackground(id) { const w = S.wiz; if (w.background === id) return; w.background = id; w.bgSkills = []; w.bgTalent = ''; pruneSkills(w); },
+  wBgSkill(sk) { const w = S.wiz, i = w.bgSkills.indexOf(sk); if (i >= 0) w.bgSkills.splice(i, 1); else if (w.bgSkills.length < bgSkillsNeeded(w)) w.bgSkills.push(sk); pruneSkills(w); },
+  wBgTalent(id) { S.wiz.bgTalent = id; },
   wClass(id) { const w = S.wiz; if (w.cls === id) return; w.cls = id; w.skills = []; w.items = find('classes', id).startingEquipment.slice(); },
   wSkill(s) { const w = S.wiz, cls = find('classes', w.cls), i = w.skills.indexOf(s); if (i >= 0) w.skills.splice(i, 1); else if (w.skills.length < cls.skillChoices) w.skills.push(s); },
-  wMethod(m) { const w = S.wiz; w.method = m; w.assign = [null, null, null, null, null, null]; if (m === 'standard') { w.pool = STD.slice(); w.assign = [0, 1, 2, 3, 4, 5]; } if (m === 'roll') w.pool = []; if (m === 'pointbuy') w.base = [8, 8, 8, 8, 8, 8]; if (m === 'manual') w.base = [10, 10, 10, 10, 10, 10]; if (m === 'standard' || m === 'roll') w.base = w.assign.map(a => a != null && a < w.pool.length ? w.pool[a] : 8); },
-  wRoll() { const w = S.wiz; w.pool = Array.from({ length: 6 }, () => [die(6), die(6), die(6), die(6)].sort((a, b) => b - a).slice(0, 3).reduce((s, x) => s + x, 0)).sort((a, b) => b - a); w.assign = [0, 1, 2, 3, 4, 5]; w.base = w.pool.slice(); },
-  wBump(p) { const [i, d] = p.split(':').map(Number); S.wiz.base[i] = Math.min(15, Math.max(8, S.wiz.base[i] + d)); },
+  wMethod(m) { const w = S.wiz; w.method = m; w.plus2 = null; w.plus1 = null; w.rolls = []; w.assign = [null, null, null, null, null, null]; if (m === 'standard') { w.pool = STD.slice(); w.assign = [0, 1, 2, 3, 4, 5]; } if (m === 'roll') w.pool = []; if (m === 'pointbuy') w.base = [8, 8, 8, 8, 8, 8]; if (m === 'manual') w.base = [10, 10, 10, 10, 10, 10]; if (m === 'standard' || m === 'roll') w.base = w.assign.map(a => a != null && a < w.pool.length ? w.pool[a] : 8); },
+  wRoll() {
+    const w = S.wiz, sum3 = r => r[0] + r[1] + r[2];
+    // each roll is kept highest-first, so the last die is the dropped one
+    w.rolls = Array.from({ length: 6 }, () => [die(6), die(6), die(6), die(6)].sort((a, b) => b - a)).sort((a, b) => sum3(b) - sum3(a));
+    w.pool = w.rolls.map(sum3); w.assign = [0, 1, 2, 3, 4, 5]; w.base = w.pool.slice(); w.plus2 = null; w.plus1 = null;
+  },
+  wBump(p) { const [i, d] = p.split(':').map(Number); S.wiz.base[i] = Math.min(PB_MAX, Math.max(PB_MIN, S.wiz.base[i] + d)); },
   wGold(v) { S.wiz.gold = v === '1'; },
   wItem(id) { const it = S.wiz.items, i = it.indexOf(id); if (i >= 0) it.splice(i, 1); else it.push(id); },
   wTalent(id) { S.wiz.talent = S.wiz.talent === id ? '' : id; },
@@ -843,8 +993,8 @@ const A = {
   setKind(k) { S.set.kind = k; S.set.search = ''; },
   toggleSource(s) { const i = S.disabled.indexOf(s); if (i >= 0) S.disabled.splice(i, 1); else S.disabled.push(s); persist(); },
   edNew() { Object.assign(S.set, { draft: BLANK[S.set.kind](), isNew: true, core: false, json: false, err: '' }); S.open = {}; S.modal = 'editor'; },
-  edOpen(id) { const r = allEntries(S.set.kind).find(x => x.e.id === id); Object.assign(S.set, { draft: clone(r.e), isNew: false, core: !r.user, json: false, err: '' }); S.open = {}; S.modal = 'editor'; },
-  edCopy(id) { const r = allEntries(S.set.kind).find(x => x.e.id === id), d = clone(r.e); d.id = ''; d.name += ' (copy)'; d.source = 'Homebrew'; Object.assign(S.set, { draft: d, isNew: true, core: false, json: false, err: '' }); S.open = {}; S.modal = 'editor'; },
+  edOpen(id) { const r = allEntries(S.set.kind).find(x => x.e.id === id); Object.assign(S.set, { draft: withDefaults(S.set.kind, clone(r.e)), isNew: false, core: !r.user, json: false, err: '' }); S.open = {}; S.modal = 'editor'; },
+  edCopy(id) { const r = allEntries(S.set.kind).find(x => x.e.id === id), d = withDefaults(S.set.kind, clone(r.e)); d.id = ''; d.name += ' (copy)'; d.source = 'Homebrew'; Object.assign(S.set, { draft: d, isNew: true, core: false, json: false, err: '' }); S.open = {}; S.modal = 'editor'; },
   edDelete(id) { const r = allEntries(S.set.kind).find(x => x.e.id === id); S.modal = { confirm: r.over ? `Revert ${r.e.name} to the built-in version?` : `Delete ${r.e.name}?`, yes: r.over ? 'Revert' : 'Delete', danger: true, then() { S.user[S.set.kind] = S.user[S.set.kind].filter(x => x.id !== id); persist(); S.set.msg = (r.over ? 'Reverted ' : 'Deleted ') + r.e.name + '.'; } }; },
   edToggle(p) { const [path, v] = p.split('|'); const { obj, key } = resolve(path); const l = obj[key], i = l.indexOf(v); if (i >= 0) l.splice(i, 1); else l.push(v); },
   edAdd(p) { const [path, k] = p.split('|'); const { obj, key } = resolve(path); obj[key].push(TEMPLATES[k](obj[key])); S.open = S.open || {}; S.open[`${path}.${obj[key].length - 1}`] = true; },

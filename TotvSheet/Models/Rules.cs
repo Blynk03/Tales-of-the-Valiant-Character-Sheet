@@ -31,14 +31,26 @@ public static class Rules
         ("Performance", Ability.CHA), ("Persuasion", Ability.CHA),
     };
 
-    public static readonly int[] StandardArray = { 15, 14, 13, 12, 10, 8 };
-    public const int PointBuyBudget = 27;
+    // Ability score generation (Player's Guide, Chapter 1).
+    public static readonly int[] StandardArray = { 16, 14, 14, 13, 10, 8 };
+    public const int PointBuyBudget = 32;
+    public const int PointBuyMin = 8;
+    public const int PointBuyMax = 18;
 
-    /// <summary>Point-buy cost for scores 8-15.</summary>
+    /// <summary>Point-buy cost for scores 8-18.</summary>
     public static int PointBuyCost(int score) => score switch
     {
-        <= 8 => 0, 9 => 1, 10 => 2, 11 => 3, 12 => 4, 13 => 5, 14 => 7, _ => 9
+        <= 8 => 0, 9 => 1, 10 => 2, 11 => 3, 12 => 4, 13 => 5, 14 => 7,
+        15 => 9, 16 => 11, 17 => 13, _ => 16
     };
+
+    /// <summary>Rolled scores: +2 to one score of this value or lower...</summary>
+    public const int RolledPlusTwoMax = 16;
+    /// <summary>...and +1 to a different score of this value or lower.</summary>
+    public const int RolledPlusOneMax = 17;
+
+    // Luck.
+    public const int LuckRerollCost = 3;
 
     /// <summary>XP needed to reach each level (index = level).</summary>
     public static readonly int[] XpForLevel =
@@ -140,4 +152,17 @@ public static class CharacterCalc
     public static int HitDiceMax(this Character c) => c.Level;
 
     public static int AttunedCount(this Character c) => c.MagicItems.Count(m => m.Attuned);
+
+    /// <summary>Max uses of a feature, following its UsesFrom formula when set.</summary>
+    public static int UsesMaxOf(this Character c, Feature f)
+    {
+        // "PB", "CHA", "PB+1", "WIS + 2"...
+        var m = System.Text.RegularExpressions.Regex.Match((f.UsesFrom ?? "").ToUpperInvariant(),
+            @"^\s*(PB|STR|DEX|CON|INT|WIS|CHA)\s*(?:([+-])\s*(\d+))?\s*$");
+        if (!m.Success) return f.UsesMax;
+        var key = m.Groups[1].Value;
+        int baseValue = key == "PB" ? c.Prof() : c.Mod(Enum.Parse<Ability>(key));
+        int extra = m.Groups[3].Success ? int.Parse(m.Groups[3].Value) * (m.Groups[2].Value == "-" ? -1 : 1) : 0;
+        return Math.Max(1, baseValue + extra);
+    }
 }

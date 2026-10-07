@@ -78,16 +78,26 @@ public class ContentService
     public IEnumerable<SpellDef> Spells => Merge(Core.Spells, User.Spells);
     public IEnumerable<ItemDef> Items => Merge(Core.Items, User.Items);
 
-    public ClassDef? Class(string id) => Classes.FirstOrDefault(c => c.Id == id);
-    public SubclassDef? Subclass(string id) => Subclasses.FirstOrDefault(c => c.Id == id);
+    // Lookups by id ignore sample hiding, so characters built from a retired sample entry keep working.
+    public ClassDef? Class(string id) => Merge(Core.Classes, User.Classes, hideSamples: false).FirstOrDefault(c => c.Id == id);
+    public SubclassDef? Subclass(string id) => Merge(Core.Subclasses, User.Subclasses, hideSamples: false).FirstOrDefault(c => c.Id == id);
     public IEnumerable<SubclassDef> SubclassesFor(string classId) => Subclasses.Where(s => s.ClassId == classId);
-    public TalentDef? Talent(string id) => Talents.FirstOrDefault(t => t.Id == id);
-    public ItemDef? Item(string id) => Items.FirstOrDefault(i => i.Id == id);
+    public TalentDef? Talent(string id) => Merge(Core.Talents, User.Talents, hideSamples: false).FirstOrDefault(t => t.Id == id);
+    public ItemDef? Item(string id) => Merge(Core.Items, User.Items, hideSamples: false).FirstOrDefault(i => i.Id == id);
 
-    private IEnumerable<T> Merge<T>(List<T> core, List<T> user) where T : ContentEntry
+    /// <summary>Homebrew entries never push the built-in samples aside; imported book content does.</summary>
+    public const string HomebrewSource = "Homebrew";
+
+    /// <summary>
+    /// Core entries are samples. Once enabled book content (any user entry whose source isn't
+    /// Homebrew) exists for a kind, the samples of that kind are hidden from lists.
+    /// </summary>
+    private IEnumerable<T> Merge<T>(List<T> core, List<T> user, bool hideSamples = true) where T : ContentEntry
     {
         var overridden = user.Select(u => u.Id).ToHashSet();
-        return core.Where(c => !overridden.Contains(c.Id))
+        var hasBook = hideSamples && user.Any(u => !DisabledSources.Contains(u.Source)
+            && !string.Equals(u.Source, HomebrewSource, StringComparison.OrdinalIgnoreCase));
+        return (hasBook ? Enumerable.Empty<T>() : core.Where(c => !overridden.Contains(c.Id)))
             .Concat(user)
             .Where(e => !DisabledSources.Contains(e.Source))
             .OrderBy(e => e.Name);

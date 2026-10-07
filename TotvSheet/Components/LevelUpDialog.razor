@@ -47,7 +47,7 @@
                         @foreach (var s in subclasses)
                         {
                             var sub = s;
-                            <button type="button" class="choice @(choices.Subclass == sub ? "selected" : "")" @onclick="() => choices.Subclass = sub">
+                            <button type="button" class="choice @(choices.Subclass == sub ? "selected" : "")" @onclick="() => PickSubclass(sub)">
                                 <div class="font-semibold">@sub.Name</div>
                                 <div class="muted text-sm">@sub.Description</div>
                             </button>
@@ -60,10 +60,11 @@
             @if (def?.GrantsAbilityIncrease == true)
             {
                 <section>
-                    <h3 class="box-title text-left">Ability score increase</h3>
-                    <div class="flex gap-2 mb-2">
+                    <h3 class="box-title text-left">Improvement</h3>
+                    <div class="flex flex-wrap gap-2 mb-2">
                         <button type="button" class="btn btn-sm @(choices.IncreaseMode == AbilityIncreaseMode.PlusTwo ? "btn-primary" : "")" @onclick="() => SetMode(AbilityIncreaseMode.PlusTwo)">+2 to one</button>
                         <button type="button" class="btn btn-sm @(choices.IncreaseMode == AbilityIncreaseMode.TwoPlusOne ? "btn-primary" : "")" @onclick="() => SetMode(AbilityIncreaseMode.TwoPlusOne)">+1 to two</button>
+                        <button type="button" class="btn btn-sm @(choices.IncreaseMode == AbilityIncreaseMode.PlusOneTalent ? "btn-primary" : "")" @onclick="() => SetMode(AbilityIncreaseMode.PlusOneTalent)">+1 and a talent</button>
                     </div>
                     <div class="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
                         @foreach (var a in Rules.Abilities)
@@ -77,6 +78,26 @@
                             </button>
                         }
                     </div>
+                    @if (choices.IncreaseMode == AbilityIncreaseMode.PlusOneTalent)
+                    {
+                        <label class="lbl block mt-3" for="imp-talent">Talent (@CategoryText())</label>
+                        <select id="imp-talent" class="select" @bind="improvementTalentId">
+                            <option value="">Select a talent…</option>
+                            @foreach (var group in available.GroupBy(x => x.Category))
+                            {
+                                <optgroup label="@group.Key">
+                                    @foreach (var t in group)
+                                    {
+                                        <option value="@t.Id" disabled="@(t.Id == talentId)">@t.Name</option>
+                                    }
+                                </optgroup>
+                            }
+                        </select>
+                        if (Content.Talent(improvementTalentId) is { } impSelected)
+                        {
+                            <p class="text-sm muted mt-1">@impSelected.Description @(string.IsNullOrEmpty(impSelected.Prerequisite) ? "" : $"Prerequisite: {impSelected.Prerequisite}.")</p>
+                        }
+                    }
                 </section>
             }
 
@@ -85,14 +106,14 @@
             {
                 <section>
                     <h3 class="box-title text-left">Choose a talent</h3>
-                    <select class="select" @bind="talentId">
+                    <select class="select" aria-label="Talent" @bind="talentId">
                         <option value="">Select a talent…</option>
-                        @foreach (var group in Content.Talents.GroupBy(x => x.Category))
+                        @foreach (var group in available.GroupBy(x => x.Category))
                         {
                             <optgroup label="@group.Key">
                                 @foreach (var t in group)
                                 {
-                                    <option value="@t.Id" disabled="@(C.Talents.Any(ct => ct.Name == t.Name))">@t.Name</option>
+                                    <option value="@t.Id" disabled="@(t.Id == improvementTalentId)">@t.Name</option>
                                 }
                             </optgroup>
                         }
@@ -116,6 +137,10 @@
                     @if (SlotsText() is { } slots)
                     {
                         <li>Spell slots: @slots</li>
+                    }
+                    @foreach (var rc in CharacterBuilder.ResourceChanges(C, cls, newLevel))
+                    {
+                        <li><span class="font-semibold">@rc.Name</span> uses <span class="num">@rc.From</span> → <span class="num" style="color:var(--good)">@rc.To</span></li>
                     }
                     @foreach (var f in Gained())
                     {
@@ -152,6 +177,8 @@
     private bool needsSubclass;
     private int newLevel;
     private string talentId = "";
+    private string improvementTalentId = "";
+    private List<TalentDef> available = new();
 
     protected override void OnInitialized()
     {
@@ -160,6 +187,28 @@
         def = CharacterBuilder.LevelDef(cls, newLevel);
         needsSubclass = CharacterBuilder.NeedsSubclass(C, cls, newLevel);
         subclasses = Content.SubclassesFor(C.ClassId).ToList();
+        RefreshTalents();
+    }
+
+    /// <summary>Talent lists come from the class, plus any the (new or existing) subclass adds.</summary>
+    private HashSet<TalentCategory> Categories() =>
+        CharacterBuilder.TalentCategories(cls, Content.Subclass(C.SubclassId) ?? choices.Subclass);
+
+    private void RefreshTalents() =>
+        available = CharacterBuilder.AvailableTalents(C, Content, Categories()).OrderBy(t => t.Name).ToList();
+
+    private string CategoryText()
+    {
+        var cats = Categories();
+        return cats.Count == 0 ? "any list" : string.Join(" or ", cats.OrderBy(x => x)) + " list";
+    }
+
+    private void PickSubclass(SubclassDef sub)
+    {
+        choices.Subclass = sub;
+        RefreshTalents();
+        if (available.All(t => t.Id != talentId)) talentId = "";
+        if (available.All(t => t.Id != improvementTalentId)) improvementTalentId = "";
     }
 
     private List<Feature> Gained() =>
@@ -167,8 +216,9 @@
 
     private string? SlotsText()
     {
-        if (def is null || def.SpellSlots.Count == 0) return null;
-        var parts = def.SpellSlots.Select((n, i) => (n, i))
+        var slots = CharacterBuilder.SlotsAt(cls, Content.Subclass(C.SubclassId) ?? (needsSubclass ? choices.Subclass : null), newLevel);
+        if (slots is null) return null;
+        var parts = slots.Select((n, i) => (n, i))
             .Where(t => t.n > 0)
             .Select(t => $"{Rules.CircleName(t.i + 1)} ×{t.n}" + (t.i < 9 && C.SlotsTotal[t.i] != t.n ? " (new)" : ""));
         return string.Join(", ", parts);
@@ -181,6 +231,7 @@
         {
             if (choices.IncreaseA is null) return "Choose an ability to increase.";
             if (choices.IncreaseMode == AbilityIncreaseMode.TwoPlusOne && choices.IncreaseB is null) return "Choose a second ability.";
+            if (choices.IncreaseMode == AbilityIncreaseMode.PlusOneTalent && string.IsNullOrEmpty(improvementTalentId)) return "Choose a talent for your Improvement.";
         }
         if (def?.GrantsTalent == true && string.IsNullOrEmpty(talentId)) return "Choose a talent.";
         if (choices.RollHp && choices.RolledHp is null) return "Roll your hit die.";
@@ -202,7 +253,7 @@
 
     private void PickAbility(Ability a)
     {
-        if (choices.IncreaseMode == AbilityIncreaseMode.PlusTwo)
+        if (choices.IncreaseMode is AbilityIncreaseMode.PlusTwo or AbilityIncreaseMode.PlusOneTalent)
         {
             choices.IncreaseA = choices.IncreaseA == a ? null : a;
             return;
@@ -217,6 +268,7 @@
     {
         if (MissingChoice() is not null) return;
         choices.Talent = Content.Talent(talentId);
+        choices.ImprovementTalent = choices.IncreaseMode == AbilityIncreaseMode.PlusOneTalent ? Content.Talent(improvementTalentId) : null;
         CharacterBuilder.ApplyLevelUp(C, cls, Content, choices);
         await OnApplied.InvokeAsync();
     }

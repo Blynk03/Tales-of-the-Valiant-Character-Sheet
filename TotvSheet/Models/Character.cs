@@ -35,6 +35,8 @@ public class Character
     public bool[] SaveProficiencies { get; set; } = new bool[6];
     public Dictionary<string, ProfLevel> Skills { get; set; } = new();
     public int Luck { get; set; }
+    /// <summary>Luck can be gained once per turn; cleared by "New turn" in the roll tray.</summary>
+    public bool LuckGainedThisTurn { get; set; }
 
     // ---- Combat ----
     public string Speed { get; set; } = "30 ft.";
@@ -117,6 +119,8 @@ public class Feature
     public string Description { get; set; } = "";
     public int UsesMax { get; set; }
     public int UsesSpent { get; set; }
+    /// <summary>"PB" or an ability code; when set, max uses follow that value (min 1).</summary>
+    public string UsesFrom { get; set; } = "";
     /// <summary>"Short Rest", "Long Rest" or blank.</summary>
     public string Recharge { get; set; } = "";
 }

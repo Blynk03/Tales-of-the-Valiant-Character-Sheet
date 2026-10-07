@@ -32,11 +32,11 @@
                         <button type="button" class="icon-btn" title="Remove feature" @onclick="() => Remove(feature)">✕</button>
                     </div>
                     <textarea class="area text-sm mt-1.5" rows="2" style="min-height:3rem" aria-label="Description" @bind="feature.Description" @bind:after="Save"></textarea>
-                    @if (feature.UsesMax > 0)
+                    @if (C.UsesMaxOf(feature) > 0)
                     {
                         <div class="flex items-center gap-2 mt-1">
                             <span class="lbl">Used</span>
-                            <Pips Count="feature.UsesMax" Label="Use" @bind-Value="feature.UsesSpent" @bind-Value:after="Save" />
+                            <Pips Count="C.UsesMaxOf(feature)" Label="Use" @bind-Value="feature.UsesSpent" @bind-Value:after="Save" />
                             <span class="muted text-xs ml-auto">@feature.Recharge</span>
                         </div>
                     }

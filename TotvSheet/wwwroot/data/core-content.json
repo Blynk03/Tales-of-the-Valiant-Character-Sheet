@@ -13,7 +13,8 @@
      "level": 1,
      "description": "Gain one extra talent of your choice at 1st level (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
    ]
   },
@@ -30,14 +31,16 @@
      "level": 1,
      "description": "See in dim light within 60 feet as if it were bright light.",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     },
     {
      "name": "Dwarven Resilience",
      "level": 1,
      "description": "Advantage on saves against poison and resistance to poison damage (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
    ]
   },
@@ -54,14 +57,16 @@
      "level": 1,
      "description": "See in dim light within 60 feet as if it were bright light.",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     },
     {
      "name": "Trance",
      "level": 1,
      "description": "You don't need to sleep; 4 hours of meditation counts as a long rest (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
    ]
   },
@@ -78,14 +83,16 @@
      "level": 1,
      "description": "See in dim light within 60 feet as if it were bright light.",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     },
     {
      "name": "Relentless",
      "level": 1,
      "description": "Once per long rest, when reduced to 0 HP you drop to 1 HP instead (sample text).",
      "usesMax": 1,
-     "recharge": "Long Rest"
+     "recharge": "Long Rest",
+     "usesFrom": ""
     }
    ]
   },
@@ -102,7 +109,8 @@
      "level": 1,
      "description": "You can move through the space of a creature larger than you (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
    ]
   },
@@ -119,14 +127,16 @@
      "level": 1,
      "description": "See in dim light within 60 feet as if it were bright light.",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     },
     {
      "name": "Draconic Resistance",
      "level": 1,
      "description": "Resistance to one damage type tied to your draconic ancestry (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
    ]
   },
@@ -143,7 +153,8 @@
      "level": 1,
      "description": "Choose an animal aspect that grants a movement or sense trait (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
    ]
   },
@@ -160,7 +171,8 @@
      "level": 1,
      "description": "Resistance to radiant or necrotic damage, based on your origin (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
    ]
   }
@@ -171,16 +183,25 @@
    "name": "Cosmopolitan",
    "source": "Core (sample)",
    "description": "Raised in a bustling city among many cultures.",
-   "languages": "Common, one extra language",
+   "languages": "Common",
    "traits": [
     {
      "name": "Street Savvy",
      "level": 1,
-     "description": "Proficiency in one Charisma skill of your choice (sample text).",
+     "description": "Proficiency in one Charisma skill of your choice, picked during creation (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
-   ]
+   ],
+   "languageChoices": 1,
+   "skillOptions": [
+    "Deception",
+    "Intimidation",
+    "Performance",
+    "Persuasion"
+   ],
+   "skillChoices": 1
   },
   {
    "id": "nomadic",
@@ -194,9 +215,13 @@
      "level": 1,
      "description": "Your speed is not reduced by difficult terrain from natural weather (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
-   ]
+   ],
+   "languageChoices": 0,
+   "skillOptions": [],
+   "skillChoices": 0
   },
   {
    "id": "wildlands",
@@ -210,9 +235,13 @@
      "level": 1,
      "description": "Proficiency in Survival (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
-   ]
+   ],
+   "languageChoices": 0,
+   "skillOptions": [],
+   "skillChoices": 0
   },
   {
    "id": "fireforge",
@@ -226,9 +255,13 @@
      "level": 1,
      "description": "Proficiency with smith's tools (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
-   ]
+   ],
+   "languageChoices": 0,
+   "skillOptions": [],
+   "skillChoices": 0
   },
   {
    "id": "grove",
@@ -242,9 +275,13 @@
      "level": 1,
      "description": "You know one primordial cantrip (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
-   ]
+   ],
+   "languageChoices": 0,
+   "skillOptions": [],
+   "skillChoices": 0
   },
   {
    "id": "slayer",
@@ -258,9 +295,13 @@
      "level": 1,
      "description": "Advantage on checks to recall information about monsters (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
-   ]
+   ],
+   "languageChoices": 0,
+   "skillOptions": [],
+   "skillChoices": 0
   }
  ],
  "backgrounds": [
@@ -269,26 +310,31 @@
    "name": "Soldier",
    "source": "Core (sample)",
    "description": "You served in an army or militia.",
-   "skillProficiencies": [
-    "Athletics",
-    "Intimidation"
-   ],
+   "skillProficiencies": [],
    "toolProficiencies": "One gaming set",
-   "abilityOptions": [
-    "STR",
-    "DEX",
-    "CON"
-   ],
    "equipment": "Insignia of rank, Gaming set, Common clothes, Pouch",
-   "talentId": "combat-conditioning",
+   "talentId": "",
    "traits": [
     {
      "name": "Military Rank",
      "level": 1,
      "description": "Soldiers loyal to your former organization recognize your authority (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
+   ],
+   "skillOptions": [
+    "Athletics",
+    "Intimidation",
+    "Survival",
+    "Perception"
+   ],
+   "skillChoices": 2,
+   "talentOptions": [
+    "combat-conditioning",
+    "touch-of-luck",
+    "aware"
    ]
   },
   {
@@ -296,26 +342,31 @@
    "name": "Scholar",
    "source": "Core (sample)",
    "description": "You spent years studying in libraries and academies.",
-   "skillProficiencies": [
-    "Arcana",
-    "History"
-   ],
+   "skillProficiencies": [],
    "toolProficiencies": "Calligrapher's supplies",
-   "abilityOptions": [
-    "INT",
-    "WIS",
-    "CHA"
-   ],
    "equipment": "Ink and quill, Book of lore, Common clothes, Pouch",
-   "talentId": "arcane-dabbler",
+   "talentId": "",
    "traits": [
     {
      "name": "Researcher",
      "level": 1,
      "description": "You know where to find information you don't have (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
+   ],
+   "skillOptions": [
+    "Arcana",
+    "History",
+    "Investigation",
+    "Religion"
+   ],
+   "skillChoices": 2,
+   "talentOptions": [
+    "ritualist",
+    "aware",
+    "trade-skills"
    ]
   },
   {
@@ -323,16 +374,8 @@
    "name": "Criminal",
    "source": "Core (sample)",
    "description": "You lived outside the law.",
-   "skillProficiencies": [
-    "Deception",
-    "Stealth"
-   ],
+   "skillProficiencies": [],
    "toolProficiencies": "Thieves' tools",
-   "abilityOptions": [
-    "DEX",
-    "INT",
-    "CHA"
-   ],
    "equipment": "Crowbar, Dark clothes with hood, Pouch",
    "talentId": "",
    "traits": [
@@ -341,8 +384,21 @@
      "level": 1,
      "description": "You have a reliable contact in the criminal underworld (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
+   ],
+   "skillOptions": [
+    "Deception",
+    "Sleight of Hand",
+    "Stealth",
+    "Insight"
+   ],
+   "skillChoices": 2,
+   "talentOptions": [
+    "aware",
+    "touch-of-luck",
+    "trade-skills"
    ]
   },
   {
@@ -350,16 +406,8 @@
    "name": "Adherent",
    "source": "Core (sample)",
    "description": "You served a temple or faith.",
-   "skillProficiencies": [
-    "Insight",
-    "Religion"
-   ],
+   "skillProficiencies": [],
    "toolProficiencies": "",
-   "abilityOptions": [
-    "WIS",
-    "CHA",
-    "CON"
-   ],
    "equipment": "Holy symbol, Prayer book, Vestments, Pouch",
    "talentId": "",
    "traits": [
@@ -368,8 +416,21 @@
      "level": 1,
      "description": "Temples of your faith offer you aid and lodging (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
+   ],
+   "skillOptions": [
+    "History",
+    "Insight",
+    "Religion",
+    "Persuasion"
+   ],
+   "skillChoices": 2,
+   "talentOptions": [
+    "ritualist",
+    "touch-of-luck",
+    "aware"
    ]
   },
   {
@@ -378,15 +439,9 @@
    "source": "Core (sample)",
    "description": "You worked the land in a rural community.",
    "skillProficiencies": [
-    "Animal Handling",
-    "Survival"
+    "Athletics"
    ],
    "toolProficiencies": "Carpenter's tools",
-   "abilityOptions": [
-    "STR",
-    "CON",
-    "WIS"
-   ],
    "equipment": "Shovel, Iron pot, Common clothes, Pouch",
    "talentId": "",
    "traits": [
@@ -395,8 +450,20 @@
      "level": 1,
      "description": "Common folk will shelter and hide you (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
+   ],
+   "skillOptions": [
+    "Animal Handling",
+    "Nature",
+    "Survival"
+   ],
+   "skillChoices": 1,
+   "talentOptions": [
+    "combat-conditioning",
+    "trade-skills",
+    "aware"
    ]
   },
   {
@@ -404,16 +471,8 @@
    "name": "Artist",
    "source": "Core (sample)",
    "description": "You made your living through performance or craft.",
-   "skillProficiencies": [
-    "Performance",
-    "Persuasion"
-   ],
+   "skillProficiencies": [],
    "toolProficiencies": "One musical instrument",
-   "abilityOptions": [
-    "DEX",
-    "CHA",
-    "WIS"
-   ],
    "equipment": "Musical instrument, Costume, Pouch",
    "talentId": "",
    "traits": [
@@ -422,8 +481,21 @@
      "level": 1,
      "description": "You can always find a place to perform for room and board (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
+   ],
+   "skillOptions": [
+    "Performance",
+    "Persuasion",
+    "Deception",
+    "Insight"
+   ],
+   "skillChoices": 2,
+   "talentOptions": [
+    "trade-skills",
+    "touch-of-luck",
+    "aware"
    ]
   }
  ],
@@ -480,19 +552,22 @@
        "level": 1,
        "description": "Adopt a fighting style that grants a combat benefit (sample text).",
        "usesMax": 0,
-       "recharge": ""
+       "recharge": "",
+       "usesFrom": ""
       },
       {
        "name": "Second Wind",
        "level": 1,
        "description": "Bonus action: regain 1d10 + fighter level HP.",
        "usesMax": 1,
-       "recharge": "Short Rest"
+       "recharge": "Short Rest",
+       "usesFrom": ""
       }
      ],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 2,
@@ -502,26 +577,30 @@
        "level": 2,
        "description": "Take one additional action on your turn.",
        "usesMax": 1,
-       "recharge": "Short Rest"
+       "recharge": "Short Rest",
+       "usesFrom": ""
       }
      ],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 3,
      "features": [],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 4,
      "features": [],
      "grantsTalent": true,
      "grantsAbilityIncrease": true,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 5,
@@ -531,33 +610,38 @@
        "level": 5,
        "description": "Attack twice when you take the Attack action.",
        "usesMax": 0,
-       "recharge": ""
+       "recharge": "",
+       "usesFrom": ""
       }
      ],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 6,
      "features": [],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 7,
      "features": [],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 8,
      "features": [],
      "grantsTalent": true,
      "grantsAbilityIncrease": true,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 9,
@@ -567,19 +651,22 @@
        "level": 9,
        "description": "Reroll a failed saving throw.",
        "usesMax": 1,
-       "recharge": "Long Rest"
+       "recharge": "Long Rest",
+       "usesFrom": ""
       }
      ],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 10,
      "features": [],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 11,
@@ -589,68 +676,84 @@
        "level": 11,
        "description": "Attack three times when you take the Attack action.",
        "usesMax": 0,
-       "recharge": ""
+       "recharge": "",
+       "usesFrom": ""
       }
      ],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 12,
      "features": [],
      "grantsTalent": true,
      "grantsAbilityIncrease": true,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 13,
      "features": [],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 14,
      "features": [],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 15,
      "features": [],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 16,
      "features": [],
      "grantsTalent": true,
      "grantsAbilityIncrease": true,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 17,
      "features": [],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": [
+      {
+       "name": "Action Surge",
+       "usesMax": 2,
+       "recharge": "Short Rest"
+      }
+     ]
     },
     {
      "level": 18,
      "features": [],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 19,
      "features": [],
      "grantsTalent": true,
      "grantsAbilityIncrease": true,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 20,
@@ -660,13 +763,18 @@
        "level": 20,
        "description": "Attack four times when you take the Attack action.",
        "usesMax": 0,
-       "recharge": ""
+       "recharge": "",
+       "usesFrom": ""
       }
      ],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     }
+   ],
+   "talentCategories": [
+    "Martial"
    ]
   },
   {
@@ -720,19 +828,22 @@
        "level": 1,
        "description": "Double your proficiency bonus for two chosen skills (sample text).",
        "usesMax": 0,
-       "recharge": ""
+       "recharge": "",
+       "usesFrom": ""
       },
       {
        "name": "Sneak Attack",
        "level": 1,
        "description": "Once per turn deal extra damage (1d6 at 1st level) with a finesse or ranged weapon when you have advantage.",
        "usesMax": 0,
-       "recharge": ""
+       "recharge": "",
+       "usesFrom": ""
       }
      ],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 2,
@@ -742,12 +853,14 @@
        "level": 2,
        "description": "Dash, Disengage or Hide as a bonus action.",
        "usesMax": 0,
-       "recharge": ""
+       "recharge": "",
+       "usesFrom": ""
       }
      ],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 3,
@@ -757,19 +870,22 @@
        "level": 3,
        "description": "Sneak Attack damage increases.",
        "usesMax": 0,
-       "recharge": ""
+       "recharge": "",
+       "usesFrom": ""
       }
      ],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 4,
      "features": [],
      "grantsTalent": true,
      "grantsAbilityIncrease": true,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 5,
@@ -779,26 +895,30 @@
        "level": 5,
        "description": "Reaction: halve the damage of an attack that hits you.",
        "usesMax": 0,
-       "recharge": ""
+       "recharge": "",
+       "usesFrom": ""
       },
       {
        "name": "Sneak Attack 3d6",
        "level": 5,
        "description": "Sneak Attack damage increases.",
        "usesMax": 0,
-       "recharge": ""
+       "recharge": "",
+       "usesFrom": ""
       }
      ],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 6,
      "features": [],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 7,
@@ -808,26 +928,30 @@
        "level": 7,
        "description": "Take no damage on a successful DEX save for half (sample text).",
        "usesMax": 0,
-       "recharge": ""
+       "recharge": "",
+       "usesFrom": ""
       },
       {
        "name": "Sneak Attack 4d6",
        "level": 7,
        "description": "Sneak Attack damage increases.",
        "usesMax": 0,
-       "recharge": ""
+       "recharge": "",
+       "usesFrom": ""
       }
      ],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 8,
      "features": [],
      "grantsTalent": true,
      "grantsAbilityIncrease": true,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 9,
@@ -837,90 +961,106 @@
        "level": 9,
        "description": "Sneak Attack damage increases.",
        "usesMax": 0,
-       "recharge": ""
+       "recharge": "",
+       "usesFrom": ""
       }
      ],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 10,
      "features": [],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 11,
      "features": [],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 12,
      "features": [],
      "grantsTalent": true,
      "grantsAbilityIncrease": true,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 13,
      "features": [],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 14,
      "features": [],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 15,
      "features": [],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 16,
      "features": [],
      "grantsTalent": true,
      "grantsAbilityIncrease": true,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 17,
      "features": [],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 18,
      "features": [],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 19,
      "features": [],
      "grantsTalent": true,
      "grantsAbilityIncrease": true,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     },
     {
      "level": 20,
      "features": [],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
-     "spellSlots": []
+     "spellSlots": [],
+     "resources": []
     }
+   ],
+   "talentCategories": [
+    "Technical"
    ]
   },
   {
@@ -966,21 +1106,24 @@
        "level": 1,
        "description": "Cast arcane spells using Intelligence; prepare spells from your spellbook.",
        "usesMax": 0,
-       "recharge": ""
+       "recharge": "",
+       "usesFrom": ""
       },
       {
        "name": "Arcane Recovery",
        "level": 1,
        "description": "On a short rest, recover expended spell slots (sample text).",
        "usesMax": 1,
-       "recharge": "Long Rest"
+       "recharge": "Long Rest",
+       "usesFrom": ""
       }
      ],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
      "spellSlots": [
       2
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 2,
@@ -990,14 +1133,16 @@
        "level": 2,
        "description": "Gain expertise in one Intelligence skill (sample text).",
        "usesMax": 0,
-       "recharge": ""
+       "recharge": "",
+       "usesFrom": ""
       }
      ],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
      "spellSlots": [
       3
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 3,
@@ -1007,7 +1152,8 @@
      "spellSlots": [
       4,
       2
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 4,
@@ -1017,7 +1163,8 @@
      "spellSlots": [
       4,
       3
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 5,
@@ -1028,7 +1175,8 @@
       4,
       3,
       2
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 6,
@@ -1039,7 +1187,8 @@
       4,
       3,
       3
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 7,
@@ -1051,7 +1200,8 @@
       3,
       3,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 8,
@@ -1063,7 +1213,8 @@
       3,
       3,
       2
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 9,
@@ -1076,7 +1227,8 @@
       3,
       3,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 10,
@@ -1089,7 +1241,8 @@
       3,
       3,
       2
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 11,
@@ -1103,7 +1256,8 @@
       3,
       2,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 12,
@@ -1117,7 +1271,8 @@
       3,
       2,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 13,
@@ -1132,7 +1287,8 @@
       2,
       1,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 14,
@@ -1147,7 +1303,8 @@
       2,
       1,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 15,
@@ -1163,7 +1320,8 @@
       1,
       1,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 16,
@@ -1179,7 +1337,8 @@
       1,
       1,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 17,
@@ -1196,7 +1355,8 @@
       1,
       1,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 18,
@@ -1206,7 +1366,8 @@
        "level": 18,
        "description": "Cast a chosen 1st- and 2nd-circle spell at will (sample text).",
        "usesMax": 0,
-       "recharge": ""
+       "recharge": "",
+       "usesFrom": ""
       }
      ],
      "grantsTalent": false,
@@ -1221,7 +1382,8 @@
       1,
       1,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 19,
@@ -1238,7 +1400,8 @@
       1,
       1,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 20,
@@ -1255,8 +1418,12 @@
       2,
       1,
       1
-     ]
+     ],
+     "resources": []
     }
+   ],
+   "talentCategories": [
+    "Magic"
    ]
   },
   {
@@ -1305,21 +1472,24 @@
        "level": 1,
        "description": "Cast divine spells using Wisdom.",
        "usesMax": 0,
-       "recharge": ""
+       "recharge": "",
+       "usesFrom": ""
       },
       {
        "name": "Divine Order",
        "level": 1,
        "description": "Choose a role in your faith that grants a benefit (sample text).",
        "usesMax": 0,
-       "recharge": ""
+       "recharge": "",
+       "usesFrom": ""
       }
      ],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
      "spellSlots": [
       2
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 2,
@@ -1329,14 +1499,16 @@
        "level": 2,
        "description": "Channel divine energy for a magical effect.",
        "usesMax": 2,
-       "recharge": "Short Rest"
+       "recharge": "Short Rest",
+       "usesFrom": ""
       }
      ],
      "grantsTalent": false,
      "grantsAbilityIncrease": false,
      "spellSlots": [
       3
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 3,
@@ -1346,7 +1518,8 @@
      "spellSlots": [
       4,
       2
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 4,
@@ -1356,7 +1529,8 @@
      "spellSlots": [
       4,
       3
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 5,
@@ -1366,7 +1540,8 @@
        "level": 5,
        "description": "Your turning harms undead (sample text).",
        "usesMax": 0,
-       "recharge": ""
+       "recharge": "",
+       "usesFrom": ""
       }
      ],
      "grantsTalent": false,
@@ -1375,7 +1550,8 @@
       4,
       3,
       2
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 6,
@@ -1386,7 +1562,8 @@
       4,
       3,
       3
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 7,
@@ -1398,7 +1575,8 @@
       3,
       3,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 8,
@@ -1410,7 +1588,8 @@
       3,
       3,
       2
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 9,
@@ -1423,7 +1602,8 @@
       3,
       3,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 10,
@@ -1436,7 +1616,8 @@
       3,
       3,
       2
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 11,
@@ -1450,7 +1631,8 @@
       3,
       2,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 12,
@@ -1464,7 +1646,8 @@
       3,
       2,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 13,
@@ -1479,7 +1662,8 @@
       2,
       1,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 14,
@@ -1494,7 +1678,8 @@
       2,
       1,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 15,
@@ -1510,7 +1695,8 @@
       1,
       1,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 16,
@@ -1526,7 +1712,8 @@
       1,
       1,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 17,
@@ -1543,7 +1730,8 @@
       1,
       1,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 18,
@@ -1560,7 +1748,8 @@
       1,
       1,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 19,
@@ -1577,7 +1766,8 @@
       1,
       1,
       1
-     ]
+     ],
+     "resources": []
     },
     {
      "level": 20,
@@ -1594,8 +1784,12 @@
       2,
       1,
       1
-     ]
+     ],
+     "resources": []
     }
+   ],
+   "talentCategories": [
+    "Magic"
    ]
   }
  ],
@@ -1612,23 +1806,29 @@
      "level": 3,
      "description": "Your weapon attacks score a critical hit on a 19 or 20 (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     },
     {
      "name": "Remarkable Athlete",
      "level": 7,
      "description": "Add half proficiency to STR, DEX and CON checks you're not proficient in (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     },
     {
      "name": "Superior Critical",
      "level": 15,
      "description": "Critical hits on 18-20 (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
-   ]
+   ],
+   "talentCategories": [],
+   "spellcastingAbility": null,
+   "spellSlots": []
   },
   {
    "id": "rogue-shadow",
@@ -1642,16 +1842,21 @@
      "level": 3,
      "description": "Bonus action: teleport between areas of dim light within 30 ft. (sample text).",
      "usesMax": 2,
-     "recharge": "Long Rest"
+     "recharge": "Long Rest",
+     "usesFrom": ""
     },
     {
      "name": "Fade",
      "level": 9,
      "description": "Become invisible until the end of your turn after a Sneak Attack (sample text).",
      "usesMax": 1,
-     "recharge": "Short Rest"
+     "recharge": "Short Rest",
+     "usesFrom": ""
     }
-   ]
+   ],
+   "talentCategories": [],
+   "spellcastingAbility": null,
+   "spellSlots": []
   },
   {
    "id": "wizard-evoker",
@@ -1665,16 +1870,21 @@
      "level": 3,
      "description": "Protect allies from your evocation spells (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     },
     {
      "name": "Potent Cantrip",
      "level": 6,
      "description": "Creatures take half damage from your cantrips on a successful save (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
-   ]
+   ],
+   "talentCategories": [],
+   "spellcastingAbility": null,
+   "spellSlots": []
   },
   {
    "id": "cleric-life",
@@ -1688,16 +1898,21 @@
      "level": 3,
      "description": "Healing spells restore extra HP equal to 2 + spell circle (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     },
     {
      "name": "Blessed Healer",
      "level": 6,
      "description": "When you heal others, you also heal (sample text).",
      "usesMax": 0,
-     "recharge": ""
+     "recharge": "",
+     "usesFrom": ""
     }
-   ]
+   ],
+   "talentCategories": [],
+   "spellcastingAbility": null,
+   "spellSlots": []
   }
  ],
  "talents": [
@@ -1707,31 +1922,35 @@
    "source": "Core (sample)",
    "description": "Your training makes you hardier in battle (sample text).",
    "category": "Martial",
-   "prerequisite": ""
+   "prerequisite": "",
+   "repeatable": false
   },
   {
    "id": "shield-training",
-   "name": "Shield Training",
+   "name": "Shield Training (sample)",
    "source": "Core (sample)",
    "description": "You are practiced at defending yourself and allies with a shield (sample text).",
    "category": "Martial",
-   "prerequisite": "Proficiency with shields"
+   "prerequisite": "Proficiency with shields",
+   "repeatable": false
   },
   {
    "id": "polearm-training",
-   "name": "Polearm Training",
+   "name": "Polearm Training (sample)",
    "source": "Core (sample)",
    "description": "You make the most of reach weapons (sample text).",
    "category": "Martial",
-   "prerequisite": ""
+   "prerequisite": "",
+   "repeatable": false
   },
   {
    "id": "arcane-dabbler",
-   "name": "Arcane Dabbler",
+   "name": "Arcane Dabbler (sample)",
    "source": "Core (sample)",
    "description": "You learn a cantrip and a 1st-circle spell from the Arcane list (sample text).",
    "category": "Magic",
-   "prerequisite": ""
+   "prerequisite": "",
+   "repeatable": false
   },
   {
    "id": "ritualist",
@@ -1739,7 +1958,8 @@
    "source": "Core (sample)",
    "description": "You can cast certain spells as rituals (sample text).",
    "category": "Magic",
-   "prerequisite": ""
+   "prerequisite": "",
+   "repeatable": false
   },
   {
    "id": "touch-of-luck",
@@ -1747,7 +1967,8 @@
    "source": "Core (sample)",
    "description": "Fortune favors you; you can spend Luck more effectively (sample text).",
    "category": "Magic",
-   "prerequisite": ""
+   "prerequisite": "",
+   "repeatable": false
   },
   {
    "id": "aware",
@@ -1755,15 +1976,17 @@
    "source": "Core (sample)",
    "description": "You are hard to surprise and quick to act (sample text).",
    "category": "Technical",
-   "prerequisite": ""
+   "prerequisite": "",
+   "repeatable": false
   },
   {
    "id": "skillful",
-   "name": "Skillful",
+   "name": "Skillful (sample)",
    "source": "Core (sample)",
    "description": "Gain proficiency in additional skills or tools (sample text).",
    "category": "Technical",
-   "prerequisite": ""
+   "prerequisite": "",
+   "repeatable": true
   },
   {
    "id": "trade-skills",
@@ -1771,7 +1994,8 @@
    "source": "Core (sample)",
    "description": "You are expert in practical trades (sample text).",
    "category": "Technical",
-   "prerequisite": ""
+   "prerequisite": "",
+   "repeatable": false
   }
  ],
  "spells": [
