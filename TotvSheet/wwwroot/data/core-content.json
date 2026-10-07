@@ -1,0 +1,2495 @@
+{
+ "lineages": [
+  {
+   "id": "human",
+   "name": "Human",
+   "source": "Core (sample)",
+   "description": "Adaptable and ambitious people found in every land.",
+   "size": "Medium",
+   "speed": 30,
+   "traits": [
+    {
+     "name": "Ambitious",
+     "level": 1,
+     "description": "Gain one extra talent of your choice at 1st level (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  },
+  {
+   "id": "dwarf",
+   "name": "Dwarf",
+   "source": "Core (sample)",
+   "description": "Stout folk with deep ties to stone and craft.",
+   "size": "Medium",
+   "speed": 30,
+   "traits": [
+    {
+     "name": "Darkvision",
+     "level": 1,
+     "description": "See in dim light within 60 feet as if it were bright light.",
+     "usesMax": 0,
+     "recharge": ""
+    },
+    {
+     "name": "Dwarven Resilience",
+     "level": 1,
+     "description": "Advantage on saves against poison and resistance to poison damage (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  },
+  {
+   "id": "elf",
+   "name": "Elf",
+   "source": "Core (sample)",
+   "description": "Long-lived people attuned to magic and the wild.",
+   "size": "Medium",
+   "speed": 30,
+   "traits": [
+    {
+     "name": "Darkvision",
+     "level": 1,
+     "description": "See in dim light within 60 feet as if it were bright light.",
+     "usesMax": 0,
+     "recharge": ""
+    },
+    {
+     "name": "Trance",
+     "level": 1,
+     "description": "You don't need to sleep; 4 hours of meditation counts as a long rest (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  },
+  {
+   "id": "orc",
+   "name": "Orc",
+   "source": "Core (sample)",
+   "description": "Strong, enduring people with a fierce drive.",
+   "size": "Medium",
+   "speed": 30,
+   "traits": [
+    {
+     "name": "Darkvision",
+     "level": 1,
+     "description": "See in dim light within 60 feet as if it were bright light.",
+     "usesMax": 0,
+     "recharge": ""
+    },
+    {
+     "name": "Relentless",
+     "level": 1,
+     "description": "Once per long rest, when reduced to 0 HP you drop to 1 HP instead (sample text).",
+     "usesMax": 1,
+     "recharge": "Long Rest"
+    }
+   ]
+  },
+  {
+   "id": "smallfolk",
+   "name": "Smallfolk",
+   "source": "Core (sample)",
+   "description": "Small, nimble folk with a knack for slipping out of trouble.",
+   "size": "Small",
+   "speed": 30,
+   "traits": [
+    {
+     "name": "Nimble",
+     "level": 1,
+     "description": "You can move through the space of a creature larger than you (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  },
+  {
+   "id": "kobold",
+   "name": "Kobold",
+   "source": "Core (sample)",
+   "description": "Small, clever draconic folk.",
+   "size": "Small",
+   "speed": 30,
+   "traits": [
+    {
+     "name": "Darkvision",
+     "level": 1,
+     "description": "See in dim light within 60 feet as if it were bright light.",
+     "usesMax": 0,
+     "recharge": ""
+    },
+    {
+     "name": "Draconic Resistance",
+     "level": 1,
+     "description": "Resistance to one damage type tied to your draconic ancestry (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  },
+  {
+   "id": "beastkin",
+   "name": "Beastkin",
+   "source": "Core (sample)",
+   "description": "People who carry the traits of animals.",
+   "size": "Medium",
+   "speed": 30,
+   "traits": [
+    {
+     "name": "Animal Instincts",
+     "level": 1,
+     "description": "Choose an animal aspect that grants a movement or sense trait (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  },
+  {
+   "id": "syderean",
+   "name": "Syderean",
+   "source": "Core (sample)",
+   "description": "People touched by the celestial or fiendish planes.",
+   "size": "Medium",
+   "speed": 30,
+   "traits": [
+    {
+     "name": "Planar Resistance",
+     "level": 1,
+     "description": "Resistance to radiant or necrotic damage, based on your origin (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  }
+ ],
+ "heritages": [
+  {
+   "id": "cosmopolitan",
+   "name": "Cosmopolitan",
+   "source": "Core (sample)",
+   "description": "Raised in a bustling city among many cultures.",
+   "languages": "Common, one extra language",
+   "traits": [
+    {
+     "name": "Street Savvy",
+     "level": 1,
+     "description": "Proficiency in one Charisma skill of your choice (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  },
+  {
+   "id": "nomadic",
+   "name": "Nomadic",
+   "source": "Core (sample)",
+   "description": "Raised on the move, never long in one place.",
+   "languages": "Common, one extra language",
+   "traits": [
+    {
+     "name": "Traveler",
+     "level": 1,
+     "description": "Your speed is not reduced by difficult terrain from natural weather (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  },
+  {
+   "id": "wildlands",
+   "name": "Wildlands",
+   "source": "Core (sample)",
+   "description": "Raised far from cities, in the wild places of the world.",
+   "languages": "Common",
+   "traits": [
+    {
+     "name": "Wild Lore",
+     "level": 1,
+     "description": "Proficiency in Survival (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  },
+  {
+   "id": "fireforge",
+   "name": "Fireforge",
+   "source": "Core (sample)",
+   "description": "Raised in a forge-city of smiths and makers.",
+   "languages": "Common, Dwarvish",
+   "traits": [
+    {
+     "name": "Forge Trained",
+     "level": 1,
+     "description": "Proficiency with smith's tools (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  },
+  {
+   "id": "grove",
+   "name": "Grove",
+   "source": "Core (sample)",
+   "description": "Raised in a forest community close to nature.",
+   "languages": "Common, Elvish",
+   "traits": [
+    {
+     "name": "Grove Magic",
+     "level": 1,
+     "description": "You know one primordial cantrip (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  },
+  {
+   "id": "slayer",
+   "name": "Slayer",
+   "source": "Core (sample)",
+   "description": "Raised among hunters of monsters.",
+   "languages": "Common",
+   "traits": [
+    {
+     "name": "Monster Lore",
+     "level": 1,
+     "description": "Advantage on checks to recall information about monsters (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  }
+ ],
+ "backgrounds": [
+  {
+   "id": "soldier",
+   "name": "Soldier",
+   "source": "Core (sample)",
+   "description": "You served in an army or militia.",
+   "skillProficiencies": [
+    "Athletics",
+    "Intimidation"
+   ],
+   "toolProficiencies": "One gaming set",
+   "abilityOptions": [
+    "STR",
+    "DEX",
+    "CON"
+   ],
+   "equipment": "Insignia of rank, Gaming set, Common clothes, Pouch",
+   "talentId": "combat-conditioning",
+   "traits": [
+    {
+     "name": "Military Rank",
+     "level": 1,
+     "description": "Soldiers loyal to your former organization recognize your authority (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  },
+  {
+   "id": "scholar",
+   "name": "Scholar",
+   "source": "Core (sample)",
+   "description": "You spent years studying in libraries and academies.",
+   "skillProficiencies": [
+    "Arcana",
+    "History"
+   ],
+   "toolProficiencies": "Calligrapher's supplies",
+   "abilityOptions": [
+    "INT",
+    "WIS",
+    "CHA"
+   ],
+   "equipment": "Ink and quill, Book of lore, Common clothes, Pouch",
+   "talentId": "arcane-dabbler",
+   "traits": [
+    {
+     "name": "Researcher",
+     "level": 1,
+     "description": "You know where to find information you don't have (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  },
+  {
+   "id": "criminal",
+   "name": "Criminal",
+   "source": "Core (sample)",
+   "description": "You lived outside the law.",
+   "skillProficiencies": [
+    "Deception",
+    "Stealth"
+   ],
+   "toolProficiencies": "Thieves' tools",
+   "abilityOptions": [
+    "DEX",
+    "INT",
+    "CHA"
+   ],
+   "equipment": "Crowbar, Dark clothes with hood, Pouch",
+   "talentId": "",
+   "traits": [
+    {
+     "name": "Criminal Contact",
+     "level": 1,
+     "description": "You have a reliable contact in the criminal underworld (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  },
+  {
+   "id": "adherent",
+   "name": "Adherent",
+   "source": "Core (sample)",
+   "description": "You served a temple or faith.",
+   "skillProficiencies": [
+    "Insight",
+    "Religion"
+   ],
+   "toolProficiencies": "",
+   "abilityOptions": [
+    "WIS",
+    "CHA",
+    "CON"
+   ],
+   "equipment": "Holy symbol, Prayer book, Vestments, Pouch",
+   "talentId": "",
+   "traits": [
+    {
+     "name": "Shelter of the Faithful",
+     "level": 1,
+     "description": "Temples of your faith offer you aid and lodging (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  },
+  {
+   "id": "homesteader",
+   "name": "Homesteader",
+   "source": "Core (sample)",
+   "description": "You worked the land in a rural community.",
+   "skillProficiencies": [
+    "Animal Handling",
+    "Survival"
+   ],
+   "toolProficiencies": "Carpenter's tools",
+   "abilityOptions": [
+    "STR",
+    "CON",
+    "WIS"
+   ],
+   "equipment": "Shovel, Iron pot, Common clothes, Pouch",
+   "talentId": "",
+   "traits": [
+    {
+     "name": "Rustic Hospitality",
+     "level": 1,
+     "description": "Common folk will shelter and hide you (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  },
+  {
+   "id": "artist",
+   "name": "Artist",
+   "source": "Core (sample)",
+   "description": "You made your living through performance or craft.",
+   "skillProficiencies": [
+    "Performance",
+    "Persuasion"
+   ],
+   "toolProficiencies": "One musical instrument",
+   "abilityOptions": [
+    "DEX",
+    "CHA",
+    "WIS"
+   ],
+   "equipment": "Musical instrument, Costume, Pouch",
+   "talentId": "",
+   "traits": [
+    {
+     "name": "By Popular Demand",
+     "level": 1,
+     "description": "You can always find a place to perform for room and board (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  }
+ ],
+ "classes": [
+  {
+   "id": "fighter",
+   "name": "Fighter",
+   "source": "Core (sample)",
+   "description": "A master of weapons and armor (sample class data).",
+   "hitDie": 10,
+   "savingThrows": [
+    "STR",
+    "CON"
+   ],
+   "armorProficiencies": [
+    "Light",
+    "Medium",
+    "Heavy",
+    "Shields"
+   ],
+   "weaponProficiencies": [
+    "Simple",
+    "Martial"
+   ],
+   "otherProficiencies": "",
+   "skillOptions": [
+    "Acrobatics",
+    "Animal Handling",
+    "Athletics",
+    "History",
+    "Insight",
+    "Intimidation",
+    "Perception",
+    "Survival"
+   ],
+   "skillChoices": 2,
+   "spellcastingAbility": null,
+   "subclassLevel": 3,
+   "startingEquipment": [
+    "chain-mail",
+    "longsword",
+    "shield",
+    "light-crossbow",
+    "backpack",
+    "rations"
+   ],
+   "startingGold": 150,
+   "levels": [
+    {
+     "level": 1,
+     "features": [
+      {
+       "name": "Fighting Style",
+       "level": 1,
+       "description": "Adopt a fighting style that grants a combat benefit (sample text).",
+       "usesMax": 0,
+       "recharge": ""
+      },
+      {
+       "name": "Second Wind",
+       "level": 1,
+       "description": "Bonus action: regain 1d10 + fighter level HP.",
+       "usesMax": 1,
+       "recharge": "Short Rest"
+      }
+     ],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 2,
+     "features": [
+      {
+       "name": "Action Surge",
+       "level": 2,
+       "description": "Take one additional action on your turn.",
+       "usesMax": 1,
+       "recharge": "Short Rest"
+      }
+     ],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 3,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 4,
+     "features": [],
+     "grantsTalent": true,
+     "grantsAbilityIncrease": true,
+     "spellSlots": []
+    },
+    {
+     "level": 5,
+     "features": [
+      {
+       "name": "Extra Attack",
+       "level": 5,
+       "description": "Attack twice when you take the Attack action.",
+       "usesMax": 0,
+       "recharge": ""
+      }
+     ],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 6,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 7,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 8,
+     "features": [],
+     "grantsTalent": true,
+     "grantsAbilityIncrease": true,
+     "spellSlots": []
+    },
+    {
+     "level": 9,
+     "features": [
+      {
+       "name": "Indomitable",
+       "level": 9,
+       "description": "Reroll a failed saving throw.",
+       "usesMax": 1,
+       "recharge": "Long Rest"
+      }
+     ],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 10,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 11,
+     "features": [
+      {
+       "name": "Extra Attack (2)",
+       "level": 11,
+       "description": "Attack three times when you take the Attack action.",
+       "usesMax": 0,
+       "recharge": ""
+      }
+     ],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 12,
+     "features": [],
+     "grantsTalent": true,
+     "grantsAbilityIncrease": true,
+     "spellSlots": []
+    },
+    {
+     "level": 13,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 14,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 15,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 16,
+     "features": [],
+     "grantsTalent": true,
+     "grantsAbilityIncrease": true,
+     "spellSlots": []
+    },
+    {
+     "level": 17,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 18,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 19,
+     "features": [],
+     "grantsTalent": true,
+     "grantsAbilityIncrease": true,
+     "spellSlots": []
+    },
+    {
+     "level": 20,
+     "features": [
+      {
+       "name": "Extra Attack (3)",
+       "level": 20,
+       "description": "Attack four times when you take the Attack action.",
+       "usesMax": 0,
+       "recharge": ""
+      }
+     ],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    }
+   ]
+  },
+  {
+   "id": "rogue",
+   "name": "Rogue",
+   "source": "Core (sample)",
+   "description": "A skilled expert in stealth and precision (sample class data).",
+   "hitDie": 8,
+   "savingThrows": [
+    "DEX",
+    "INT"
+   ],
+   "armorProficiencies": [
+    "Light"
+   ],
+   "weaponProficiencies": [
+    "Simple"
+   ],
+   "otherProficiencies": "Hand crossbows, longswords, rapiers, shortswords; thieves' tools",
+   "skillOptions": [
+    "Acrobatics",
+    "Athletics",
+    "Deception",
+    "Insight",
+    "Intimidation",
+    "Investigation",
+    "Perception",
+    "Performance",
+    "Persuasion",
+    "Sleight of Hand",
+    "Stealth"
+   ],
+   "skillChoices": 4,
+   "spellcastingAbility": null,
+   "subclassLevel": 3,
+   "startingEquipment": [
+    "rapier",
+    "shortbow",
+    "leather",
+    "dagger",
+    "thieves-tools",
+    "backpack"
+   ],
+   "startingGold": 100,
+   "levels": [
+    {
+     "level": 1,
+     "features": [
+      {
+       "name": "Expertise",
+       "level": 1,
+       "description": "Double your proficiency bonus for two chosen skills (sample text).",
+       "usesMax": 0,
+       "recharge": ""
+      },
+      {
+       "name": "Sneak Attack",
+       "level": 1,
+       "description": "Once per turn deal extra damage (1d6 at 1st level) with a finesse or ranged weapon when you have advantage.",
+       "usesMax": 0,
+       "recharge": ""
+      }
+     ],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 2,
+     "features": [
+      {
+       "name": "Cunning Action",
+       "level": 2,
+       "description": "Dash, Disengage or Hide as a bonus action.",
+       "usesMax": 0,
+       "recharge": ""
+      }
+     ],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 3,
+     "features": [
+      {
+       "name": "Sneak Attack 2d6",
+       "level": 3,
+       "description": "Sneak Attack damage increases.",
+       "usesMax": 0,
+       "recharge": ""
+      }
+     ],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 4,
+     "features": [],
+     "grantsTalent": true,
+     "grantsAbilityIncrease": true,
+     "spellSlots": []
+    },
+    {
+     "level": 5,
+     "features": [
+      {
+       "name": "Uncanny Dodge",
+       "level": 5,
+       "description": "Reaction: halve the damage of an attack that hits you.",
+       "usesMax": 0,
+       "recharge": ""
+      },
+      {
+       "name": "Sneak Attack 3d6",
+       "level": 5,
+       "description": "Sneak Attack damage increases.",
+       "usesMax": 0,
+       "recharge": ""
+      }
+     ],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 6,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 7,
+     "features": [
+      {
+       "name": "Evasion",
+       "level": 7,
+       "description": "Take no damage on a successful DEX save for half (sample text).",
+       "usesMax": 0,
+       "recharge": ""
+      },
+      {
+       "name": "Sneak Attack 4d6",
+       "level": 7,
+       "description": "Sneak Attack damage increases.",
+       "usesMax": 0,
+       "recharge": ""
+      }
+     ],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 8,
+     "features": [],
+     "grantsTalent": true,
+     "grantsAbilityIncrease": true,
+     "spellSlots": []
+    },
+    {
+     "level": 9,
+     "features": [
+      {
+       "name": "Sneak Attack 5d6",
+       "level": 9,
+       "description": "Sneak Attack damage increases.",
+       "usesMax": 0,
+       "recharge": ""
+      }
+     ],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 10,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 11,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 12,
+     "features": [],
+     "grantsTalent": true,
+     "grantsAbilityIncrease": true,
+     "spellSlots": []
+    },
+    {
+     "level": 13,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 14,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 15,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 16,
+     "features": [],
+     "grantsTalent": true,
+     "grantsAbilityIncrease": true,
+     "spellSlots": []
+    },
+    {
+     "level": 17,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 18,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    },
+    {
+     "level": 19,
+     "features": [],
+     "grantsTalent": true,
+     "grantsAbilityIncrease": true,
+     "spellSlots": []
+    },
+    {
+     "level": 20,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": []
+    }
+   ]
+  },
+  {
+   "id": "wizard",
+   "name": "Wizard",
+   "source": "Core (sample)",
+   "description": "A scholar of arcane magic (sample class data).",
+   "hitDie": 6,
+   "savingThrows": [
+    "INT",
+    "WIS"
+   ],
+   "armorProficiencies": [],
+   "weaponProficiencies": [
+    "Simple"
+   ],
+   "otherProficiencies": "",
+   "skillOptions": [
+    "Arcana",
+    "History",
+    "Insight",
+    "Investigation",
+    "Medicine",
+    "Religion"
+   ],
+   "skillChoices": 2,
+   "spellcastingAbility": "INT",
+   "subclassLevel": 3,
+   "startingEquipment": [
+    "quarterstaff",
+    "dagger",
+    "spellbook",
+    "arcane-focus",
+    "backpack"
+   ],
+   "startingGold": 80,
+   "levels": [
+    {
+     "level": 1,
+     "features": [
+      {
+       "name": "Spellcasting",
+       "level": 1,
+       "description": "Cast arcane spells using Intelligence; prepare spells from your spellbook.",
+       "usesMax": 0,
+       "recharge": ""
+      },
+      {
+       "name": "Arcane Recovery",
+       "level": 1,
+       "description": "On a short rest, recover expended spell slots (sample text).",
+       "usesMax": 1,
+       "recharge": "Long Rest"
+      }
+     ],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      2
+     ]
+    },
+    {
+     "level": 2,
+     "features": [
+      {
+       "name": "Scholarly Pursuit",
+       "level": 2,
+       "description": "Gain expertise in one Intelligence skill (sample text).",
+       "usesMax": 0,
+       "recharge": ""
+      }
+     ],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      3
+     ]
+    },
+    {
+     "level": 3,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      2
+     ]
+    },
+    {
+     "level": 4,
+     "features": [],
+     "grantsTalent": true,
+     "grantsAbilityIncrease": true,
+     "spellSlots": [
+      4,
+      3
+     ]
+    },
+    {
+     "level": 5,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      2
+     ]
+    },
+    {
+     "level": 6,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3
+     ]
+    },
+    {
+     "level": 7,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      1
+     ]
+    },
+    {
+     "level": 8,
+     "features": [],
+     "grantsTalent": true,
+     "grantsAbilityIncrease": true,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      2
+     ]
+    },
+    {
+     "level": 9,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      1
+     ]
+    },
+    {
+     "level": 10,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      2
+     ]
+    },
+    {
+     "level": 11,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      2,
+      1
+     ]
+    },
+    {
+     "level": 12,
+     "features": [],
+     "grantsTalent": true,
+     "grantsAbilityIncrease": true,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      2,
+      1
+     ]
+    },
+    {
+     "level": 13,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      2,
+      1,
+      1
+     ]
+    },
+    {
+     "level": 14,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      2,
+      1,
+      1
+     ]
+    },
+    {
+     "level": 15,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      2,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "level": 16,
+     "features": [],
+     "grantsTalent": true,
+     "grantsAbilityIncrease": true,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      2,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "level": 17,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      2,
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "level": 18,
+     "features": [
+      {
+       "name": "Spell Mastery",
+       "level": 18,
+       "description": "Cast a chosen 1st- and 2nd-circle spell at will (sample text).",
+       "usesMax": 0,
+       "recharge": ""
+      }
+     ],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      3,
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "level": 19,
+     "features": [],
+     "grantsTalent": true,
+     "grantsAbilityIncrease": true,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      3,
+      2,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "level": 20,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      3,
+      2,
+      2,
+      1,
+      1
+     ]
+    }
+   ]
+  },
+  {
+   "id": "cleric",
+   "name": "Cleric",
+   "source": "Core (sample)",
+   "description": "A divine champion who channels the power of a god (sample class data).",
+   "hitDie": 8,
+   "savingThrows": [
+    "WIS",
+    "CHA"
+   ],
+   "armorProficiencies": [
+    "Light",
+    "Medium",
+    "Shields"
+   ],
+   "weaponProficiencies": [
+    "Simple"
+   ],
+   "otherProficiencies": "",
+   "skillOptions": [
+    "History",
+    "Insight",
+    "Medicine",
+    "Persuasion",
+    "Religion"
+   ],
+   "skillChoices": 2,
+   "spellcastingAbility": "WIS",
+   "subclassLevel": 3,
+   "startingEquipment": [
+    "mace",
+    "scale-mail",
+    "shield",
+    "holy-symbol",
+    "backpack"
+   ],
+   "startingGold": 110,
+   "levels": [
+    {
+     "level": 1,
+     "features": [
+      {
+       "name": "Spellcasting",
+       "level": 1,
+       "description": "Cast divine spells using Wisdom.",
+       "usesMax": 0,
+       "recharge": ""
+      },
+      {
+       "name": "Divine Order",
+       "level": 1,
+       "description": "Choose a role in your faith that grants a benefit (sample text).",
+       "usesMax": 0,
+       "recharge": ""
+      }
+     ],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      2
+     ]
+    },
+    {
+     "level": 2,
+     "features": [
+      {
+       "name": "Channel Divinity",
+       "level": 2,
+       "description": "Channel divine energy for a magical effect.",
+       "usesMax": 2,
+       "recharge": "Short Rest"
+      }
+     ],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      3
+     ]
+    },
+    {
+     "level": 3,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      2
+     ]
+    },
+    {
+     "level": 4,
+     "features": [],
+     "grantsTalent": true,
+     "grantsAbilityIncrease": true,
+     "spellSlots": [
+      4,
+      3
+     ]
+    },
+    {
+     "level": 5,
+     "features": [
+      {
+       "name": "Sear Undead",
+       "level": 5,
+       "description": "Your turning harms undead (sample text).",
+       "usesMax": 0,
+       "recharge": ""
+      }
+     ],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      2
+     ]
+    },
+    {
+     "level": 6,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3
+     ]
+    },
+    {
+     "level": 7,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      1
+     ]
+    },
+    {
+     "level": 8,
+     "features": [],
+     "grantsTalent": true,
+     "grantsAbilityIncrease": true,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      2
+     ]
+    },
+    {
+     "level": 9,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      1
+     ]
+    },
+    {
+     "level": 10,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      2
+     ]
+    },
+    {
+     "level": 11,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      2,
+      1
+     ]
+    },
+    {
+     "level": 12,
+     "features": [],
+     "grantsTalent": true,
+     "grantsAbilityIncrease": true,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      2,
+      1
+     ]
+    },
+    {
+     "level": 13,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      2,
+      1,
+      1
+     ]
+    },
+    {
+     "level": 14,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      2,
+      1,
+      1
+     ]
+    },
+    {
+     "level": 15,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      2,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "level": 16,
+     "features": [],
+     "grantsTalent": true,
+     "grantsAbilityIncrease": true,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      2,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "level": 17,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      2,
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "level": 18,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      3,
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "level": 19,
+     "features": [],
+     "grantsTalent": true,
+     "grantsAbilityIncrease": true,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      3,
+      2,
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "level": 20,
+     "features": [],
+     "grantsTalent": false,
+     "grantsAbilityIncrease": false,
+     "spellSlots": [
+      4,
+      3,
+      3,
+      3,
+      3,
+      2,
+      2,
+      1,
+      1
+     ]
+    }
+   ]
+  }
+ ],
+ "subclasses": [
+  {
+   "id": "fighter-weapon-master",
+   "name": "Weapon Master (sample)",
+   "source": "Core (sample)",
+   "description": "A sample fighter subclass. Replace with a real one in Settings.",
+   "classId": "fighter",
+   "features": [
+    {
+     "name": "Improved Critical",
+     "level": 3,
+     "description": "Your weapon attacks score a critical hit on a 19 or 20 (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    },
+    {
+     "name": "Remarkable Athlete",
+     "level": 7,
+     "description": "Add half proficiency to STR, DEX and CON checks you're not proficient in (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    },
+    {
+     "name": "Superior Critical",
+     "level": 15,
+     "description": "Critical hits on 18-20 (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  },
+  {
+   "id": "rogue-shadow",
+   "name": "Shadow Blade (sample)",
+   "source": "Core (sample)",
+   "description": "A sample rogue subclass.",
+   "classId": "rogue",
+   "features": [
+    {
+     "name": "Shadow Step",
+     "level": 3,
+     "description": "Bonus action: teleport between areas of dim light within 30 ft. (sample text).",
+     "usesMax": 2,
+     "recharge": "Long Rest"
+    },
+    {
+     "name": "Fade",
+     "level": 9,
+     "description": "Become invisible until the end of your turn after a Sneak Attack (sample text).",
+     "usesMax": 1,
+     "recharge": "Short Rest"
+    }
+   ]
+  },
+  {
+   "id": "wizard-evoker",
+   "name": "School of Evocation (sample)",
+   "source": "Core (sample)",
+   "description": "A sample wizard subclass.",
+   "classId": "wizard",
+   "features": [
+    {
+     "name": "Sculpt Spells",
+     "level": 3,
+     "description": "Protect allies from your evocation spells (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    },
+    {
+     "name": "Potent Cantrip",
+     "level": 6,
+     "description": "Creatures take half damage from your cantrips on a successful save (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  },
+  {
+   "id": "cleric-life",
+   "name": "Life Domain (sample)",
+   "source": "Core (sample)",
+   "description": "A sample cleric subclass.",
+   "classId": "cleric",
+   "features": [
+    {
+     "name": "Disciple of Life",
+     "level": 3,
+     "description": "Healing spells restore extra HP equal to 2 + spell circle (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    },
+    {
+     "name": "Blessed Healer",
+     "level": 6,
+     "description": "When you heal others, you also heal (sample text).",
+     "usesMax": 0,
+     "recharge": ""
+    }
+   ]
+  }
+ ],
+ "talents": [
+  {
+   "id": "combat-conditioning",
+   "name": "Combat Conditioning",
+   "source": "Core (sample)",
+   "description": "Your training makes you hardier in battle (sample text).",
+   "category": "Martial",
+   "prerequisite": ""
+  },
+  {
+   "id": "shield-training",
+   "name": "Shield Training",
+   "source": "Core (sample)",
+   "description": "You are practiced at defending yourself and allies with a shield (sample text).",
+   "category": "Martial",
+   "prerequisite": "Proficiency with shields"
+  },
+  {
+   "id": "polearm-training",
+   "name": "Polearm Training",
+   "source": "Core (sample)",
+   "description": "You make the most of reach weapons (sample text).",
+   "category": "Martial",
+   "prerequisite": ""
+  },
+  {
+   "id": "arcane-dabbler",
+   "name": "Arcane Dabbler",
+   "source": "Core (sample)",
+   "description": "You learn a cantrip and a 1st-circle spell from the Arcane list (sample text).",
+   "category": "Magic",
+   "prerequisite": ""
+  },
+  {
+   "id": "ritualist",
+   "name": "Ritualist",
+   "source": "Core (sample)",
+   "description": "You can cast certain spells as rituals (sample text).",
+   "category": "Magic",
+   "prerequisite": ""
+  },
+  {
+   "id": "touch-of-luck",
+   "name": "Touch of Luck",
+   "source": "Core (sample)",
+   "description": "Fortune favors you; you can spend Luck more effectively (sample text).",
+   "category": "Magic",
+   "prerequisite": ""
+  },
+  {
+   "id": "aware",
+   "name": "Aware",
+   "source": "Core (sample)",
+   "description": "You are hard to surprise and quick to act (sample text).",
+   "category": "Technical",
+   "prerequisite": ""
+  },
+  {
+   "id": "skillful",
+   "name": "Skillful",
+   "source": "Core (sample)",
+   "description": "Gain proficiency in additional skills or tools (sample text).",
+   "category": "Technical",
+   "prerequisite": ""
+  },
+  {
+   "id": "trade-skills",
+   "name": "Trade Skills",
+   "source": "Core (sample)",
+   "description": "You are expert in practical trades (sample text).",
+   "category": "Technical",
+   "prerequisite": ""
+  }
+ ],
+ "spells": [
+  {
+   "id": "fire-bolt",
+   "name": "Fire Bolt",
+   "source": "Core (sample)",
+   "description": "Hurl a mote of fire: ranged spell attack, 1d10 fire damage.",
+   "circle": 0,
+   "school": "Evocation",
+   "tradition": "Arcane",
+   "castingTime": "1 action",
+   "range": "120 ft.",
+   "components": "V, S",
+   "duration": "Instantaneous",
+   "concentration": false,
+   "ritual": false
+  },
+  {
+   "id": "light",
+   "name": "Light",
+   "source": "Core (sample)",
+   "description": "An object sheds bright light in a 20-foot radius.",
+   "circle": 0,
+   "school": "Evocation",
+   "tradition": "Arcane, Divine",
+   "castingTime": "1 action",
+   "range": "Touch",
+   "components": "V, M",
+   "duration": "1 hour",
+   "concentration": false,
+   "ritual": false
+  },
+  {
+   "id": "sacred-flame",
+   "name": "Sacred Flame",
+   "source": "Core (sample)",
+   "description": "DEX save or take 1d8 radiant damage.",
+   "circle": 0,
+   "school": "Evocation",
+   "tradition": "Divine",
+   "castingTime": "1 action",
+   "range": "60 ft.",
+   "components": "V, S",
+   "duration": "Instantaneous",
+   "concentration": false,
+   "ritual": false
+  },
+  {
+   "id": "mage-hand",
+   "name": "Mage Hand",
+   "source": "Core (sample)",
+   "description": "Mage Hand (sample text; replace with your book's description).",
+   "circle": 0,
+   "school": "Conjuration",
+   "tradition": "Arcane",
+   "castingTime": "1 action",
+   "range": "30 ft.",
+   "components": "V, S",
+   "duration": "1 minute",
+   "concentration": false,
+   "ritual": false
+  },
+  {
+   "id": "magic-missile",
+   "name": "Magic Missile",
+   "source": "Core (sample)",
+   "description": "Three darts each deal 1d4+1 force damage.",
+   "circle": 1,
+   "school": "Evocation",
+   "tradition": "Arcane",
+   "castingTime": "1 action",
+   "range": "120 ft.",
+   "components": "V, S",
+   "duration": "Instantaneous",
+   "concentration": false,
+   "ritual": false
+  },
+  {
+   "id": "shield",
+   "name": "Shield",
+   "source": "Core (sample)",
+   "description": "+5 bonus to AC until the start of your next turn.",
+   "circle": 1,
+   "school": "Abjuration",
+   "tradition": "Arcane",
+   "castingTime": "1 reaction",
+   "range": "Self",
+   "components": "V, S",
+   "duration": "1 round",
+   "concentration": false,
+   "ritual": false
+  },
+  {
+   "id": "cure-wounds",
+   "name": "Cure Wounds",
+   "source": "Core (sample)",
+   "description": "A creature regains 1d8 + your spellcasting modifier HP.",
+   "circle": 1,
+   "school": "Evocation",
+   "tradition": "Divine, Primordial",
+   "castingTime": "1 action",
+   "range": "Touch",
+   "components": "V, S",
+   "duration": "Instantaneous",
+   "concentration": false,
+   "ritual": false
+  },
+  {
+   "id": "bless",
+   "name": "Bless",
+   "source": "Core (sample)",
+   "description": "Up to three creatures add 1d4 to attack rolls and saves.",
+   "circle": 1,
+   "school": "Enchantment",
+   "tradition": "Divine",
+   "castingTime": "1 action",
+   "range": "30 ft.",
+   "components": "V, S, M",
+   "duration": "1 minute",
+   "concentration": true,
+   "ritual": false
+  },
+  {
+   "id": "detect-magic",
+   "name": "Detect Magic",
+   "source": "Core (sample)",
+   "description": "Detect Magic (sample text; replace with your book's description).",
+   "circle": 1,
+   "school": "Divination",
+   "tradition": "Arcane, Divine, Primordial",
+   "castingTime": "1 action",
+   "range": "Self",
+   "components": "V, S",
+   "duration": "10 minutes",
+   "concentration": true,
+   "ritual": true
+  },
+  {
+   "id": "identify",
+   "name": "Identify",
+   "source": "Core (sample)",
+   "description": "Identify (sample text; replace with your book's description).",
+   "circle": 1,
+   "school": "Divination",
+   "tradition": "Arcane",
+   "castingTime": "1 minute",
+   "range": "Touch",
+   "components": "V, S, M (a pearl worth 100 gp)",
+   "duration": "Instantaneous",
+   "concentration": false,
+   "ritual": true
+  },
+  {
+   "id": "hold-person",
+   "name": "Hold Person",
+   "source": "Core (sample)",
+   "description": "Hold Person (sample text; replace with your book's description).",
+   "circle": 2,
+   "school": "Enchantment",
+   "tradition": "Arcane, Divine",
+   "castingTime": "1 action",
+   "range": "60 ft.",
+   "components": "V, S, M",
+   "duration": "1 minute",
+   "concentration": true,
+   "ritual": false
+  },
+  {
+   "id": "misty-step",
+   "name": "Misty Step",
+   "source": "Core (sample)",
+   "description": "Teleport up to 30 feet to a space you can see.",
+   "circle": 2,
+   "school": "Conjuration",
+   "tradition": "Arcane",
+   "castingTime": "1 bonus action",
+   "range": "Self",
+   "components": "V",
+   "duration": "Instantaneous",
+   "concentration": false,
+   "ritual": false
+  },
+  {
+   "id": "fireball",
+   "name": "Fireball",
+   "source": "Core (sample)",
+   "description": "20-foot-radius burst, DEX save, 8d6 fire damage.",
+   "circle": 3,
+   "school": "Evocation",
+   "tradition": "Arcane",
+   "castingTime": "1 action",
+   "range": "150 ft.",
+   "components": "V, S, M",
+   "duration": "Instantaneous",
+   "concentration": false,
+   "ritual": false
+  },
+  {
+   "id": "revivify",
+   "name": "Revivify",
+   "source": "Core (sample)",
+   "description": "Revivify (sample text; replace with your book's description).",
+   "circle": 3,
+   "school": "Necromancy",
+   "tradition": "Divine, Primordial",
+   "castingTime": "1 action",
+   "range": "Touch",
+   "components": "V, S, M (diamonds worth 300 gp)",
+   "duration": "Instantaneous",
+   "concentration": false,
+   "ritual": false
+  }
+ ],
+ "items": [
+  {
+   "id": "dagger",
+   "name": "Dagger",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Weapon",
+   "weaponCategory": "Simple",
+   "damage": "1d4",
+   "damageType": "piercing",
+   "range": "20/60 ft.",
+   "properties": "Finesse, light, thrown",
+   "finesse": true,
+   "ranged": false,
+   "baseAC": 0,
+   "armorCategory": "None",
+   "cost": "2 gp",
+   "weight": "1 lb."
+  },
+  {
+   "id": "mace",
+   "name": "Mace",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Weapon",
+   "weaponCategory": "Simple",
+   "damage": "1d6",
+   "damageType": "bludgeoning",
+   "range": "",
+   "properties": "",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 0,
+   "armorCategory": "None",
+   "cost": "5 gp",
+   "weight": "4 lb."
+  },
+  {
+   "id": "quarterstaff",
+   "name": "Quarterstaff",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Weapon",
+   "weaponCategory": "Simple",
+   "damage": "1d6",
+   "damageType": "bludgeoning",
+   "range": "",
+   "properties": "Versatile (1d8)",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 0,
+   "armorCategory": "None",
+   "cost": "2 sp",
+   "weight": "4 lb."
+  },
+  {
+   "id": "light-crossbow",
+   "name": "Light Crossbow",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Weapon",
+   "weaponCategory": "Simple",
+   "damage": "1d8",
+   "damageType": "piercing",
+   "range": "80/320 ft.",
+   "properties": "Ammunition, loading, two-handed",
+   "finesse": false,
+   "ranged": true,
+   "baseAC": 0,
+   "armorCategory": "None",
+   "cost": "25 gp",
+   "weight": "5 lb."
+  },
+  {
+   "id": "shortbow",
+   "name": "Shortbow",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Weapon",
+   "weaponCategory": "Simple",
+   "damage": "1d6",
+   "damageType": "piercing",
+   "range": "80/320 ft.",
+   "properties": "Ammunition, two-handed",
+   "finesse": false,
+   "ranged": true,
+   "baseAC": 0,
+   "armorCategory": "None",
+   "cost": "25 gp",
+   "weight": "2 lb."
+  },
+  {
+   "id": "longsword",
+   "name": "Longsword",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Weapon",
+   "weaponCategory": "Martial",
+   "damage": "1d8",
+   "damageType": "slashing",
+   "range": "",
+   "properties": "Versatile (1d10)",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 0,
+   "armorCategory": "None",
+   "cost": "15 gp",
+   "weight": "3 lb."
+  },
+  {
+   "id": "rapier",
+   "name": "Rapier",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Weapon",
+   "weaponCategory": "Martial",
+   "damage": "1d8",
+   "damageType": "piercing",
+   "range": "",
+   "properties": "Finesse",
+   "finesse": true,
+   "ranged": false,
+   "baseAC": 0,
+   "armorCategory": "None",
+   "cost": "25 gp",
+   "weight": "2 lb."
+  },
+  {
+   "id": "shortsword",
+   "name": "Shortsword",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Weapon",
+   "weaponCategory": "Martial",
+   "damage": "1d6",
+   "damageType": "piercing",
+   "range": "",
+   "properties": "Finesse, light",
+   "finesse": true,
+   "ranged": false,
+   "baseAC": 0,
+   "armorCategory": "None",
+   "cost": "10 gp",
+   "weight": "2 lb."
+  },
+  {
+   "id": "greataxe",
+   "name": "Greataxe",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Weapon",
+   "weaponCategory": "Martial",
+   "damage": "1d12",
+   "damageType": "slashing",
+   "range": "",
+   "properties": "Heavy, two-handed",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 0,
+   "armorCategory": "None",
+   "cost": "30 gp",
+   "weight": "7 lb."
+  },
+  {
+   "id": "longbow",
+   "name": "Longbow",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Weapon",
+   "weaponCategory": "Martial",
+   "damage": "1d8",
+   "damageType": "piercing",
+   "range": "150/600 ft.",
+   "properties": "Ammunition, heavy, two-handed",
+   "finesse": false,
+   "ranged": true,
+   "baseAC": 0,
+   "armorCategory": "None",
+   "cost": "50 gp",
+   "weight": "2 lb."
+  },
+  {
+   "id": "leather",
+   "name": "Leather Armor",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Armor",
+   "weaponCategory": "",
+   "damage": "",
+   "damageType": "",
+   "range": "",
+   "properties": "",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 11,
+   "armorCategory": "Light",
+   "cost": "10 gp",
+   "weight": "10 lb."
+  },
+  {
+   "id": "studded-leather",
+   "name": "Studded Leather",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Armor",
+   "weaponCategory": "",
+   "damage": "",
+   "damageType": "",
+   "range": "",
+   "properties": "",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 12,
+   "armorCategory": "Light",
+   "cost": "45 gp",
+   "weight": "13 lb."
+  },
+  {
+   "id": "chain-shirt",
+   "name": "Chain Shirt",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Armor",
+   "weaponCategory": "",
+   "damage": "",
+   "damageType": "",
+   "range": "",
+   "properties": "",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 13,
+   "armorCategory": "Medium",
+   "cost": "50 gp",
+   "weight": "20 lb."
+  },
+  {
+   "id": "scale-mail",
+   "name": "Scale Mail",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Armor",
+   "weaponCategory": "",
+   "damage": "",
+   "damageType": "",
+   "range": "",
+   "properties": "Stealth disadvantage",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 14,
+   "armorCategory": "Medium",
+   "cost": "50 gp",
+   "weight": "45 lb."
+  },
+  {
+   "id": "chain-mail",
+   "name": "Chain Mail",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Armor",
+   "weaponCategory": "",
+   "damage": "",
+   "damageType": "",
+   "range": "",
+   "properties": "STR 13, stealth disadvantage",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 16,
+   "armorCategory": "Heavy",
+   "cost": "75 gp",
+   "weight": "55 lb."
+  },
+  {
+   "id": "plate",
+   "name": "Plate Armor",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Armor",
+   "weaponCategory": "",
+   "damage": "",
+   "damageType": "",
+   "range": "",
+   "properties": "STR 15, stealth disadvantage",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 18,
+   "armorCategory": "Heavy",
+   "cost": "1,500 gp",
+   "weight": "65 lb."
+  },
+  {
+   "id": "shield",
+   "name": "Shield",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Shield",
+   "weaponCategory": "",
+   "damage": "",
+   "damageType": "",
+   "range": "",
+   "properties": "",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 2,
+   "armorCategory": "None",
+   "cost": "10 gp",
+   "weight": "6 lb."
+  },
+  {
+   "id": "backpack",
+   "name": "Backpack",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Gear",
+   "weaponCategory": "",
+   "damage": "",
+   "damageType": "",
+   "range": "",
+   "properties": "",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 0,
+   "armorCategory": "None",
+   "cost": "2 gp",
+   "weight": "5 lb."
+  },
+  {
+   "id": "bedroll",
+   "name": "Bedroll",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Gear",
+   "weaponCategory": "",
+   "damage": "",
+   "damageType": "",
+   "range": "",
+   "properties": "",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 0,
+   "armorCategory": "None",
+   "cost": "1 gp",
+   "weight": "7 lb."
+  },
+  {
+   "id": "rations",
+   "name": "Rations (1 day)",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Gear",
+   "weaponCategory": "",
+   "damage": "",
+   "damageType": "",
+   "range": "",
+   "properties": "",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 0,
+   "armorCategory": "None",
+   "cost": "5 sp",
+   "weight": "2 lb."
+  },
+  {
+   "id": "rope",
+   "name": "Rope, 50 ft.",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Gear",
+   "weaponCategory": "",
+   "damage": "",
+   "damageType": "",
+   "range": "",
+   "properties": "",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 0,
+   "armorCategory": "None",
+   "cost": "1 gp",
+   "weight": "10 lb."
+  },
+  {
+   "id": "torch",
+   "name": "Torch",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Gear",
+   "weaponCategory": "",
+   "damage": "",
+   "damageType": "",
+   "range": "",
+   "properties": "",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 0,
+   "armorCategory": "None",
+   "cost": "1 cp",
+   "weight": "1 lb."
+  },
+  {
+   "id": "waterskin",
+   "name": "Waterskin",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Gear",
+   "weaponCategory": "",
+   "damage": "",
+   "damageType": "",
+   "range": "",
+   "properties": "",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 0,
+   "armorCategory": "None",
+   "cost": "2 sp",
+   "weight": "5 lb."
+  },
+  {
+   "id": "thieves-tools",
+   "name": "Thieves' Tools",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Gear",
+   "weaponCategory": "",
+   "damage": "",
+   "damageType": "",
+   "range": "",
+   "properties": "",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 0,
+   "armorCategory": "None",
+   "cost": "25 gp",
+   "weight": "1 lb."
+  },
+  {
+   "id": "spellbook",
+   "name": "Spellbook",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Gear",
+   "weaponCategory": "",
+   "damage": "",
+   "damageType": "",
+   "range": "",
+   "properties": "",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 0,
+   "armorCategory": "None",
+   "cost": "50 gp",
+   "weight": "3 lb."
+  },
+  {
+   "id": "holy-symbol",
+   "name": "Holy Symbol",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Gear",
+   "weaponCategory": "",
+   "damage": "",
+   "damageType": "",
+   "range": "",
+   "properties": "",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 0,
+   "armorCategory": "None",
+   "cost": "5 gp",
+   "weight": "1 lb."
+  },
+  {
+   "id": "arcane-focus",
+   "name": "Arcane Focus",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Gear",
+   "weaponCategory": "",
+   "damage": "",
+   "damageType": "",
+   "range": "",
+   "properties": "",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 0,
+   "armorCategory": "None",
+   "cost": "10 gp",
+   "weight": "1 lb."
+  },
+  {
+   "id": "healers-kit",
+   "name": "Healer's Kit",
+   "source": "Core (sample)",
+   "description": "",
+   "type": "Gear",
+   "weaponCategory": "",
+   "damage": "",
+   "damageType": "",
+   "range": "",
+   "properties": "",
+   "finesse": false,
+   "ranged": false,
+   "baseAC": 0,
+   "armorCategory": "None",
+   "cost": "5 gp",
+   "weight": "3 lb."
+  }
+ ]
+}

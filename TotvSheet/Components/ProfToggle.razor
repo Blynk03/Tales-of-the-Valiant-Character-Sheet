@@ -1,0 +1,16 @@
+<label class="flex items-center gap-2 cursor-pointer select-none">
+    <button type="button" class="pip @(Value ? "on" : "")" aria-pressed="@(Value ? "true" : "false")" @onclick="Toggle"></button>
+    <span>@Label</span>
+</label>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public bool Value { get; set; }
+    [Parameter] public EventCallback<bool> ValueChanged { get; set; }
+
+    private async Task Toggle()
+    {
+        Value = !Value;
+        await ValueChanged.InvokeAsync(Value);
+    }
+}

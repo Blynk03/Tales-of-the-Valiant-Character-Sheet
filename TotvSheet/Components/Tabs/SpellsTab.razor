@@ -1,0 +1,222 @@
+@inject ContentService Content
+@inject DiceService Dice
+
+@* Page 5 of the printed sheet: spellcasting, slots, spells, rituals. *@
+<div class="flex flex-col gap-3">
+    <div class="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-3">
+        <Box Title="Spellcasting">
+            <div class="lbl">Spellcaster class &amp; source</div>
+            <input class="field font-semibold" @bind="C.SpellcasterClass" @bind:after="Save" />
+            <div class="lbl mt-2">Spellcasting ability</div>
+            <select class="select" @bind="abilityValue" @bind:after="SetAbility">
+                <option value="">None</option>
+                @foreach (var a in Rules.Abilities)
+                {
+                    <option value="@a">@Rules.AbilityNames[a]</option>
+                }
+            </select>
+            <div class="grid grid-cols-2 gap-2 mt-3">
+                <div class="field-box"><div class="lbl">Save DC</div><div class="num text-3xl" style="color:var(--ink)">@(C.SpellAbility is null ? "—" : C.SpellSaveDc().ToString())</div></div>
+                <div class="field-box">
+                    <div class="lbl">Attack bonus</div>
+                    @if (C.SpellAbility is null)
+                    {
+                        <div class="num text-3xl">—</div>
+                    }
+                    else
+                    {
+                        <button type="button" class="roll num text-3xl" style="color:var(--ink)" title="Roll spell attack" @onclick="RollSpellAttack">@Rules.Signed(C.SpellAttack())</button>
+                    }
+                </div>
+            </div>
+        </Box>
+
+        <Box Title="Spell Slots">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                @for (int i = 0; i < 9; i++)
+                {
+                    var idx = i;
+                    <div class="rounded-lg px-2 py-1.5" style="border:1px solid var(--line)">
+                        <div class="flex items-center gap-2">
+                            <span class="display font-bold text-sm" style="color:var(--ink)">@Rules.CircleName(idx + 1) circle</span>
+                            <span class="lbl ml-auto">Total</span>
+                            <input type="number" min="0" max="9" class="field num w-9 text-center" aria-label="@($"{Rules.CircleName(idx + 1)} circle slots")"
+                                   @bind="C.SlotsTotal[idx]" @bind:after="Save" />
+                        </div>
+                        <div class="flex items-center gap-2 mt-1 min-h-[1.25rem]">
+                            <span class="lbl">Expended</span>
+                            <Pips Count="C.SlotsTotal[idx]" Label="Expended" Value="C.SlotsExpended[idx]" ValueChanged="(int v) => SetExpended(idx, v)" />
+                        </div>
+                    </div>
+                }
+            </div>
+        </Box>
+    </div>
+
+    <Box Title="Cantrips & Spells">
+        <div class="overflow-x-auto">
+            <table class="tbl min-w-[48rem]">
+                <thead>
+                    <tr><th>Circle</th><th>Spell Name</th><th>Cast Time</th><th>Range</th><th>Components</th><th>Duration</th><th title="Concentration">Conc.</th><th>Prepared</th><th></th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in C.Spells.OrderBy(x => x.Circle).ThenBy(x => x.Name))
+                    {
+                        var spell = s;
+                        <tr>
+                            <td><input type="number" min="0" max="9" class="field num w-9 text-center" aria-label="Circle" @bind="spell.Circle" @bind:after="Save" /></td>
+                            <td>
+                                <input class="field font-semibold" aria-label="Spell name" @bind="spell.Name" @bind:after="Save" />
+                                @if (!string.IsNullOrWhiteSpace(spell.Description))
+                                {
+                                    <div class="text-xs muted mt-0.5 max-w-xs">@spell.Description</div>
+                                }
+                            </td>
+                            <td><input class="field text-sm w-24" aria-label="Casting time" @bind="spell.CastingTime" @bind:after="Save" /></td>
+                            <td><input class="field text-sm w-20" aria-label="Range" @bind="spell.Range" @bind:after="Save" /></td>
+                            <td><input class="field text-sm" aria-label="Components" @bind="spell.Components" @bind:after="Save" /></td>
+                            <td><input class="field text-sm w-24" aria-label="Duration" @bind="spell.Duration" @bind:after="Save" /></td>
+                            <td class="text-center"><input type="checkbox" aria-label="Concentration" @bind="spell.Concentration" @bind:after="Save" /></td>
+                            <td class="text-center"><button type="button" class="pip @(spell.Prepared || spell.Circle == 0 ? "on" : "")" title="Prepared" @onclick="() => TogglePrepared(spell)"></button></td>
+                            <td><button type="button" class="btn btn-sm" disabled="@(!CanCast(spell))" title="@CastTitle(spell)" @onclick="() => Cast(spell)">Cast</button></td>
+                            <td><button type="button" class="icon-btn" title="Remove" @onclick="() => RemoveSpell(spell)">✕</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (!string.IsNullOrEmpty(castMessage))
+        {
+            <p class="text-sm mt-1" style="color:var(--ink)">@castMessage</p>
+        }
+        <div class="flex flex-wrap gap-1.5 items-center mt-2">
+            <select class="select max-w-xs" aria-label="Add spell from library" @bind="spellToAdd">
+                <option value="">Add a spell from library…</option>
+                @foreach (var group in Content.Spells.GroupBy(x => x.Circle).OrderBy(g => g.Key))
+                {
+                    <optgroup label="@(group.Key == 0 ? "Cantrips" : $"{Rules.CircleName(group.Key)} circle")">
+                        @foreach (var opt in group)
+                        {
+                            <option value="@opt.Id">@opt.Name @(string.IsNullOrEmpty(opt.Tradition) ? "" : $"· {opt.Tradition}")</option>
+                        }
+                    </optgroup>
+                }
+            </select>
+            <button type="button" class="btn btn-sm btn-primary" disabled="@string.IsNullOrEmpty(spellToAdd)" @onclick="AddSpell">Add</button>
+            <button type="button" class="btn btn-sm" @onclick="AddCustomSpell">+ Custom spell</button>
+        </div>
+    </Box>
+
+    <Box Title="Rituals">
+        <div class="overflow-x-auto">
+            <table class="tbl min-w-[36rem]">
+                <thead><tr><th>Circle</th><th>Ritual Name</th><th>Cast Time</th><th>Materials &amp; Cost</th><th>Duration</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var r in C.Rituals)
+                    {
+                        var ritual = r;
+                        <tr>
+                            <td><input type="number" min="1" max="9" class="field num w-9 text-center" aria-label="Circle" @bind="ritual.Circle" @bind:after="Save" /></td>
+                            <td><input class="field font-semibold" aria-label="Ritual name" @bind="ritual.Name" @bind:after="Save" /></td>
+                            <td><input class="field text-sm" aria-label="Casting time" @bind="ritual.CastingTime" @bind:after="Save" /></td>
+                            <td><input class="field text-sm" aria-label="Materials" @bind="ritual.Materials" @bind:after="Save" /></td>
+                            <td><input class="field text-sm" aria-label="Duration" @bind="ritual.Duration" @bind:after="Save" /></td>
+                            <td><button type="button" class="icon-btn" title="Remove" @onclick="() => RemoveRitual(ritual)">✕</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="flex flex-wrap gap-1.5 items-center mt-2">
+            <select class="select max-w-xs" aria-label="Add ritual from library" @bind="ritualToAdd">
+                <option value="">Add a ritual from library…</option>
+                @foreach (var opt in Content.Spells.Where(x => x.Ritual))
+                {
+                    <option value="@opt.Id">@opt.Name</option>
+                }
+            </select>
+            <button type="button" class="btn btn-sm btn-primary" disabled="@string.IsNullOrEmpty(ritualToAdd)" @onclick="AddRitual">Add</button>
+            <button type="button" class="btn btn-sm" @onclick="AddCustomRitual">+ Custom ritual</button>
+        </div>
+    </Box>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Character C { get; set; } = default!;
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private string abilityValue = "";
+    private string spellToAdd = "";
+    private string ritualToAdd = "";
+    private string castMessage = "";
+
+    protected override void OnParametersSet() => abilityValue = C.SpellAbility?.ToString() ?? "";
+
+    private Task Save() => Changed.InvokeAsync();
+
+    private async Task SetAbility()
+    {
+        C.SpellAbility = Enum.TryParse<Ability>(abilityValue, out var a) ? a : null;
+        await Save();
+    }
+
+    private void RollSpellAttack() => Dice.D20("Spell attack", C.SpellAttack());
+
+    private async Task SetExpended(int idx, int value)
+    {
+        C.SlotsExpended[idx] = Math.Min(value, C.SlotsTotal[idx]);
+        await Save();
+    }
+
+    /// <summary>Lowest circle with a free slot at or above the spell's circle (0 = cantrip).</summary>
+    private int? SlotFor(CharSpell s)
+    {
+        if (s.Circle == 0) return 0;
+        for (int c = s.Circle; c <= 9; c++)
+            if (C.SlotsExpended[c - 1] < C.SlotsTotal[c - 1]) return c;
+        return null;
+    }
+
+    private bool CanCast(CharSpell s) => SlotFor(s) is not null;
+
+    private string CastTitle(CharSpell s) => SlotFor(s) switch
+    {
+        0 => "Cantrip: no slot needed",
+        null => "No slots left at this circle or higher",
+        int c => $"Uses a {Rules.CircleName(c)}-circle slot"
+    };
+
+    private async Task Cast(CharSpell s)
+    {
+        var slot = SlotFor(s);
+        if (slot is null) return;
+        if (slot > 0) C.SlotsExpended[slot.Value - 1]++;
+        castMessage = slot == 0
+            ? $"Cast {s.Name}."
+            : $"Cast {s.Name} using a {Rules.CircleName(slot.Value)}-circle slot." + (s.Concentration ? " Concentration started." : "");
+        await Save();
+    }
+
+    private async Task TogglePrepared(CharSpell s) { s.Prepared = !s.Prepared; await Save(); }
+    private async Task RemoveSpell(CharSpell s) { C.Spells.Remove(s); await Save(); }
+    private async Task RemoveRitual(Ritual r) { C.Rituals.Remove(r); await Save(); }
+
+    private async Task AddSpell()
+    {
+        var def = Content.Spells.FirstOrDefault(x => x.Id == spellToAdd);
+        if (def is not null) CharacterBuilder.AddSpell(C, def);
+        spellToAdd = "";
+        await Save();
+    }
+
+    private async Task AddRitual()
+    {
+        var def = Content.Spells.FirstOrDefault(x => x.Id == ritualToAdd);
+        if (def is not null) CharacterBuilder.AddRitual(C, def);
+        ritualToAdd = "";
+        await Save();
+    }
+
+    private async Task AddCustomSpell() { C.Spells.Add(new CharSpell { Name = "New spell", Circle = 1 }); await Save(); }
+    private async Task AddCustomRitual() { C.Rituals.Add(new Ritual { Name = "New ritual" }); await Save(); }
+}

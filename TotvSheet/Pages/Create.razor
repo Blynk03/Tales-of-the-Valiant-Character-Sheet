@@ -1,0 +1,495 @@
+@page "/create"
+@inject ContentService Content
+@inject CharacterService Characters
+@inject DiceService Dice
+@inject NavigationManager Nav
+
+<PageTitle>New character · Valiant Sheet</PageTitle>
+
+<div class="max-w-4xl mx-auto">
+    <h1 class="display font-extrabold text-2xl" style="color:var(--ink)">Create a character</h1>
+    @if (noCharacters)
+    {
+        <p class="muted">You don't have any saved characters yet. Let's build one.</p>
+    }
+
+    @* ---------- step indicator ---------- *@
+    <ol class="flex flex-wrap gap-1.5 my-4">
+        @for (int i = 0; i < Steps.Length; i++)
+        {
+            var idx = i;
+            <li>
+                <button type="button" class="btn btn-sm @(idx == step ? "btn-primary" : "")" disabled="@(idx > MaxReachable())" @onclick="() => step = idx">
+                    @(idx + 1). @Steps[idx]
+                </button>
+            </li>
+        }
+    </ol>
+
+    <div class="box p-4 sm:p-5">
+        @switch (step)
+        {
+            case 0:
+                <h2 class="box-title text-left">Who are you?</h2>
+                <div class="grid sm:grid-cols-2 gap-4">
+                    <div><label class="lbl">Character name</label><input class="field text-xl display" @bind="ch.Name" autocomplete="off" /></div>
+                    <div><label class="lbl">Player name</label><input class="field text-xl" @bind="ch.PlayerName" /></div>
+                </div>
+                break;
+
+            case 1:
+                <h2 class="box-title text-left">Choose a lineage</h2>
+                <p class="muted text-sm mb-3">Your lineage is your ancestry: size, speed and inborn traits.</p>
+                <div class="grid sm:grid-cols-2 gap-2">
+                    @foreach (var l in Content.Lineages)
+                    {
+                        var lin = l;
+                        <button type="button" class="choice @(ch.Lineage?.Id == lin.Id ? "selected" : "")" @onclick="() => ch.Lineage = lin">
+                            <div class="flex items-center gap-2"><span class="font-semibold">@lin.Name</span><span class="chip ml-auto">@lin.Source</span></div>
+                            <div class="text-sm muted">@lin.Size · @lin.Speed ft.</div>
+                            <div class="text-sm mt-1">@lin.Description</div>
+                            <TraitList Traits="lin.Traits" />
+                        </button>
+                    }
+                </div>
+                break;
+
+            case 2:
+                <h2 class="box-title text-left">Choose a heritage</h2>
+                <p class="muted text-sm mb-3">Your heritage is the culture you were raised in: languages and learned traits.</p>
+                <div class="grid sm:grid-cols-2 gap-2">
+                    @foreach (var h in Content.Heritages)
+                    {
+                        var her = h;
+                        <button type="button" class="choice @(ch.Heritage?.Id == her.Id ? "selected" : "")" @onclick="() => ch.Heritage = her">
+                            <div class="flex items-center gap-2"><span class="font-semibold">@her.Name</span><span class="chip ml-auto">@her.Source</span></div>
+                            <div class="text-sm muted">Languages: @her.Languages</div>
+                            <div class="text-sm mt-1">@her.Description</div>
+                            <TraitList Traits="her.Traits" />
+                        </button>
+                    }
+                </div>
+                break;
+
+            case 3:
+                <h2 class="box-title text-left">Choose a background</h2>
+                <p class="muted text-sm mb-3">What you did before adventuring: skills, tools, equipment and your ability increases.</p>
+                <div class="grid sm:grid-cols-2 gap-2">
+                    @foreach (var b in Content.Backgrounds)
+                    {
+                        var bg = b;
+                        <button type="button" class="choice @(ch.Background?.Id == bg.Id ? "selected" : "")" @onclick="() => PickBackground(bg)">
+                            <div class="flex items-center gap-2"><span class="font-semibold">@bg.Name</span><span class="chip ml-auto">@bg.Source</span></div>
+                            <div class="text-sm muted">Skills: @string.Join(", ", bg.SkillProficiencies)@(string.IsNullOrEmpty(bg.ToolProficiencies) ? "" : $" · Tools: {bg.ToolProficiencies}")</div>
+                            <div class="text-sm mt-1">@bg.Description</div>
+                            <TraitList Traits="bg.Traits" />
+                        </button>
+                    }
+                </div>
+                break;
+
+            case 4:
+                <h2 class="box-title text-left">Choose a class</h2>
+                <div class="grid sm:grid-cols-2 gap-2">
+                    @foreach (var c in Content.Classes)
+                    {
+                        var cls = c;
+                        <button type="button" class="choice @(ch.Class?.Id == cls.Id ? "selected" : "")" @onclick="() => PickClass(cls)">
+                            <div class="flex items-center gap-2"><span class="font-semibold">@cls.Name</span><span class="chip ml-auto">@cls.Source</span></div>
+                            <div class="text-sm muted">d@(cls.HitDie) hit die · Saves: @string.Join(", ", cls.SavingThrows)@(cls.SpellcastingAbility is Ability sa ? $" · Casts with {sa}" : "")</div>
+                            <div class="text-sm mt-1">@cls.Description</div>
+                        </button>
+                    }
+                </div>
+                if (ch.Class is { } chosen)
+                {
+                    <h3 class="box-title text-left mt-5">Choose @chosen.SkillChoices skills</h3>
+                    <div class="flex flex-wrap gap-1.5">
+                        @foreach (var s in chosen.SkillOptions)
+                        {
+                            var skill = s;
+                            var fromBg = ch.Background?.SkillProficiencies.Contains(skill) == true;
+                            var picked = ch.ClassSkills.Contains(skill);
+                            <button type="button" class="btn btn-sm @(picked || fromBg ? "btn-primary" : "")"
+                                    disabled="@(fromBg || (!picked && ch.ClassSkills.Count >= chosen.SkillChoices))"
+                                    title="@(fromBg ? "Already granted by your background" : "")" @onclick="() => ToggleSkill(skill)">@skill</button>
+                        }
+                    </div>
+                    <p class="muted text-sm mt-1">@ch.ClassSkills.Count of @chosen.SkillChoices chosen.</p>
+                }
+                break;
+
+            case 5:
+                <h2 class="box-title text-left">Ability scores</h2>
+                <div class="flex flex-wrap gap-1.5 mb-3">
+                    <button type="button" class="btn btn-sm @(method == "standard" ? "btn-primary" : "")" @onclick='() => SetMethod("standard")'>Standard array</button>
+                    <button type="button" class="btn btn-sm @(method == "pointbuy" ? "btn-primary" : "")" @onclick='() => SetMethod("pointbuy")'>Point buy</button>
+                    <button type="button" class="btn btn-sm @(method == "roll" ? "btn-primary" : "")" @onclick='() => SetMethod("roll")'>Roll 4d6</button>
+                    <button type="button" class="btn btn-sm @(method == "manual" ? "btn-primary" : "")" @onclick='() => SetMethod("manual")'>Manual</button>
+                </div>
+
+                if (method == "pointbuy")
+                {
+                    <p class="text-sm mb-2">Points left: <span class="num @(PointsLeft() < 0 ? "fumble" : "")">@PointsLeft()</span> of @Rules.PointBuyBudget</p>
+                }
+                if (method == "roll")
+                {
+                    <p class="text-sm mb-2">
+                        <button type="button" class="btn btn-sm btn-gold" @onclick="RollPool">Roll six scores</button>
+                        <span class="ml-2 num">@string.Join(", ", pool)</span>
+                    </p>
+                }
+                if (method is "standard" or "roll")
+                {
+                    <p class="muted text-sm mb-2">Assign each value to one ability.</p>
+                }
+
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                    @foreach (var a in Rules.Abilities)
+                    {
+                        var ab = a;
+                        <div class="field-box">
+                            <div class="lbl">@Rules.AbilityNames[ab]</div>
+                            @if (method is "standard" or "roll")
+                            {
+                                <select class="select num text-center" value="@(assign[(int)ab]?.ToString() ?? "")" @onchange="e => Assign(ab, e.Value?.ToString())">
+                                    <option value="">—</option>
+                                    @for (int i = 0; i < pool.Count; i++)
+                                    {
+                                        var pi = i;
+                                        <option value="@pi" disabled="@(assign.Contains(pi) && assign[(int)ab] != pi)">@pool[pi]</option>
+                                    }
+                                </select>
+                            }
+                            else if (method == "pointbuy")
+                            {
+                                <div class="flex items-center justify-center gap-1">
+                                    <button type="button" class="icon-btn" disabled="@(ch.BaseScores[(int)ab] <= 8)" @onclick="() => Bump(ab, -1)">−</button>
+                                    <span class="num text-xl w-8">@ch.BaseScores[(int)ab]</span>
+                                    <button type="button" class="icon-btn" disabled="@(ch.BaseScores[(int)ab] >= 15 || PointsLeft() < Rules.PointBuyCost(ch.BaseScores[(int)ab] + 1) - Rules.PointBuyCost(ch.BaseScores[(int)ab]))" @onclick="() => Bump(ab, 1)">+</button>
+                                </div>
+                            }
+                            else
+                            {
+                                <input type="number" min="1" max="20" class="field num text-center text-xl" @bind="ch.BaseScores[(int)ab]" />
+                            }
+                            <div class="mt-1 text-sm">
+                                @if (ch.PlusTwo == ab) { <span class="chip user">+2</span> }
+                                @if (ch.PlusOne == ab) { <span class="chip user">+1</span> }
+                                <span class="num">= @ch.FinalScore(ab) (@Rules.Signed(Rules.Mod(ch.FinalScore(ab))))</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <h3 class="box-title text-left mt-5">Background increases</h3>
+                <p class="muted text-sm mb-2">Your background raises one ability by 2 and another by 1.</p>
+                <div class="grid sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="lbl">+2 to</label>
+                        <select class="select" value="@(ch.PlusTwo?.ToString() ?? "")" @onchange="e => ch.PlusTwo = ParseAbility(e.Value)">
+                            <option value="">—</option>
+                            @foreach (var a in BonusOptions())
+                            {
+                                <option value="@a" disabled="@(ch.PlusOne == a)">@Rules.AbilityNames[a]</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="lbl">+1 to</label>
+                        <select class="select" value="@(ch.PlusOne?.ToString() ?? "")" @onchange="e => ch.PlusOne = ParseAbility(e.Value)">
+                            <option value="">—</option>
+                            @foreach (var a in BonusOptions())
+                            {
+                                <option value="@a" disabled="@(ch.PlusTwo == a)">@Rules.AbilityNames[a]</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                break;
+
+            case 6:
+                <h2 class="box-title text-left">Starting equipment</h2>
+                if (ch.Class is { } eqClass)
+                {
+                    <div class="flex flex-wrap gap-1.5 mb-3">
+                        <button type="button" class="btn btn-sm @(!ch.TakeGoldInstead ? "btn-primary" : "")" @onclick="() => ch.TakeGoldInstead = false">Take @eqClass.Name gear</button>
+                        <button type="button" class="btn btn-sm @(ch.TakeGoldInstead ? "btn-primary" : "")" @onclick="() => ch.TakeGoldInstead = true">Take @eqClass.StartingGold gp instead</button>
+                    </div>
+                    if (!ch.TakeGoldInstead)
+                    {
+                        <div class="grid sm:grid-cols-2 gap-1.5">
+                            @foreach (var id in eqClass.StartingEquipment)
+                            {
+                                var itemId = id;
+                                var item = Content.Item(itemId);
+                                <label class="choice flex items-center gap-2 @(ch.EquipmentIds.Contains(itemId) ? "selected" : "")">
+                                    <input type="checkbox" checked="@ch.EquipmentIds.Contains(itemId)" @onchange="() => ToggleItem(itemId)" />
+                                    <span class="font-semibold">@(item?.Name ?? itemId)</span>
+                                    <span class="muted text-sm ml-auto">@ItemSummary(item)</span>
+                                </label>
+                            }
+                        </div>
+                    }
+                }
+                else
+                {
+                    <p class="muted">Choose a class first.</p>
+                }
+                if (!string.IsNullOrWhiteSpace(ch.Background?.Equipment))
+                {
+                    <p class="mt-3 text-sm"><span class="lbl">From your background:</span> @(ch.Background!.Equipment)</p>
+                }
+                break;
+
+            case 7:
+                <h2 class="box-title text-left">Talent</h2>
+                if (Content.Talent(ch.Background?.TalentId ?? "") is { } bgTalent)
+                {
+                    <p class="mb-3">Your background grants <span class="font-semibold">@bgTalent.Name</span>. <span class="muted text-sm">@bgTalent.Description</span></p>
+                }
+                <p class="muted text-sm mb-2">Pick an additional talent if your lineage or GM grants one, or skip this step.</p>
+                <div class="grid sm:grid-cols-2 gap-2">
+                    @foreach (var t in Content.Talents)
+                    {
+                        var talent = t;
+                        <button type="button" class="choice @(ch.Talent?.Id == talent.Id ? "selected" : "")" @onclick="() => ch.Talent = ch.Talent?.Id == talent.Id ? null : talent">
+                            <div class="flex items-center gap-2"><span class="font-semibold">@talent.Name</span><span class="chip ml-auto">@talent.Category</span></div>
+                            <div class="text-sm muted">@talent.Description</div>
+                            @if (!string.IsNullOrEmpty(talent.Prerequisite))
+                            {
+                                <div class="text-xs mt-0.5">Prerequisite: @talent.Prerequisite</div>
+                            }
+                        </button>
+                    }
+                </div>
+                break;
+
+            default:
+                var preview = CharacterBuilder.Create(ch, Content);
+                <h2 class="box-title text-left">Review</h2>
+                <div class="grid sm:grid-cols-2 gap-4">
+                    <div>
+                        <div class="display font-extrabold text-2xl" style="color:var(--ink)">@preview.Name</div>
+                        <div>@preview.ClassName 1 · @preview.LineageName · @preview.HeritageName · @preview.BackgroundName</div>
+                        <div class="grid grid-cols-6 gap-1 mt-3 text-center">
+                            @foreach (var a in Rules.Abilities)
+                            {
+                                <div class="field-box"><div class="lbl">@a</div><div class="num">@preview.Score(a)</div><div class="text-xs muted">@Rules.Signed(preview.Mod(a))</div></div>
+                            }
+                        </div>
+                        <div class="flex gap-4 mt-3">
+                            <span>HP <span class="num">@preview.MaxHp</span></span>
+                            <span>AC <span class="num">@preview.ArmorClass(preview.EquippedShield() is not null)</span></span>
+                            <span>Speed <span class="num">@preview.Speed</span></span>
+                        </div>
+                    </div>
+                    <div class="text-sm space-y-1">
+                        <div><span class="lbl">Skills</span> @string.Join(", ", preview.Skills.Keys.OrderBy(k => k))</div>
+                        <div><span class="lbl">Features</span> @string.Join(", ", preview.Features.Select(f => f.Name))</div>
+                        <div><span class="lbl">Talents</span> @(preview.Talents.Count == 0 ? "—" : string.Join(", ", preview.Talents.Select(t => t.Name)))</div>
+                        <div><span class="lbl">Equipment</span> @string.Join(", ", preview.Weapons.Select(w => w.Name).Concat(preview.Armor.Select(x => x.Name)).Concat(preview.Gear.Select(g => g.Name)))</div>
+                        <div><span class="lbl">Languages</span> @preview.Languages</div>
+                    </div>
+                </div>
+                if (Problems().Any())
+                {
+                    <ul class="mt-4 text-sm" style="color:var(--danger)">
+                        @foreach (var p in Problems())
+                        {
+                            <li>• @p</li>
+                        }
+                    </ul>
+                }
+                break;
+        }
+
+        <div class="flex items-center gap-2 mt-6 pt-3" style="border-top:1px solid var(--line)">
+            <button type="button" class="btn" disabled="@(step == 0)" @onclick="() => step--">Back</button>
+            @if (StepProblem() is { } problem)
+            {
+                <span class="muted text-sm">@problem</span>
+            }
+            @if (step < Steps.Length - 1)
+            {
+                <button type="button" class="btn btn-primary ml-auto" disabled="@(StepProblem() is not null)" @onclick="() => step++">Next</button>
+            }
+            else
+            {
+                <button type="button" class="btn btn-primary ml-auto" disabled="@Problems().Any()" @onclick="CreateCharacter">Create character</button>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private static readonly string[] Steps =
+        { "Name", "Lineage", "Heritage", "Background", "Class", "Abilities", "Equipment", "Talent", "Review" };
+
+    private readonly CreationChoices ch = new();
+    private int step;
+    private bool noCharacters;
+
+    // ability score state
+    private string method = "standard";
+    private List<int> pool = Rules.StandardArray.ToList();
+    private int?[] assign = new int?[6];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Content.EnsureLoadedAsync();
+        await Characters.EnsureLoadedAsync();
+        noCharacters = Characters.Characters.Count == 0;
+        // Default the standard array in a sensible order.
+        for (int i = 0; i < 6; i++) assign[i] = i;
+        ApplyAssignments();
+    }
+
+    private string? StepProblem() => step switch
+    {
+        1 when ch.Lineage is null => "Choose a lineage.",
+        2 when ch.Heritage is null => "Choose a heritage.",
+        3 when ch.Background is null => "Choose a background.",
+        4 when ch.Class is null => "Choose a class.",
+        4 when ch.ClassSkills.Count < SkillsNeeded() => $"Choose {SkillsNeeded() - ch.ClassSkills.Count} more skill(s).",
+        5 when (method is "standard" or "roll") && assign.Any(a => a is null) => "Assign a value to every ability.",
+        5 when method == "pointbuy" && PointsLeft() < 0 => "You've spent too many points.",
+        5 when ch.PlusTwo is null || ch.PlusOne is null => "Pick your background increases.",
+        _ => null
+    };
+
+    private int MaxReachable()
+    {
+        int saved = step;
+        int max = 0;
+        for (int s = 0; s < Steps.Length - 1; s++)
+        {
+            step = s;
+            if (StepProblem() is not null) break;
+            max = s + 1;
+        }
+        step = saved;
+        return Math.Max(max, step);
+    }
+
+    private IEnumerable<string> Problems()
+    {
+        if (ch.Lineage is null) yield return "No lineage chosen.";
+        if (ch.Heritage is null) yield return "No heritage chosen.";
+        if (ch.Background is null) yield return "No background chosen.";
+        if (ch.Class is null) yield return "No class chosen.";
+        if (ch.PlusTwo is null || ch.PlusOne is null) yield return "Background ability increases not chosen.";
+    }
+
+    private int SkillsNeeded()
+    {
+        if (ch.Class is null) return 0;
+        // Skills already granted by the background can't be picked again, so don't require more than are available.
+        var available = ch.Class.SkillOptions.Count(s => ch.Background?.SkillProficiencies.Contains(s) != true);
+        return Math.Min(ch.Class.SkillChoices, available);
+    }
+
+    private void PickBackground(BackgroundDef bg)
+    {
+        ch.Background = bg;
+        ch.ClassSkills.RemoveWhere(s => bg.SkillProficiencies.Contains(s));
+        if (ch.PlusTwo is Ability p2 && !BonusOptions().Contains(p2)) ch.PlusTwo = null;
+        if (ch.PlusOne is Ability p1 && !BonusOptions().Contains(p1)) ch.PlusOne = null;
+    }
+
+    private void PickClass(ClassDef cls)
+    {
+        if (ch.Class?.Id == cls.Id) return;
+        ch.Class = cls;
+        ch.ClassSkills.Clear();
+        ch.EquipmentIds = cls.StartingEquipment.ToHashSet();
+    }
+
+    private void ToggleSkill(string s)
+    {
+        if (!ch.ClassSkills.Remove(s) && ch.ClassSkills.Count < (ch.Class?.SkillChoices ?? 0)) ch.ClassSkills.Add(s);
+    }
+
+    private void ToggleItem(string id)
+    {
+        if (!ch.EquipmentIds.Remove(id)) ch.EquipmentIds.Add(id);
+    }
+
+    private static string ItemSummary(ItemDef? i) => i is null ? "" : i.Type switch
+    {
+        ItemType.Weapon => $"{i.Damage} {i.DamageType}",
+        ItemType.Armor => $"AC {i.BaseAC} · {i.ArmorCategory}",
+        ItemType.Shield => $"+{i.BaseAC} AC",
+        _ => i.Cost
+    };
+
+    // ---------- ability scores ----------
+
+    private IEnumerable<Ability> BonusOptions() =>
+        ch.Background is { AbilityOptions.Count: > 0 } bg ? bg.AbilityOptions : (IEnumerable<Ability>)Rules.Abilities;
+
+    private static Ability? ParseAbility(object? v) =>
+        Enum.TryParse<Ability>(v?.ToString(), out var a) ? a : null;
+
+    private void SetMethod(string m)
+    {
+        method = m;
+        assign = new int?[6];
+        switch (m)
+        {
+            case "standard":
+                pool = Rules.StandardArray.ToList();
+                for (int i = 0; i < 6; i++) assign[i] = i;
+                break;
+            case "roll":
+                pool = new List<int>();
+                break;
+            case "pointbuy":
+                ch.BaseScores = new[] { 8, 8, 8, 8, 8, 8 };
+                break;
+            case "manual":
+                ch.BaseScores = new[] { 10, 10, 10, 10, 10, 10 };
+                break;
+        }
+        ApplyAssignments();
+    }
+
+    private void RollPool()
+    {
+        pool = Enumerable.Range(0, 6).Select(n =>
+        {
+            var dice = Enumerable.Range(0, 4).Select(m => Dice.Die(6)).OrderByDescending(d => d).ToList();
+            return dice.Take(3).Sum();
+        }).OrderByDescending(v => v).ToList();
+        assign = new int?[6];
+        for (int i = 0; i < 6; i++) assign[i] = i;
+        ApplyAssignments();
+    }
+
+    private void Assign(Ability a, string? raw)
+    {
+        assign[(int)a] = int.TryParse(raw, out var i) ? i : null;
+        ApplyAssignments();
+    }
+
+    private void ApplyAssignments()
+    {
+        if (method is not ("standard" or "roll")) return;
+        for (int i = 0; i < 6; i++)
+            ch.BaseScores[i] = assign[i] is int idx && idx < pool.Count ? pool[idx] : 8;
+    }
+
+    private int PointsLeft() => Rules.PointBuyBudget - ch.BaseScores.Sum(s => Rules.PointBuyCost(s));
+
+    private void Bump(Ability a, int delta) =>
+        ch.BaseScores[(int)a] = Math.Clamp(ch.BaseScores[(int)a] + delta, 8, 15);
+
+    // ---------- finish ----------
+
+    private async Task CreateCharacter()
+    {
+        var c = CharacterBuilder.Create(ch, Content);
+        await Characters.AddAsync(c);
+        Nav.NavigateTo($"character/{c.Id}");
+    }
+}

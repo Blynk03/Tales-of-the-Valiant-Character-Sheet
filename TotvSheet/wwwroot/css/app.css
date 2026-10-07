@@ -1,0 +1,190 @@
+/* Valiant Sheet — styles modelled on the printed Tales of the Valiant sheet:
+   white paper, blue ink frames, Cinzel small-caps headings. */
+:root {
+  --paper: #eef1f6;
+  --card: #ffffff;
+  --ink: #24479a;
+  --ink-soft: #4d6cb5;
+  --ink-faint: #dfe6f5;
+  --text: #1c2233;
+  --muted: #5b6478;
+  --line: #b9c4dc;
+  --accent: #b8862b;      /* gold, used for Luck and highlights */
+  --danger: #b3261e;
+  --good: #2e7d4f;
+  --shadow: 0 1px 0 rgba(36, 71, 154, .08), 0 6px 18px -10px rgba(36, 71, 154, .35);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f1420; --card: #171e2e; --ink: #8fb0ff; --ink-soft: #7d97d8; --ink-faint: #22304d;
+    --text: #e6eaf3; --muted: #9aa5bd; --line: #33415f; --accent: #e0b050; --danger: #ff7b72; --good: #6fcf97;
+    --shadow: 0 6px 18px -10px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f1420; --card: #171e2e; --ink: #8fb0ff; --ink-soft: #7d97d8; --ink-faint: #22304d;
+  --text: #e6eaf3; --muted: #9aa5bd; --line: #33415f; --accent: #e0b050; --danger: #ff7b72; --good: #6fcf97;
+  --shadow: 0 6px 18px -10px rgba(0,0,0,.6);
+}
+
+html, body { background: var(--paper); color: var(--text); }
+body { font-family: "Crimson Pro", Georgia, serif; font-size: 17px; line-height: 1.35; margin: 0; }
+* { box-sizing: border-box; }
+.loading { font-family: Cinzel, serif; color: var(--ink); padding: 3rem; text-align: center; }
+
+.display { font-family: Cinzel, "Times New Roman", serif; letter-spacing: .04em; }
+.num { font-variant-numeric: tabular-nums; font-family: "Crimson Pro", serif; font-weight: 700; }
+.muted { color: var(--muted); }
+.link { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
+
+/* ---------- frames ---------- */
+.box {
+  background: var(--card); border: 2px solid var(--ink); border-radius: 12px;
+  padding: .6rem .75rem .75rem; box-shadow: var(--shadow); position: relative; min-width: 0;
+}
+.box-title {
+  font-family: Cinzel, serif; font-weight: 800; text-transform: uppercase; color: var(--ink);
+  font-size: .78rem; letter-spacing: .08em; text-align: center; margin-bottom: .4rem;
+}
+.lbl {
+  font-family: Cinzel, serif; font-weight: 700; text-transform: uppercase; font-size: .62rem;
+  letter-spacing: .07em; color: var(--muted);
+}
+
+/* ---------- inputs ---------- */
+.field, .area, .select {
+  width: 100%; background: transparent; color: var(--text); font: inherit;
+  border: 0; border-bottom: 1px solid var(--line); padding: .15rem .1rem; outline: none; border-radius: 0;
+}
+.field:focus, .area:focus, .select:focus { border-bottom-color: var(--ink); background: var(--ink-faint); }
+.area { border: 1px solid var(--line); border-radius: 8px; padding: .4rem .5rem; resize: vertical; min-height: 5rem; }
+.select { cursor: pointer; }
+.select option { background: var(--card); color: var(--text); }
+.field-box { border: 1px solid var(--line); border-radius: 8px; padding: .25rem .5rem; text-align: center; }
+input[type=number].field { -moz-appearance: textfield; }
+input[type=number].field::-webkit-inner-spin-button { opacity: .4; }
+
+/* ---------- ability block ---------- */
+.mod-circle {
+  width: 4.6rem; height: 4.6rem; border-radius: 9999px; border: 2px solid var(--ink);
+  display: grid; place-items: center; font-size: 1.9rem; background: var(--card); cursor: pointer;
+  transition: background .15s, transform .1s;
+}
+.mod-circle:hover { background: var(--ink-faint); }
+.mod-circle:active { transform: scale(.96); }
+.score-circle {
+  width: 2.7rem; height: 2.7rem; border-radius: 9999px; border: 2px solid var(--ink); background: var(--card);
+  margin-left: -1rem; margin-top: 2.2rem; display: grid; place-items: center;
+}
+.score-circle input { width: 100%; text-align: center; background: transparent; border: 0; font: 700 1.05rem "Crimson Pro", serif; color: var(--text); outline: none; }
+
+/* ---------- pips (proficiency, death saves, exhaustion, luck) ---------- */
+.pip {
+  width: 1rem; height: 1rem; border-radius: 9999px; border: 1.5px solid var(--ink); background: transparent;
+  flex: none; cursor: pointer; padding: 0; position: relative;
+}
+.pip.on { background: var(--ink); }
+.pip.exp { background: var(--ink); box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--ink); }
+.pip.lg { width: 1.6rem; height: 1.6rem; font: 700 .8rem "Crimson Pro"; color: var(--ink); display: grid; place-items: center; }
+.pip.lg.on { color: var(--card); }
+.pip.luck { border-color: var(--accent); }
+.pip.luck.on { background: var(--accent); }
+.pip.bad.on { background: var(--danger); border-color: var(--danger); }
+.pip.goodpip.on { background: var(--good); border-color: var(--good); }
+
+/* ---------- rollable values ---------- */
+.roll {
+  cursor: pointer; border-radius: 6px; padding: 0 .25rem; transition: background .12s; user-select: none;
+  border: 0; background: transparent; color: inherit; font: inherit;
+}
+.roll:hover { background: var(--ink-faint); color: var(--ink); }
+.skill-row { display: flex; align-items: center; gap: .45rem; padding: .08rem 0; }
+.skill-row .bonus { width: 2.2rem; text-align: right; }
+
+/* ---------- buttons ---------- */
+.btn {
+  font-family: Cinzel, serif; font-weight: 700; font-size: .72rem; letter-spacing: .06em; text-transform: uppercase;
+  border: 1.5px solid var(--ink); color: var(--ink); background: var(--card); padding: .42rem .8rem; border-radius: 9999px;
+  cursor: pointer; transition: background .15s, color .15s; white-space: nowrap;
+}
+.btn:hover { background: var(--ink-faint); }
+.btn-primary { background: var(--ink); color: var(--card); }
+.btn-primary:hover { background: var(--ink-soft); }
+.btn-gold { border-color: var(--accent); color: var(--accent); }
+.btn-danger { border-color: var(--danger); color: var(--danger); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn-sm { padding: .2rem .55rem; font-size: .62rem; }
+.icon-btn { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 1rem; padding: .1rem .3rem; border-radius: 6px; }
+.icon-btn:hover { color: var(--danger); background: var(--ink-faint); }
+.chip {
+  display: inline-block; font-family: Cinzel, serif; font-size: .6rem; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; border: 1px solid var(--line); color: var(--muted); border-radius: 9999px; padding: .05rem .5rem;
+}
+.chip.user { border-color: var(--accent); color: var(--accent); }
+
+/* ---------- tabs ---------- */
+.tabs { display: flex; gap: .25rem; overflow-x: auto; scrollbar-width: none; border-bottom: 2px solid var(--ink); }
+.tab {
+  font-family: Cinzel, serif; font-weight: 700; font-size: .74rem; letter-spacing: .06em; text-transform: uppercase;
+  padding: .55rem .9rem; border: 2px solid transparent; border-bottom: 0; border-radius: 10px 10px 0 0;
+  color: var(--muted); background: transparent; cursor: pointer; white-space: nowrap; margin-bottom: -2px;
+}
+.tab.active { color: var(--ink); background: var(--card); border-color: var(--ink); }
+
+/* ---------- tables ---------- */
+.tbl { width: 100%; border-collapse: collapse; }
+.tbl th { text-align: left; font-family: Cinzel, serif; font-size: .6rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; padding: .2rem .3rem; }
+.tbl td { padding: .15rem .3rem; border-top: 1px solid var(--ink-faint); vertical-align: middle; }
+
+/* ---------- shield-shaped AC ---------- */
+.shield {
+  width: 5.2rem; height: 6rem; flex: none; border: 2px solid var(--ink); background: var(--card);
+  border-radius: 10px 10px 50% 50% / 10px 10px 40% 40%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+
+/* ---------- roll tray ---------- */
+.tray {
+  position: fixed; right: 1rem; bottom: 1rem; width: min(22rem, calc(100vw - 2rem)); z-index: 40;
+  background: var(--card); border: 2px solid var(--ink); border-radius: 14px; box-shadow: 0 20px 40px -18px rgba(0,0,0,.45);
+}
+.tray-total { font: 800 2.4rem Cinzel, serif; color: var(--ink); line-height: 1; }
+.crit { color: var(--good) !important; }
+.fumble { color: var(--danger) !important; }
+
+/* ---------- modal ---------- */
+.modal-back { position: fixed; inset: 0; background: rgba(10, 16, 30, .55); z-index: 50; display: grid; place-items: center; padding: 1rem; }
+.modal { background: var(--card); border: 2px solid var(--ink); border-radius: 16px; width: min(46rem, 100%); max-height: calc(100vh - 2rem); overflow: auto; }
+
+.choice {
+  text-align: left; border: 1.5px solid var(--line); border-radius: 12px; padding: .6rem .75rem; background: var(--card);
+  cursor: pointer; color: var(--text); font: inherit; transition: border-color .12s, background .12s; width: 100%;
+}
+.choice:hover { border-color: var(--ink-soft); }
+.choice.selected { border-color: var(--ink); background: var(--ink-faint); box-shadow: inset 0 0 0 1px var(--ink); }
+
+#blazor-error-ui {
+  background: #fff3cd; color: #5c4400; bottom: 0; display: none; left: 0; padding: .6rem 1.25rem; position: fixed; width: 100%; z-index: 1000;
+}
+#blazor-error-ui .dismiss { cursor: pointer; position: absolute; right: .75rem; top: .5rem; }
+
+/* ---------- dice picker (roll tray) ---------- */
+.tray { max-height: calc(100vh - 2rem); overflow-y: auto; }
+.picker { margin-top: .6rem; padding-top: .6rem; border-top: 1px solid var(--ink-faint); }
+.die-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .3rem; }
+.die-btn {
+  position: relative; border: 1.5px solid var(--ink); background: var(--card); color: var(--ink);
+  border-radius: 10px; padding: .45rem 0; font: 700 .78rem Cinzel, serif; cursor: pointer; transition: background .12s;
+}
+.die-btn:hover { background: var(--ink-faint); }
+.die-btn.on { background: var(--ink); color: var(--card); }
+.die-count {
+  position: absolute; top: -.45rem; right: -.35rem; min-width: 1.15rem; height: 1.15rem; padding: 0 .25rem;
+  border-radius: 9999px; background: var(--accent); color: var(--card); font: 700 .7rem "Crimson Pro", serif;
+  display: grid; place-items: center;
+}
+.pool-chip { display: inline-flex; align-items: center; gap: .25rem; color: var(--ink); border-color: var(--ink-soft); font-size: .7rem; }
+.chip-x { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-weight: 700; padding: 0 .1rem; line-height: 1; }
+.chip-x:hover { color: var(--danger); }
+.icon-btn.reroll:hover { color: var(--ink); }
+.die-btn:focus-visible, .chip-x:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn-dice { text-transform: none; letter-spacing: .02em; font-size: .8rem; }

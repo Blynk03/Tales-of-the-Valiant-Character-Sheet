@@ -1,0 +1,13 @@
+@if (Traits.Count > 0)
+{
+    <ul class="mt-1.5 text-sm space-y-0.5">
+        @foreach (var t in Traits)
+        {
+            <li><span class="font-semibold">@t.Name.</span> <span class="muted">@t.Description</span></li>
+        }
+    </ul>
+}
+
+@code {
+    [Parameter] public List<FeatureDef> Traits { get; set; } = new();
+}

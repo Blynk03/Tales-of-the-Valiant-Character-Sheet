@@ -1,0 +1,205 @@
+@inject ContentService Content
+
+@* Page 2 of the printed sheet: level features, weapons & armor, equipment, treasure. *@
+<div class="flex flex-col gap-3">
+
+    <Box Title="Level Features">
+        <Actions>
+            <select class="select text-sm" style="width:auto" aria-label="Sort features" @bind="sort">
+                <option value="level">By level</option>
+                <option value="source">By source</option>
+            </select>
+        </Actions>
+        <ChildContent>
+        @if (C.Features.Count == 0)
+        {
+            <p class="muted text-sm text-center py-2">Features from your lineage, heritage, background, class and subclass appear here. Level up adds new ones automatically.</p>
+        }
+        <div class="grid sm:grid-cols-2 xl:grid-cols-3 gap-2 mt-1">
+            @foreach (var f in SortedFeatures())
+            {
+                var feature = f;
+                <div class="rounded-lg p-2" style="border:1px solid var(--line)">
+                    <div class="flex items-start gap-2">
+                        <div class="min-w-0 flex-1">
+                            <input class="field font-semibold" aria-label="Feature name" @bind="feature.Name" @bind:after="Save" />
+                            <div class="flex gap-2 items-center mt-0.5">
+                                <span class="lbl">Level</span>
+                                <input type="number" class="field num w-10 text-center" aria-label="Level" @bind="feature.Level" @bind:after="Save" />
+                                <span class="chip truncate">@feature.Source</span>
+                            </div>
+                        </div>
+                        <button type="button" class="icon-btn" title="Remove feature" @onclick="() => Remove(feature)">✕</button>
+                    </div>
+                    <textarea class="area text-sm mt-1.5" rows="2" style="min-height:3rem" aria-label="Description" @bind="feature.Description" @bind:after="Save"></textarea>
+                    @if (feature.UsesMax > 0)
+                    {
+                        <div class="flex items-center gap-2 mt-1">
+                            <span class="lbl">Used</span>
+                            <Pips Count="feature.UsesMax" Label="Use" @bind-Value="feature.UsesSpent" @bind-Value:after="Save" />
+                            <span class="muted text-xs ml-auto">@feature.Recharge</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+        <button type="button" class="btn btn-sm mt-2" @onclick="AddFeature">+ Custom feature</button>
+        </ChildContent>
+    </Box>
+
+    <div class="grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-3">
+        <div class="flex flex-col gap-3 min-w-0">
+            <Box Title="Weapons">
+                <div class="overflow-x-auto">
+                    <table class="tbl min-w-[40rem]">
+                        <thead><tr><th>Weapon</th><th>Damage</th><th>Type</th><th>Range</th><th>Properties / Options</th><th title="Finesse">Fin</th><th title="Ranged">Rng</th><th title="Proficient">Prof</th><th title="Magic bonus">+</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var w in C.Weapons)
+                            {
+                                var weapon = w;
+                                <tr>
+                                    <td><input class="field font-semibold" aria-label="Name" @bind="weapon.Name" @bind:after="Save" /></td>
+                                    <td><input class="field num w-16" aria-label="Damage dice" @bind="weapon.Damage" @bind:after="Save" /></td>
+                                    <td><input class="field w-24" aria-label="Damage type" @bind="weapon.DamageType" @bind:after="Save" /></td>
+                                    <td><input class="field w-20" aria-label="Range" @bind="weapon.Range" @bind:after="Save" /></td>
+                                    <td>
+                                        <input class="field text-sm" placeholder="Properties" aria-label="Properties" @bind="weapon.Properties" @bind:after="Save" />
+                                        <input class="field text-sm" placeholder="Weapon options" aria-label="Weapon options" @bind="weapon.Options" @bind:after="Save" />
+                                    </td>
+                                    <td><input type="checkbox" aria-label="Finesse" @bind="weapon.Finesse" @bind:after="Save" /></td>
+                                    <td><input type="checkbox" aria-label="Ranged" @bind="weapon.Ranged" @bind:after="Save" /></td>
+                                    <td><input type="checkbox" aria-label="Proficient" @bind="weapon.Proficient" @bind:after="Save" /></td>
+                                    <td><input type="number" class="field num w-10" aria-label="Magic bonus" @bind="weapon.MagicBonus" @bind:after="Save" /></td>
+                                    <td><button type="button" class="icon-btn" title="Remove" @onclick="() => RemoveWeapon(weapon)">✕</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <p class="muted text-xs mt-1">Attack bonus and damage on the Main tab update from these values, your ability scores and proficiency bonus.</p>
+            </Box>
+
+            <Box Title="Armor">
+                <div class="overflow-x-auto">
+                    <table class="tbl min-w-[32rem]">
+                        <thead><tr><th>Worn</th><th>Armor</th><th>Base AC</th><th>Category</th><th>Shield</th><th>+</th><th>Properties</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var a in C.Armor)
+                            {
+                                var armor = a;
+                                <tr>
+                                    <td><button type="button" class="pip @(armor.Equipped ? "on" : "")" title="Equip / unequip" @onclick="() => ToggleEquip(armor)"></button></td>
+                                    <td><input class="field font-semibold" aria-label="Name" @bind="armor.Name" @bind:after="Save" /></td>
+                                    <td><input type="number" class="field num w-12" aria-label="Base AC" @bind="armor.BaseAC" @bind:after="Save" /></td>
+                                    <td>
+                                        <select class="select" aria-label="Category" disabled="@armor.IsShield" @bind="armor.Category" @bind:after="Save">
+                                            @foreach (var cat in Enum.GetValues<ArmorCategory>())
+                                            {
+                                                <option value="@cat">@cat</option>
+                                            }
+                                        </select>
+                                    </td>
+                                    <td><input type="checkbox" aria-label="Is shield" @bind="armor.IsShield" @bind:after="Save" /></td>
+                                    <td><input type="number" class="field num w-10" aria-label="Magic bonus" @bind="armor.MagicBonus" @bind:after="Save" /></td>
+                                    <td><input class="field text-sm" aria-label="Properties" @bind="armor.Properties" @bind:after="Save" /></td>
+                                    <td><button type="button" class="icon-btn" title="Remove" @onclick="() => RemoveArmor(armor)">✕</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <p class="muted text-xs mt-1">Wearing one body armor and one shield at a time; AC recalculates when you change what's worn.</p>
+            </Box>
+
+            <div class="flex flex-wrap gap-1.5 items-center">
+                <select class="select max-w-xs" aria-label="Add from library" @bind="itemToAdd">
+                    <option value="">Add equipment from library…</option>
+                    @foreach (var group in Content.Items.GroupBy(i => i.Type))
+                    {
+                        <optgroup label="@group.Key">
+                            @foreach (var item in group)
+                            {
+                                <option value="@item.Id">@item.Name @(string.IsNullOrEmpty(item.Cost) ? "" : $"({item.Cost})")</option>
+                            }
+                        </optgroup>
+                    }
+                </select>
+                <button type="button" class="btn btn-sm btn-primary" disabled="@string.IsNullOrEmpty(itemToAdd)" @onclick="AddFromLibrary">Add</button>
+                <span class="muted text-sm mx-1">or</span>
+                <button type="button" class="btn btn-sm" @onclick="AddWeapon">+ Weapon</button>
+                <button type="button" class="btn btn-sm" @onclick="AddArmor">+ Armor</button>
+            </div>
+        </div>
+
+        <div class="flex flex-col gap-3 min-w-0">
+            <Box Title="Other Equipment">
+                @foreach (var g in C.Gear)
+                {
+                    var gear = g;
+                    <div class="flex items-center gap-1.5">
+                        <input type="number" min="0" class="field num w-12 text-center" aria-label="Quantity" @bind="gear.Quantity" @bind:after="Save" />
+                        <input class="field" aria-label="Item" @bind="gear.Name" @bind:after="Save" />
+                        <button type="button" class="icon-btn" title="Remove" @onclick="() => RemoveGear(gear)">✕</button>
+                    </div>
+                }
+                <button type="button" class="btn btn-sm mt-2" @onclick="AddGear">+ Item</button>
+            </Box>
+
+            <Box Title="Treasure & Additional Items">
+                <div class="grid grid-cols-4 gap-2 text-center">
+                    <div><div class="lbl">PP</div><input type="number" class="field text-center num" @bind="C.Coins.PP" @bind:after="Save" /></div>
+                    <div><div class="lbl">GP</div><input type="number" class="field text-center num" @bind="C.Coins.GP" @bind:after="Save" /></div>
+                    <div><div class="lbl">SP</div><input type="number" class="field text-center num" @bind="C.Coins.SP" @bind:after="Save" /></div>
+                    <div><div class="lbl">CP</div><input type="number" class="field text-center num" @bind="C.Coins.CP" @bind:after="Save" /></div>
+                </div>
+                <div class="muted text-xs text-center mt-1">Total ≈ @TotalGp() gp</div>
+                <textarea class="area mt-2" rows="5" placeholder="Gems, art objects, trade goods…" @bind="C.Treasure" @bind:after="Save"></textarea>
+            </Box>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Character C { get; set; } = default!;
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private string sort = "level";
+    private string itemToAdd = "";
+
+    private Task Save() => Changed.InvokeAsync();
+
+    private IEnumerable<Feature> SortedFeatures() => sort == "source"
+        ? C.Features.OrderBy(f => f.Source).ThenBy(f => f.Level)
+        : C.Features.OrderBy(f => f.Level).ThenBy(f => f.Source);
+
+    private string TotalGp() =>
+        (C.Coins.PP * 10 + C.Coins.GP + C.Coins.SP / 10.0 + C.Coins.CP / 100.0).ToString("0.##");
+
+    private async Task AddFeature() { C.Features.Add(new Feature { Name = "New feature", Level = C.Level, Source = "Custom" }); await Save(); }
+    private async Task Remove(Feature f) { C.Features.Remove(f); await Save(); }
+
+    private async Task AddWeapon() { C.Weapons.Add(new Weapon { Name = "New weapon", Damage = "1d6" }); await Save(); }
+    private async Task RemoveWeapon(Weapon w) { C.Weapons.Remove(w); await Save(); }
+
+    private async Task AddArmor() { C.Armor.Add(new Armor { Name = "New armor", BaseAC = 11 }); await Save(); }
+    private async Task RemoveArmor(Armor a) { C.Armor.Remove(a); await Save(); }
+
+    private async Task AddGear() { C.Gear.Add(new GearItem { Name = "" }); await Save(); }
+    private async Task RemoveGear(GearItem g) { C.Gear.Remove(g); await Save(); }
+
+    private async Task ToggleEquip(Armor a)
+    {
+        var equip = !a.Equipped;
+        if (equip)
+            foreach (var other in C.Armor.Where(x => x.IsShield == a.IsShield)) other.Equipped = false;
+        a.Equipped = equip;
+        await Save();
+    }
+
+    private async Task AddFromLibrary()
+    {
+        if (Content.Item(itemToAdd) is { } item) CharacterBuilder.AddItem(C, item);
+        itemToAdd = "";
+        await Save();
+    }
+}

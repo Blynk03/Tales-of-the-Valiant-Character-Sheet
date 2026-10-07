@@ -1,0 +1,106 @@
+@* Page 3 of the printed sheet: magic items, mounts, vehicles, base. *@
+<div class="flex flex-col gap-3">
+    <Box Title="Magic Items">
+        <div class="flex items-center justify-center gap-2 mb-2">
+            <span class="lbl">Attunement slots</span>
+            <input type="number" min="0" class="field num w-12 text-center" aria-label="Attunement slots" @bind="C.AttunementSlots" @bind:after="Save" />
+            <span class="chip @(C.AttunedCount() > C.AttunementSlots ? "user" : "")">@C.AttunedCount() / @C.AttunementSlots attuned</span>
+        </div>
+        <div class="grid md:grid-cols-2 gap-2">
+            @foreach (var m in C.MagicItems)
+            {
+                var item = m;
+                <div class="rounded-lg p-2" style="border:1px solid var(--line)">
+                    <div class="flex items-center gap-2">
+                        <span class="lbl">Item</span>
+                        <input class="field font-semibold" aria-label="Item name" @bind="item.Name" @bind:after="Save" />
+                        <button type="button" class="icon-btn" title="Remove" @onclick="() => Remove(C.MagicItems, item)">✕</button>
+                    </div>
+                    <div class="flex items-center gap-3 mt-1">
+                        <label class="flex items-center gap-1.5 text-sm"><input type="checkbox" @bind="item.RequiresAttunement" @bind:after="Save" /> Requires attunement</label>
+                        <label class="flex items-center gap-1.5 text-sm ml-auto">
+                            <button type="button" class="pip @(item.Attuned ? "on" : "")" disabled="@(!item.Attuned && C.AttunedCount() >= C.AttunementSlots)"
+                                    title="Attune" @onclick="() => ToggleAttune(item)"></button>
+                            Attuned
+                        </label>
+                    </div>
+                    <textarea class="area text-sm mt-1.5" rows="2" style="min-height:3rem" placeholder="Notes" @bind="item.Notes" @bind:after="Save"></textarea>
+                </div>
+            }
+        </div>
+        <button type="button" class="btn btn-sm mt-2" @onclick="AddMagicItem">+ Magic item</button>
+    </Box>
+
+    <Box Title="Mounts & Creatures">
+        <div class="grid md:grid-cols-2 gap-2">
+            @foreach (var m in C.Mounts)
+            {
+                var mount = m;
+                <div class="rounded-lg p-2 grid grid-cols-4 gap-x-2 gap-y-1" style="border:1px solid var(--line)">
+                    <div class="col-span-2"><div class="lbl">Name</div><input class="field font-semibold" @bind="mount.Name" @bind:after="Save" /></div>
+                    <div><div class="lbl">Type</div><input class="field" @bind="mount.Type" @bind:after="Save" /></div>
+                    <div class="flex items-end"><button type="button" class="icon-btn ml-auto" title="Remove" @onclick="() => Remove(C.Mounts, mount)">✕</button></div>
+                    <div class="col-span-2"><div class="lbl">Speed</div><input class="field" @bind="mount.Speed" @bind:after="Save" /></div>
+                    <div class="col-span-2"><div class="lbl">Carrying capacity</div><input class="field" @bind="mount.CarryingCapacity" @bind:after="Save" /></div>
+                    <div class="col-span-4"><div class="lbl">Notes</div><textarea class="area text-sm" rows="2" style="min-height:3rem" @bind="mount.Notes" @bind:after="Save"></textarea></div>
+                </div>
+            }
+        </div>
+        <button type="button" class="btn btn-sm mt-2" @onclick="AddMount">+ Mount or creature</button>
+    </Box>
+
+    <Box Title="Vehicles">
+        <div class="grid md:grid-cols-2 gap-2">
+            @foreach (var v in C.Vehicles)
+            {
+                var vehicle = v;
+                <div class="rounded-lg p-2 grid grid-cols-6 gap-x-2 gap-y-1" style="border:1px solid var(--line)">
+                    <div class="col-span-3"><div class="lbl">Name</div><input class="field font-semibold" @bind="vehicle.Name" @bind:after="Save" /></div>
+                    <div class="col-span-2"><div class="lbl">Type</div><input class="field" @bind="vehicle.Type" @bind:after="Save" /></div>
+                    <div class="flex items-end"><button type="button" class="icon-btn ml-auto" title="Remove" @onclick="() => Remove(C.Vehicles, vehicle)">✕</button></div>
+                    <div><div class="lbl">Prof.</div><input type="checkbox" @bind="vehicle.Proficient" @bind:after="Save" /></div>
+                    <div><div class="lbl">AC</div><input type="number" class="field num" @bind="vehicle.AC" @bind:after="Save" /></div>
+                    <div class="col-span-2"><div class="lbl">Max HP</div><input type="number" class="field num" @bind="vehicle.MaxHp" @bind:after="Save" /></div>
+                    <div class="col-span-2"><div class="lbl">Current HP</div><input type="number" class="field num" @bind="vehicle.CurrentHp" @bind:after="Save" /></div>
+                    <div class="col-span-2"><div class="lbl">Speed (round)</div><input class="field" @bind="vehicle.SpeedRound" @bind:after="Save" /></div>
+                    <div class="col-span-2"><div class="lbl">Speed (travel)</div><input class="field" @bind="vehicle.SpeedTravel" @bind:after="Save" /></div>
+                    <div class="col-span-2"><div class="lbl">Crew</div><input class="field" @bind="vehicle.Crew" @bind:after="Save" /></div>
+                    <div class="col-span-3"><div class="lbl">Passengers</div><input class="field" @bind="vehicle.Passengers" @bind:after="Save" /></div>
+                    <div class="col-span-3"><div class="lbl">Cargo capacity</div><input class="field" @bind="vehicle.Cargo" @bind:after="Save" /></div>
+                    <div class="col-span-6"><div class="lbl">Notes</div><textarea class="area text-sm" rows="2" style="min-height:3rem" @bind="vehicle.Notes" @bind:after="Save"></textarea></div>
+                </div>
+            }
+        </div>
+        <button type="button" class="btn btn-sm mt-2" @onclick="AddVehicle">+ Vehicle</button>
+    </Box>
+
+    <div class="grid md:grid-cols-3 gap-3">
+        <Box Title="Base">
+            <input class="field font-semibold" placeholder="Name and location" @bind="C.BaseName" @bind:after="Save" />
+            <div class="lbl mt-2">Notes</div>
+            <textarea class="area" rows="5" @bind="C.BaseNotes" @bind:after="Save"></textarea>
+        </Box>
+        <Box Title="Facilities"><textarea class="area" rows="8" @bind="C.Facilities" @bind:after="Save"></textarea></Box>
+        <Box Title="Personnel"><textarea class="area" rows="8" @bind="C.Personnel" @bind:after="Save"></textarea></Box>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Character C { get; set; } = default!;
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private Task Save() => Changed.InvokeAsync();
+
+    private async Task Remove<T>(List<T> list, T item) { list.Remove(item); await Save(); }
+
+    private async Task AddMagicItem() { C.MagicItems.Add(new MagicItem()); await Save(); }
+    private async Task AddMount() { C.Mounts.Add(new Mount()); await Save(); }
+    private async Task AddVehicle() { C.Vehicles.Add(new Vehicle()); await Save(); }
+
+    private async Task ToggleAttune(MagicItem m)
+    {
+        if (!m.Attuned && C.AttunedCount() >= C.AttunementSlots) return;
+        m.Attuned = !m.Attuned;
+        await Save();
+    }
+}

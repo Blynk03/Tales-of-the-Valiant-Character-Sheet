@@ -1,0 +1,293 @@
+@page "/settings"
+@using System.Text.Json
+@using System.Text.RegularExpressions
+@inject ContentService Content
+@inject IJSRuntime JS
+
+<PageTitle>Content · Valiant Sheet</PageTitle>
+
+<div class="flex flex-wrap items-end gap-3 mb-4">
+    <div>
+        <h1 class="display font-extrabold text-2xl" style="color:var(--ink)">Content library</h1>
+        <p class="muted max-w-2xl">
+            Add lineages, heritages, backgrounds, classes, subclasses, talents, spells and items from books you own or your own homebrew.
+            Character creation and level up use everything here. Built-in entries are samples: customize them to match your book.
+        </p>
+    </div>
+    <div class="ml-auto flex gap-1.5">
+        <button type="button" class="btn btn-sm" @onclick="Export">Export my content</button>
+        <label class="btn btn-sm cursor-pointer">
+            Import…
+            <InputFile class="hidden" accept=".json,application/json" OnChange="Import" />
+        </label>
+    </div>
+</div>
+@if (!string.IsNullOrEmpty(message))
+{
+    <p class="text-sm mb-3" style="color:var(--good)">@message</p>
+}
+
+<div class="grid lg:grid-cols-[13rem_minmax(0,1fr)] gap-4">
+    <aside class="flex flex-col gap-3">
+        <nav class="flex lg:flex-col gap-1 overflow-x-auto">
+            @foreach (var k in ContentService.Kinds)
+            {
+                var kindRef = k;
+                <button type="button" class="btn text-left justify-start @(kind == kindRef ? "btn-primary" : "")" @onclick="() => SelectKind(kindRef)">
+                    @kindRef.Label <span class="opacity-70">(@Content.AllEntries(kindRef).Count())</span>
+                </button>
+            }
+        </nav>
+
+        <div class="box">
+            <div class="box-title">Sources</div>
+            <p class="muted text-xs mb-1.5">Turn a source off to hide it from creation and level up.</p>
+            @foreach (var s in Content.AllSources())
+            {
+                var source = s;
+                var isOn = !Content.DisabledSources.Contains(source);
+                <label class="flex items-center gap-2 text-sm py-0.5 cursor-pointer">
+                    <input type="checkbox" checked="@isOn" @onchange="() => ToggleSource(source)" />
+                    <span class="truncate">@source</span>
+                </label>
+            }
+        </div>
+    </aside>
+
+    <section class="box min-w-0">
+        <div class="flex flex-wrap items-center gap-2 mb-2">
+            <h2 class="display font-bold text-lg" style="color:var(--ink)">@kind.Label</h2>
+            <input class="field max-w-xs ml-auto" placeholder="Search…" aria-label="Search" @bind="search" @bind:event="oninput" />
+            <button type="button" class="btn btn-sm btn-primary" @onclick="New">+ New</button>
+        </div>
+
+        <table class="tbl">
+            <thead><tr><th>Name</th><th>Source</th><th class="hidden sm:table-cell">Details</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var row in Rows())
+                {
+                    var entry = row.Entry;
+                    var isUser = row.IsUser;
+                    <tr>
+                        <td>
+                            <button type="button" class="roll font-semibold text-left" @onclick="() => Edit(entry, isUser)">@entry.Name</button>
+                            @if (row.OverridesCore)
+                            {
+                                <span class="chip user ml-1">customized</span>
+                            }
+                            else if (isUser)
+                            {
+                                <span class="chip user ml-1">yours</span>
+                            }
+                        </td>
+                        <td class="text-sm"><span class="chip @(Content.DisabledSources.Contains(entry.Source) ? "opacity-50" : "")">@entry.Source</span></td>
+                        <td class="text-sm muted hidden sm:table-cell">@Summary(entry)</td>
+                        <td class="whitespace-nowrap text-right">
+                            <button type="button" class="btn btn-sm" @onclick="() => Edit(entry, isUser)">@(isUser ? "Edit" : "Customize")</button>
+                            <button type="button" class="btn btn-sm" title="Copy as a new entry" @onclick="() => Copy(entry)">Copy</button>
+                            @if (isUser)
+                            {
+                                <button type="button" class="btn btn-sm btn-danger" @onclick="() => Delete(entry, row.OverridesCore)">@(row.OverridesCore ? "Revert" : "Delete")</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (!Rows().Any())
+        {
+            <p class="muted text-center py-6">Nothing here yet.</p>
+        }
+    </section>
+</div>
+
+@if (draft is not null)
+{
+    <div class="modal-back" @onclick="CloseEditor">
+        <div class="modal" style="width:min(56rem,100%)" role="dialog" aria-modal="true" @onclick:stopPropagation="true">
+            <div class="px-5 pt-4 pb-3 flex items-center gap-3" style="border-bottom:2px solid var(--ink)">
+                <h2 class="display font-extrabold text-lg" style="color:var(--ink)">@(isNew ? "New" : "Edit") @Singular(kind): @draft.Name</h2>
+                <button type="button" class="btn btn-sm ml-auto" @onclick="ToggleJson">@(jsonMode ? "Form view" : "Edit as JSON")</button>
+                <button type="button" class="icon-btn text-xl" title="Close" @onclick="CloseEditor">✕</button>
+            </div>
+            <div class="p-5">
+                @if (editingCore)
+                {
+                    <p class="text-sm mb-3 muted">Saving creates your own copy that replaces the built-in "@draft.Name". You can revert it later.</p>
+                }
+                @if (jsonMode)
+                {
+                    <textarea class="area font-mono text-sm" rows="22" @bind="jsonText"></textarea>
+                }
+                else
+                {
+                    <ObjectEditor Target="draft" ReadOnlyId="editingCore" OnChange="() => StateHasChanged()" />
+                }
+                @if (!string.IsNullOrEmpty(editorError))
+                {
+                    <p class="text-sm mt-2" style="color:var(--danger)">@editorError</p>
+                }
+            </div>
+            <div class="px-5 py-3 flex gap-2 justify-end" style="border-top:1px solid var(--line)">
+                <button type="button" class="btn" @onclick="CloseEditor">Cancel</button>
+                <button type="button" class="btn btn-primary" @onclick="SaveDraft">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private ContentKind kind = ContentService.Kinds[0];
+    private string search = "";
+    private string message = "";
+
+    private ContentEntry? draft;
+    private bool isNew;
+    private bool editingCore;
+    private bool jsonMode;
+    private string jsonText = "";
+    private string editorError = "";
+
+    protected override async Task OnInitializedAsync() => await Content.EnsureLoadedAsync();
+
+    private IEnumerable<(ContentEntry Entry, bool IsUser, bool OverridesCore)> Rows() =>
+        Content.AllEntries(kind).Where(r =>
+            string.IsNullOrWhiteSpace(search) ||
+            r.Entry.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+            r.Entry.Source.Contains(search, StringComparison.OrdinalIgnoreCase));
+
+    private static string Summary(ContentEntry e) => e switch
+    {
+        LineageDef l => $"{l.Size}, {l.Speed} ft. · {l.Traits.Count} traits",
+        HeritageDef h => $"{h.Languages} · {h.Traits.Count} traits",
+        BackgroundDef b => string.Join(", ", b.SkillProficiencies),
+        ClassDef c => $"d{c.HitDie} · {c.Levels.Count} levels · {c.Levels.Sum(l => l.Features.Count)} features",
+        SubclassDef s => $"{s.ClassId} · {s.Features.Count} features",
+        TalentDef t => t.Category.ToString(),
+        SpellDef s => $"{Rules.CircleName(s.Circle)}{(s.Circle > 0 ? " circle" : "")} · {s.School}" + (s.Ritual ? " · ritual" : ""),
+        ItemDef i => i.Type.ToString() + (string.IsNullOrEmpty(i.Cost) ? "" : $" · {i.Cost}"),
+        _ => ""
+    };
+
+    private static string Singular(ContentKind k) =>
+        k.Label.EndsWith("sses") ? k.Label[..^2] : k.Label.TrimEnd('s');
+
+    private void SelectKind(ContentKind k)
+    {
+        kind = k;
+        search = "";
+    }
+
+    private async Task ToggleSource(string source)
+    {
+        if (!Content.DisabledSources.Remove(source)) Content.DisabledSources.Add(source);
+        await Content.SaveAsync();
+    }
+
+    private void New()
+    {
+        draft = (ContentEntry)Activator.CreateInstance(kind.EntryType)!;
+        draft.Name = $"New {Singular(kind).ToLower()}";
+        draft.Source = "Homebrew";
+        if (draft is ClassDef cls)
+            for (int i = 1; i <= 20; i++) cls.Levels.Add(new ClassLevelDef { Level = i });
+        OpenEditor(isNewEntry: true, core: false);
+    }
+
+    private void Edit(ContentEntry e, bool isUser)
+    {
+        draft = (ContentEntry)Json.Clone(e);
+        OpenEditor(isNewEntry: false, core: !isUser);
+    }
+
+    private void Copy(ContentEntry e)
+    {
+        draft = (ContentEntry)Json.Clone(e);
+        draft.Id = "";
+        draft.Name += " (copy)";
+        draft.Source = "Homebrew";
+        OpenEditor(isNewEntry: true, core: false);
+    }
+
+    private void OpenEditor(bool isNewEntry, bool core)
+    {
+        isNew = isNewEntry;
+        editingCore = core;
+        jsonMode = false;
+        editorError = "";
+    }
+
+    private void CloseEditor() => draft = null;
+
+    private void ToggleJson()
+    {
+        editorError = "";
+        if (!jsonMode)
+        {
+            jsonText = JsonSerializer.Serialize(draft, kind.EntryType, Json.Pretty);
+            jsonMode = true;
+        }
+        else if (TryParseJson()) jsonMode = false;
+    }
+
+    private bool TryParseJson()
+    {
+        try
+        {
+            draft = (ContentEntry?)JsonSerializer.Deserialize(jsonText, kind.EntryType, Json.Options) ?? draft;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            editorError = $"JSON problem: {ex.Message}";
+            return false;
+        }
+    }
+
+    private async Task SaveDraft()
+    {
+        if (draft is null) return;
+        if (jsonMode && !TryParseJson()) return;
+        if (string.IsNullOrWhiteSpace(draft.Name)) { editorError = "Give it a name."; return; }
+        if (string.IsNullOrWhiteSpace(draft.Id)) draft.Id = Slug(draft.Name);
+        if (isNew && Content.AllEntries(kind).Any(r => r.Entry.Id == draft.Id))
+        {
+            editorError = $"The id '{draft.Id}' is already used. Change the Id field.";
+            return;
+        }
+        await Content.UpsertAsync(kind, draft);
+        message = $"Saved {draft.Name}.";
+        draft = null;
+    }
+
+    private async Task Delete(ContentEntry e, bool overridesCore)
+    {
+        var prompt = overridesCore ? $"Revert {e.Name} to the built-in version?" : $"Delete {e.Name}?";
+        if (!await JS.InvokeAsync<bool>("totv.confirm", prompt)) return;
+        await Content.DeleteAsync(kind, e.Id);
+        message = overridesCore ? $"Reverted {e.Name}." : $"Deleted {e.Name}.";
+    }
+
+    private async Task Export() =>
+        await JS.InvokeVoidAsync("totv.download", "valiant-content.json", Content.ExportUserJson());
+
+    private async Task Import(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            using var reader = new StreamReader(e.File.OpenReadStream(10_000_000));
+            var count = await Content.ImportAsync(await reader.ReadToEndAsync());
+            message = $"Imported {count} entries.";
+        }
+        catch (Exception ex)
+        {
+            message = $"Couldn't import: {ex.Message}";
+        }
+    }
+
+    private static string Slug(string name)
+    {
+        var s = Regex.Replace(name.ToLowerInvariant(), "[^a-z0-9]+", "-").Trim('-');
+        return "hb-" + (s.Length > 0 ? s : Guid.NewGuid().ToString("n")[..6]);
+    }
+}

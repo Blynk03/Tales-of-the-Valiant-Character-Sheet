@@ -1,0 +1,273 @@
+@inject DiceService Dice
+@inject ContentService Content
+
+@* Page 1 of the printed sheet. *@
+<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,2.5fr)]">
+
+    @* ---------- column 1: proficiency, STR, DEX, CON, Luck ---------- *@
+    <div class="flex flex-col gap-3">
+        <Box Title="Proficiency Bonus">
+            <div class="text-center num text-3xl" style="color:var(--ink)">@Rules.Signed(C.Prof())</div>
+            <div class="text-center muted text-xs">from level @C.Level</div>
+        </Box>
+        <AbilityBlock C="C" A="Ability.STR" Changed="Changed" />
+        <AbilityBlock C="C" A="Ability.DEX" Changed="Changed" />
+        <AbilityBlock C="C" A="Ability.CON" Changed="Changed" />
+        <Box Title="Luck">
+            <div class="flex justify-center">
+                <Pips Count="Rules.MaxLuck" Large="true" Variant="luck" Label="Luck" @bind-Value="C.Luck" @bind-Value:after="Save" />
+            </div>
+            <p class="muted text-xs text-center mt-1.5">Gain 1 when you fail a d20 test. Spend from the roll tray for +1 each.</p>
+        </Box>
+    </div>
+
+    @* ---------- column 2: INT, WIS, CHA ---------- *@
+    <div class="flex flex-col gap-3">
+        <AbilityBlock C="C" A="Ability.INT" Changed="Changed" />
+        <AbilityBlock C="C" A="Ability.WIS" Changed="Changed" />
+        <AbilityBlock C="C" A="Ability.CHA" Changed="Changed" />
+    </div>
+
+    @* ---------- column 3: combat ---------- *@
+    <div class="flex flex-col gap-3 md:col-span-2 xl:col-span-1 min-w-0">
+        <div class="grid grid-cols-3 sm:grid-cols-5 gap-2">
+            <Box Title="Passive Insight"><div class="text-center num text-2xl">@C.Passive("Insight")</div></Box>
+            <Box Title="Passive Invest."><div class="text-center num text-2xl">@C.Passive("Investigation")</div></Box>
+            <Box Title="Passive Percep."><div class="text-center num text-2xl">@C.Passive("Perception")</div></Box>
+            <Box Title="Initiative">
+                <div class="text-center">
+                    <button type="button" class="roll num text-2xl" title="Roll initiative" @onclick="RollInitiative">@Rules.Signed(C.Initiative())</button>
+                </div>
+            </Box>
+            <Box Title="Speed(s)">
+                <input class="field text-center num text-lg" aria-label="Speed" @bind="C.Speed" @bind:after="Save" />
+            </Box>
+        </div>
+
+        <Box Title="Attacks">
+            @if (C.Weapons.Count == 0)
+            {
+                <p class="muted text-sm text-center py-2">No weapons yet. Add them on the Equipment &amp; Features tab.</p>
+            }
+            else
+            {
+                <div class="overflow-x-auto">
+                    <table class="tbl">
+                        <thead><tr><th>Name</th><th>Bonus</th><th>Damage / Type</th><th>Range / Properties</th><th>Weapon Options</th></tr></thead>
+                        <tbody>
+                            @foreach (var w in C.Weapons)
+                            {
+                                var weapon = w;
+                                <tr>
+                                    <td class="font-semibold">@weapon.Name</td>
+                                    <td><button type="button" class="roll num" title="Roll attack" @onclick="() => Attack(weapon)">@Rules.Signed(C.AttackBonus(weapon))</button></td>
+                                    <td class="whitespace-nowrap">
+                                        <button type="button" class="roll num" title="Roll damage" @onclick="() => Damage(weapon)">@C.DamageText(weapon)</button>
+                                        <span class="muted">@weapon.DamageType</span>
+                                    </td>
+                                    <td class="text-sm">@string.Join(" · ", new[] { weapon.Range, weapon.Properties }.Where(s => !string.IsNullOrWhiteSpace(s)))</td>
+                                    <td class="text-sm muted">@weapon.Options</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </Box>
+
+        <Box Title="Armor">
+            <div class="flex items-center gap-3">
+                <div class="shield" title="Armor class with shield">
+                    <span class="num text-2xl">@C.ArmorClass(true)</span>
+                    <span class="lbl text-center leading-tight">AC<br />with shield</span>
+                </div>
+                <div class="flex-1 min-w-0">
+                    @{ var armor = C.EquippedArmor(); var shield = C.EquippedShield(); }
+                    <table class="tbl">
+                        <thead><tr><th>Name</th><th>Base AC</th><th>Properties</th></tr></thead>
+                        <tbody>
+                            <tr>
+                                <td class="font-semibold">@(armor?.Name ?? "Unarmored")</td>
+                                <td class="num">@(armor is null ? "10 + DEX" : armor.BaseAC.ToString())</td>
+                                <td class="text-sm">@ArmorNote(armor)</td>
+                            </tr>
+                            @if (shield is not null)
+                            {
+                                <tr><td class="font-semibold">@shield.Name</td><td class="num">+@(shield.BaseAC + shield.MagicBonus)</td><td class="text-sm">@shield.Properties</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="shield" title="Armor class without shield">
+                    <span class="num text-2xl">@C.ArmorClass(false)</span>
+                    <span class="lbl text-center leading-tight">AC<br />no shield</span>
+                </div>
+            </div>
+        </Box>
+
+        <div class="grid sm:grid-cols-3 gap-3">
+            <Box Title="Hit Points">
+                <div class="grid grid-cols-3 gap-1.5 text-center">
+                    <div><div class="lbl">Max</div><input type="number" class="field text-center num" @bind="C.MaxHp" @bind:after="Save" /></div>
+                    <div><div class="lbl">Current</div><input type="number" class="field text-center num text-xl" style="color:@HpColor()" @bind="C.CurrentHp" @bind:after="Save" /></div>
+                    <div><div class="lbl">Temp</div><input type="number" class="field text-center num" @bind="C.TempHp" @bind:after="Save" /></div>
+                </div>
+                <div class="flex items-center gap-1 mt-2">
+                    <input type="number" min="0" class="field-box num w-16" placeholder="0" aria-label="Amount" @bind="hpAmount" />
+                    <button type="button" class="btn btn-sm btn-danger" title="Temp HP is used first" @onclick="TakeDamage">Dmg</button>
+                    <button type="button" class="btn btn-sm" @onclick="Heal">Heal</button>
+                    <button type="button" class="btn btn-sm" title="Temp HP doesn't stack: keeps the higher value" @onclick="GainTemp">Temp</button>
+                </div>
+
+                <div class="box-title mt-3">Hit Dice</div>
+                <div class="grid grid-cols-3 gap-1.5 text-center">
+                    <div><div class="lbl">Type</div><div class="num">d@(C.HitDie)</div></div>
+                    <div><div class="lbl">Used</div><input type="number" min="0" max="@C.HitDiceMax()" class="field text-center num" @bind="C.HitDiceUsed" @bind:after="Save" /></div>
+                    <div><div class="lbl">Max</div><div class="num">@C.HitDiceMax()</div></div>
+                </div>
+                <button type="button" class="btn btn-sm w-full mt-2" disabled="@(C.HitDiceUsed >= C.HitDiceMax())" @onclick="SpendHitDie">
+                    Spend hit die (d@(C.HitDie)@Rules.Signed(C.Mod(Ability.CON)))
+                </button>
+            </Box>
+
+            <Box Title="Proficiencies">
+                <div class="space-y-1">
+                    <ProfToggle Label="Light Armor" @bind-Value="C.LightArmor" @bind-Value:after="Save" />
+                    <ProfToggle Label="Medium Armor" @bind-Value="C.MediumArmor" @bind-Value:after="Save" />
+                    <ProfToggle Label="Heavy Armor" @bind-Value="C.HeavyArmor" @bind-Value:after="Save" />
+                    <ProfToggle Label="Shields" @bind-Value="C.Shields" @bind-Value:after="Save" />
+                    <ProfToggle Label="Simple Weapons" @bind-Value="C.SimpleWeapons" @bind-Value:after="Save" />
+                    <ProfToggle Label="Martial Weapons" @bind-Value="C.MartialWeapons" @bind-Value:after="Save" />
+                </div>
+            </Box>
+
+            <Box Title="Languages">
+                <textarea class="area" rows="3" @bind="C.Languages" @bind:after="Save"></textarea>
+                <div class="box-title mt-2">Other Proficiencies</div>
+                <textarea class="area" rows="3" @bind="C.OtherProficiencies" @bind:after="Save"></textarea>
+            </Box>
+        </div>
+
+        <div class="grid sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-3">
+            <div class="flex flex-col gap-3">
+                <Box Title="Death Saves">
+                    <div class="flex items-center justify-between gap-2"><Pips Count="3" Variant="goodpip" Label="Success" @bind-Value="C.DeathSuccesses" @bind-Value:after="Save" /><span class="lbl">Successes</span></div>
+                    <div class="flex items-center justify-between gap-2 mt-1"><Pips Count="3" Variant="bad" Label="Failure" @bind-Value="C.DeathFailures" @bind-Value:after="Save" /><span class="lbl">Failures</span></div>
+                    <button type="button" class="btn btn-sm w-full mt-2" @onclick="RollDeathSave">Roll death save</button>
+                </Box>
+                <Box Title="Exhaustion">
+                    <div class="flex justify-center"><Pips Count="Rules.MaxExhaustion" Large="true" Label="Exhaustion" @bind-Value="C.Exhaustion" @bind-Value:after="Save" /></div>
+                    <div class="box-title mt-3">Conditions</div>
+                    <textarea class="area" rows="2" placeholder="e.g. Poisoned, Prone" @bind="C.Conditions" @bind:after="Save"></textarea>
+                </Box>
+            </div>
+
+            <Box Title="Talents">
+                @foreach (var t in C.Talents)
+                {
+                    var talent = t;
+                    <div class="py-1.5" style="border-bottom:1px solid var(--ink-faint)">
+                        <div class="flex items-center gap-2">
+                            <span class="font-semibold">@talent.Name</span>
+                            <span class="chip">@talent.Category</span>
+                            <button type="button" class="icon-btn ml-auto" title="Remove talent" @onclick="() => RemoveTalent(talent)">✕</button>
+                        </div>
+                        <div class="text-sm muted">@talent.Description</div>
+                    </div>
+                }
+                <div class="flex gap-1.5 mt-2">
+                    <select class="select" aria-label="Add talent" @bind="talentToAdd">
+                        <option value="">Add a talent…</option>
+                        @foreach (var group in Content.Talents.GroupBy(x => x.Category))
+                        {
+                            <optgroup label="@group.Key">
+                                @foreach (var opt in group)
+                                {
+                                    <option value="@opt.Id">@opt.Name</option>
+                                }
+                            </optgroup>
+                        }
+                    </select>
+                    <button type="button" class="btn btn-sm" disabled="@string.IsNullOrEmpty(talentToAdd)" @onclick="AddTalent">Add</button>
+                </div>
+            </Box>
+        </div>
+
+        <Box Title="Actions Quick Reference">
+            <div class="grid sm:grid-cols-3 gap-2">
+                <div><div class="lbl text-center">Actions</div><textarea class="area" rows="4" @bind="C.ActionsRef" @bind:after="Save"></textarea></div>
+                <div><div class="lbl text-center">Bonus Actions</div><textarea class="area" rows="4" @bind="C.BonusActionsRef" @bind:after="Save"></textarea></div>
+                <div><div class="lbl text-center">Reactions</div><textarea class="area" rows="4" @bind="C.ReactionsRef" @bind:after="Save"></textarea></div>
+            </div>
+        </Box>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Character C { get; set; } = default!;
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private int hpAmount;
+    private string talentToAdd = "";
+
+    private Task Save() => Changed.InvokeAsync();
+
+    private string HpColor() =>
+        C.MaxHp > 0 && C.CurrentHp * 4 <= C.MaxHp ? "var(--danger)" : "var(--text)";
+
+    private static string ArmorNote(Armor? a)
+    {
+        if (a is null) return "";
+        var dex = a.Category switch { ArmorCategory.Heavy => "no DEX", ArmorCategory.Medium => "+ DEX (max 2)", _ => "+ DEX" };
+        var magic = a.MagicBonus != 0 ? $", {Rules.Signed(a.MagicBonus)} magic" : "";
+        return $"{a.Category}, {dex}{magic}" + (string.IsNullOrWhiteSpace(a.Properties) ? "" : $" · {a.Properties}");
+    }
+
+    private void RollInitiative() => Dice.D20("Initiative", C.Initiative());
+
+    private void Attack(Weapon w) =>
+        Dice.D20($"{w.Name} attack", C.AttackBonus(w), DamageExpr(w), $"{w.Name} damage ({w.DamageType})");
+
+    private void Damage(Weapon w) => Dice.Roll($"{w.Name} damage ({w.DamageType})", DamageExpr(w));
+
+    private string DamageExpr(Weapon w)
+    {
+        var mod = C.DamageMod(w);
+        return mod == 0 ? w.Damage : $"{w.Damage}{Rules.Signed(mod)}";
+    }
+
+    private async Task TakeDamage() { CharacterBuilder.TakeDamage(C, hpAmount); hpAmount = 0; await Save(); }
+    private async Task Heal() { CharacterBuilder.Heal(C, hpAmount); hpAmount = 0; await Save(); }
+    private async Task GainTemp() { CharacterBuilder.GainTemp(C, hpAmount); hpAmount = 0; await Save(); }
+
+    private async Task SpendHitDie()
+    {
+        var r = Dice.Roll("Hit die", $"1d{C.HitDie}{Rules.Signed(C.Mod(Ability.CON))}");
+        C.HitDiceUsed++;
+        CharacterBuilder.Heal(C, Math.Max(0, r.Total));
+        await Save();
+    }
+
+    private async Task RollDeathSave()
+    {
+        var r = Dice.D20("Death save", 0);
+        if (r.Natural == 20) { C.CurrentHp = 1; C.DeathSuccesses = 0; C.DeathFailures = 0; }
+        else if (r.Natural == 1) C.DeathFailures = Math.Min(3, C.DeathFailures + 2);
+        else if (r.Natural >= 10) C.DeathSuccesses = Math.Min(3, C.DeathSuccesses + 1);
+        else C.DeathFailures = Math.Min(3, C.DeathFailures + 1);
+        await Save();
+    }
+
+    private async Task AddTalent()
+    {
+        if (Content.Talent(talentToAdd) is { } t) CharacterBuilder.AddTalent(C, t);
+        talentToAdd = "";
+        await Save();
+    }
+
+    private async Task RemoveTalent(Talent t)
+    {
+        C.Talents.Remove(t);
+        await Save();
+    }
+}

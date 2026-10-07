@@ -1,0 +1,145 @@
+@page "/character/{Id:guid}"
+@inject CharacterService Characters
+@inject ContentService Content
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>@(C?.Name ?? "Character") · Valiant Sheet</PageTitle>
+
+@if (C is null)
+{
+    <p class="p-8">@(loaded ? "Character not found." : "Loading…") <a class="link" href="">Back to characters</a></p>
+}
+else
+{
+    @* ---------- header: mirrors the top band of page 1 ---------- *@
+    <section class="grid md:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1fr)] gap-3 mb-3 items-start">
+        <div class="box flex flex-col gap-1.5">
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="font-semibold text-lg">@C.ClassName @C.Level</span>
+                    <button type="button" class="btn btn-sm ml-auto @(ReadyToLevel ? "btn-gold" : "btn-primary")" disabled="@(C.Level >= 20)"
+                            title="Add the next level's features" @onclick="() => showLevelUp = true">
+                        @(ReadyToLevel ? "★ Level up" : "Level up")
+                    </button>
+                </div>
+                <div class="lbl">Class &amp; level</div>
+            </div>
+            <div><div class="truncate">@(string.IsNullOrEmpty(C.SubclassName) ? "—" : C.SubclassName)</div><div class="lbl">Subclass</div></div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <input type="number" min="0" class="field num" aria-label="Experience points" @bind="C.Experience" @bind:after="Save" />
+                    @if (C.Level < 20)
+                    {
+                        <span class="muted text-sm whitespace-nowrap">/ @Rules.XpForLevel[C.Level + 1]</span>
+                    }
+                </div>
+                <div class="lbl">Experience points</div>
+            </div>
+        </div>
+
+        <div class="box text-center" style="border-width:3px">
+            <input class="field display font-extrabold text-2xl text-center" style="color:var(--ink);border-bottom-color:var(--ink)" aria-label="Character name" @bind="C.Name" @bind:after="Save" />
+            <div class="lbl mt-0.5">Character name</div>
+            <input class="field text-center mt-2" aria-label="Player name" @bind="C.PlayerName" @bind:after="Save" />
+            <div class="lbl mt-0.5">Player name</div>
+        </div>
+
+        <div class="box flex flex-col gap-1.5">
+            <div><input class="field" aria-label="Lineage" @bind="C.LineageName" @bind:after="Save" /><div class="lbl">Lineage</div></div>
+            <div><input class="field" aria-label="Heritage" @bind="C.HeritageName" @bind:after="Save" /><div class="lbl">Heritage</div></div>
+            <div><input class="field" aria-label="Background" @bind="C.BackgroundName" @bind:after="Save" /><div class="lbl">Background</div></div>
+        </div>
+    </section>
+
+    <div class="flex flex-wrap items-center gap-2 mb-2">
+        <nav class="tabs flex-1 min-w-0" role="tablist">
+            @foreach (var (key, label) in TabList)
+            {
+                var k = key;
+                <button type="button" role="tab" aria-selected="@(tab == k ? "true" : "false")" class="tab @(tab == k ? "active" : "")" @onclick="() => tab = k">@label</button>
+            }
+        </nav>
+        <div class="flex gap-1.5">
+            <button type="button" class="btn btn-sm" title="Reset short-rest features" @onclick="ShortRest">Short rest</button>
+            <button type="button" class="btn btn-sm" title="Restore HP, slots and features; regain half your hit dice; reduce exhaustion" @onclick="LongRest">Long rest</button>
+        </div>
+    </div>
+    if (!string.IsNullOrEmpty(notice))
+    {
+        <p class="text-sm mb-2" style="color:var(--good)">@notice</p>
+    }
+
+    switch (tab)
+    {
+        case "main": <MainTab C="C" Changed="Save" /> break;
+        case "features": <FeaturesTab C="C" Changed="Save" /> break;
+        case "holdings": <HoldingsTab C="C" Changed="Save" /> break;
+        case "character": <CharacterTab C="C" Changed="Save" /> break;
+        case "spells": <SpellsTab C="C" Changed="Save" /> break;
+    }
+
+    <RollTray C="C" Changed="Save" />
+
+    if (showLevelUp)
+    {
+        <LevelUpDialog C="C" OnClose="() => showLevelUp = false" OnApplied="LevelApplied" />
+    }
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private Character? C;
+    private bool loaded;
+    private string tab = "main";
+    private bool showLevelUp;
+    private string notice = "";
+
+    private static readonly (string Key, string Label)[] TabList =
+    {
+        ("main", "Main"),
+        ("features", "Equipment & Features"),
+        ("holdings", "Magic Items & Holdings"),
+        ("character", "Character"),
+        ("spells", "Spells"),
+    };
+
+    private bool ReadyToLevel => C is not null && C.Level < 20 && C.Experience >= Rules.XpForLevel[C.Level + 1];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await Content.EnsureLoadedAsync();
+        await Characters.EnsureLoadedAsync();
+        C = Characters.Get(Id);
+        loaded = true;
+    }
+
+    private async Task Save()
+    {
+        notice = "";
+        await Characters.SaveAsync(C);
+    }
+
+    private async Task ShortRest()
+    {
+        CharacterBuilder.ShortRest(C!);
+        await Save();
+        notice = "Short rest taken. Spend hit dice from the Hit Points box to heal.";
+    }
+
+    private async Task LongRest()
+    {
+        if (!await JS.InvokeAsync<bool>("totv.confirm", "Take a long rest? HP, spell slots and feature uses are restored.")) return;
+        CharacterBuilder.LongRest(C!);
+        await Save();
+        notice = "Long rest taken.";
+    }
+
+    private async Task LevelApplied()
+    {
+        showLevelUp = false;
+        await Save();
+        notice = $"{C!.Name} is now level {C.Level}. New features are on the Equipment & Features tab.";
+    }
+}

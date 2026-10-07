@@ -1,0 +1,62 @@
+@inject DiceService Dice
+
+<Box Title="@Rules.AbilityNames[A]">
+    <div class="flex justify-center">
+        <button type="button" class="mod-circle num" title="Roll @Rules.AbilityNames[A] check" @onclick="RollCheck">
+            @Rules.Signed(C.Mod(A))
+        </button>
+        <div class="score-circle" title="Ability score">
+            <input type="number" min="1" max="30" aria-label="@A score" @bind="C.Scores[(int)A]" @bind:after="Save" />
+        </div>
+    </div>
+
+    <div class="flex items-center gap-2 mt-2 pt-1.5" style="border-top:1px solid var(--ink-faint)">
+        <button type="button" class="pip @(C.SaveProficiencies[(int)A] ? "on" : "")" title="Toggle save proficiency" @onclick="ToggleSave"></button>
+        <button type="button" class="roll num" title="Roll save" @onclick="RollSave">@Rules.Signed(C.SaveBonus(A))</button>
+        <span class="lbl">Save</span>
+    </div>
+
+    @foreach (var skill in Rules.Skills.Where(s => s.Ability == A))
+    {
+        var name = skill.Name;
+        var prof = C.SkillProf(name);
+        <div class="skill-row">
+            <button type="button" class="pip @PipClass(prof)" title="@($"{name}: {prof} (click to change)")" @onclick="() => CycleSkill(name)"></button>
+            <button type="button" class="roll num bonus" title="Roll @name" @onclick="() => RollSkill(name)">@Rules.Signed(C.SkillBonus(name))</button>
+            <span>@name</span>
+        </div>
+    }
+</Box>
+
+@code {
+    [Parameter, EditorRequired] public Character C { get; set; } = default!;
+    [Parameter, EditorRequired] public Ability A { get; set; }
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private Task Save() => Changed.InvokeAsync();
+
+    private static string PipClass(ProfLevel p) => p switch
+    {
+        ProfLevel.Proficient => "on",
+        ProfLevel.Expertise => "exp",
+        _ => ""
+    };
+
+    private void RollCheck() => Dice.D20($"{Rules.AbilityNames[A]} check", C.Mod(A));
+    private void RollSave() => Dice.D20($"{Rules.AbilityNames[A]} save", C.SaveBonus(A));
+    private void RollSkill(string name) => Dice.D20($"{name} check", C.SkillBonus(name));
+
+    private async Task ToggleSave()
+    {
+        C.SaveProficiencies[(int)A] = !C.SaveProficiencies[(int)A];
+        await Save();
+    }
+
+    private async Task CycleSkill(string name)
+    {
+        var next = (ProfLevel)(((int)C.SkillProf(name) + 1) % 3);
+        if (next == ProfLevel.None) C.Skills.Remove(name);
+        else C.Skills[name] = next;
+        await Save();
+    }
+}

@@ -1,0 +1,225 @@
+@inject ContentService Content
+@inject DiceService Dice
+
+<div class="modal-back" @onclick="Close">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="lvl-title" @onclick:stopPropagation="true">
+        <div class="px-5 pt-4 pb-3 flex items-center gap-3" style="border-bottom:2px solid var(--ink)">
+            <h2 id="lvl-title" class="display font-extrabold text-xl" style="color:var(--ink)">Level up to @newLevel</h2>
+            <span class="muted">@C.ClassName</span>
+            <button type="button" class="icon-btn ml-auto text-xl" title="Close" @onclick="Close">✕</button>
+        </div>
+
+        <div class="p-5 flex flex-col gap-5">
+            @if (cls is null)
+            {
+                <p class="text-sm" style="color:var(--danger)">
+                    The class "@C.ClassName" isn't in your content library, so no class features can be added.
+                    Level, hit points and proficiency bonus will still update. Add the class in Content to get features.
+                </p>
+            }
+
+            @* ---------- hit points ---------- *@
+            <section>
+                <h3 class="box-title text-left">Hit points</h3>
+                <div class="grid sm:grid-cols-2 gap-2">
+                    <button type="button" class="choice @(!choices.RollHp ? "selected" : "")" @onclick="() => choices.RollHp = false">
+                        <div class="font-semibold">Take the average</div>
+                        <div class="muted text-sm">@Rules.HitDieAverage(C.HitDie) @Rules.Signed(C.Mod(Ability.CON)) CON</div>
+                    </button>
+                    <button type="button" class="choice @(choices.RollHp ? "selected" : "")" @onclick="RollHp">
+                        <div class="font-semibold">Roll d@(C.HitDie)</div>
+                        <div class="muted text-sm">@(choices.RolledHp is int r ? $"Rolled {r} {Rules.Signed(C.Mod(Ability.CON))} CON (click to reroll)" : "Click to roll")</div>
+                    </button>
+                </div>
+                <p class="mt-1.5">Max HP <span class="num">@C.MaxHp</span> → <span class="num" style="color:var(--good)">@(C.MaxHp + CharacterBuilder.HpGain(C, choices))</span></p>
+            </section>
+
+            @* ---------- subclass ---------- *@
+            @if (needsSubclass)
+            {
+                <section>
+                    <h3 class="box-title text-left">Choose your subclass</h3>
+                    @if (!subclasses.Any())
+                    {
+                        <p class="muted text-sm">No subclasses for @C.ClassName in your content yet. You can add one in Content, or continue without.</p>
+                    }
+                    <div class="grid sm:grid-cols-2 gap-2">
+                        @foreach (var s in subclasses)
+                        {
+                            var sub = s;
+                            <button type="button" class="choice @(choices.Subclass == sub ? "selected" : "")" @onclick="() => choices.Subclass = sub">
+                                <div class="font-semibold">@sub.Name</div>
+                                <div class="muted text-sm">@sub.Description</div>
+                            </button>
+                        }
+                    </div>
+                </section>
+            }
+
+            @* ---------- ability increase ---------- *@
+            @if (def?.GrantsAbilityIncrease == true)
+            {
+                <section>
+                    <h3 class="box-title text-left">Ability score increase</h3>
+                    <div class="flex gap-2 mb-2">
+                        <button type="button" class="btn btn-sm @(choices.IncreaseMode == AbilityIncreaseMode.PlusTwo ? "btn-primary" : "")" @onclick="() => SetMode(AbilityIncreaseMode.PlusTwo)">+2 to one</button>
+                        <button type="button" class="btn btn-sm @(choices.IncreaseMode == AbilityIncreaseMode.TwoPlusOne ? "btn-primary" : "")" @onclick="() => SetMode(AbilityIncreaseMode.TwoPlusOne)">+1 to two</button>
+                    </div>
+                    <div class="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                        @foreach (var a in Rules.Abilities)
+                        {
+                            var ab = a;
+                            var picked = choices.IncreaseA == ab || choices.IncreaseB == ab;
+                            var add = choices.IncreaseMode == AbilityIncreaseMode.PlusTwo && choices.IncreaseA == ab ? 2 : picked ? 1 : 0;
+                            <button type="button" class="choice text-center @(picked ? "selected" : "")" disabled="@(C.Score(ab) >= 20)" @onclick="() => PickAbility(ab)">
+                                <div class="lbl">@ab</div>
+                                <div class="num text-lg">@C.Score(ab)@(add > 0 ? $" → {Math.Min(20, C.Score(ab) + add)}" : "")</div>
+                            </button>
+                        }
+                    </div>
+                </section>
+            }
+
+            @* ---------- talent ---------- *@
+            @if (def?.GrantsTalent == true)
+            {
+                <section>
+                    <h3 class="box-title text-left">Choose a talent</h3>
+                    <select class="select" @bind="talentId">
+                        <option value="">Select a talent…</option>
+                        @foreach (var group in Content.Talents.GroupBy(x => x.Category))
+                        {
+                            <optgroup label="@group.Key">
+                                @foreach (var t in group)
+                                {
+                                    <option value="@t.Id" disabled="@(C.Talents.Any(ct => ct.Name == t.Name))">@t.Name</option>
+                                }
+                            </optgroup>
+                        }
+                    </select>
+                    @if (Content.Talent(talentId) is { } selected)
+                    {
+                        <p class="text-sm muted mt-1">@selected.Description @(string.IsNullOrEmpty(selected.Prerequisite) ? "" : $"Prerequisite: {selected.Prerequisite}.")</p>
+                    }
+                </section>
+            }
+
+            @* ---------- summary ---------- *@
+            <section class="rounded-xl p-3" style="background:var(--ink-faint)">
+                <h3 class="box-title text-left">What you gain</h3>
+                <ul class="space-y-1">
+                    @if (Rules.ProficiencyBonus(newLevel) != C.Prof())
+                    {
+                        <li>Proficiency bonus <span class="num">@Rules.Signed(C.Prof())</span> → <span class="num" style="color:var(--good)">@Rules.Signed(Rules.ProficiencyBonus(newLevel))</span></li>
+                    }
+                    <li>Hit dice <span class="num">@C.HitDiceMax()</span> → <span class="num">@newLevel</span> (d@(C.HitDie))</li>
+                    @if (SlotsText() is { } slots)
+                    {
+                        <li>Spell slots: @slots</li>
+                    }
+                    @foreach (var f in Gained())
+                    {
+                        <li><span class="font-semibold">@f.Name</span> <span class="chip">@f.Source</span> <span class="text-sm muted">@f.Description</span></li>
+                    }
+                    @if (!Gained().Any())
+                    {
+                        <li class="muted text-sm">No new features at this level.</li>
+                    }
+                </ul>
+            </section>
+        </div>
+
+        <div class="px-5 py-3 flex items-center gap-2" style="border-top:1px solid var(--line)">
+            @if (MissingChoice() is { } missing)
+            {
+                <span class="text-sm muted">@missing</span>
+            }
+            <button type="button" class="btn ml-auto" @onclick="Close">Cancel</button>
+            <button type="button" class="btn btn-primary" disabled="@(MissingChoice() is not null)" @onclick="Apply">Level up</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Character C { get; set; } = default!;
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnApplied { get; set; }
+
+    private readonly LevelUpChoices choices = new();
+    private ClassDef? cls;
+    private ClassLevelDef? def;
+    private List<SubclassDef> subclasses = new();
+    private bool needsSubclass;
+    private int newLevel;
+    private string talentId = "";
+
+    protected override void OnInitialized()
+    {
+        newLevel = C.Level + 1;
+        cls = Content.Class(C.ClassId);
+        def = CharacterBuilder.LevelDef(cls, newLevel);
+        needsSubclass = CharacterBuilder.NeedsSubclass(C, cls, newLevel);
+        subclasses = Content.SubclassesFor(C.ClassId).ToList();
+    }
+
+    private List<Feature> Gained() =>
+        CharacterBuilder.FeaturesGained(C, cls, needsSubclass ? choices.Subclass : null, Content, newLevel);
+
+    private string? SlotsText()
+    {
+        if (def is null || def.SpellSlots.Count == 0) return null;
+        var parts = def.SpellSlots.Select((n, i) => (n, i))
+            .Where(t => t.n > 0)
+            .Select(t => $"{Rules.CircleName(t.i + 1)} ×{t.n}" + (t.i < 9 && C.SlotsTotal[t.i] != t.n ? " (new)" : ""));
+        return string.Join(", ", parts);
+    }
+
+    private string? MissingChoice()
+    {
+        if (needsSubclass && subclasses.Any() && choices.Subclass is null) return "Choose a subclass.";
+        if (def?.GrantsAbilityIncrease == true)
+        {
+            if (choices.IncreaseA is null) return "Choose an ability to increase.";
+            if (choices.IncreaseMode == AbilityIncreaseMode.TwoPlusOne && choices.IncreaseB is null) return "Choose a second ability.";
+        }
+        if (def?.GrantsTalent == true && string.IsNullOrEmpty(talentId)) return "Choose a talent.";
+        if (choices.RollHp && choices.RolledHp is null) return "Roll your hit die.";
+        return null;
+    }
+
+    private void RollHp()
+    {
+        choices.RollHp = true;
+        choices.RolledHp = Dice.Roll($"Level {newLevel} hit die", $"1d{C.HitDie}").Total;
+    }
+
+    private void SetMode(AbilityIncreaseMode m)
+    {
+        choices.IncreaseMode = m;
+        choices.IncreaseA = null;
+        choices.IncreaseB = null;
+    }
+
+    private void PickAbility(Ability a)
+    {
+        if (choices.IncreaseMode == AbilityIncreaseMode.PlusTwo)
+        {
+            choices.IncreaseA = choices.IncreaseA == a ? null : a;
+            return;
+        }
+        if (choices.IncreaseA == a) choices.IncreaseA = null;
+        else if (choices.IncreaseB == a) choices.IncreaseB = null;
+        else if (choices.IncreaseA is null) choices.IncreaseA = a;
+        else choices.IncreaseB = a;
+    }
+
+    private async Task Apply()
+    {
+        if (MissingChoice() is not null) return;
+        choices.Talent = Content.Talent(talentId);
+        CharacterBuilder.ApplyLevelUp(C, cls, Content, choices);
+        await OnApplied.InvokeAsync();
+    }
+
+    private Task Close() => OnClose.InvokeAsync();
+}

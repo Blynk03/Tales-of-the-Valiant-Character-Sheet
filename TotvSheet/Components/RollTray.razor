@@ -1,0 +1,251 @@
+@inject DiceService Dice
+@implements IDisposable
+
+<aside class="tray p-3" aria-live="polite">
+    <div class="flex items-center gap-1">
+        <button type="button" class="btn btn-sm @(pickerOpen ? "btn-primary" : "")" aria-expanded="@(pickerOpen ? "true" : "false")"
+                title="Pick any dice to roll" @onclick="TogglePicker">Dice</button>
+        <span class="lbl ml-auto mr-1">Next d20</span>
+        <button type="button" class="btn btn-sm @(Dice.Mode == RollMode.Normal ? "btn-primary" : "")" @onclick="() => SetMode(RollMode.Normal)">Normal</button>
+        <button type="button" class="btn btn-sm @(Dice.Mode == RollMode.Advantage ? "btn-primary" : "")" @onclick="() => SetMode(RollMode.Advantage)">Adv</button>
+        <button type="button" class="btn btn-sm @(Dice.Mode == RollMode.Disadvantage ? "btn-primary" : "")" @onclick="() => SetMode(RollMode.Disadvantage)">Dis</button>
+        <button type="button" class="icon-btn" title="@(open ? "Collapse" : "Expand")" @onclick="() => open = !open">@(open ? "▾" : "▴")</button>
+    </div>
+
+    @if (open && pickerOpen)
+    {
+        <section class="picker" aria-label="Dice picker">
+            <div class="die-row">
+                @foreach (var s in DicePool.StandardDice)
+                {
+                    var sides = s;
+                    var count = pool.CountOf(sides);
+                    <button type="button" class="die-btn @(count > 0 ? "on" : "")" title="Add a d@(sides)" @onclick="() => AddDie(sides)">
+                        d@(sides)
+                        @if (count > 0)
+                        {
+                            <span class="die-count">@count</span>
+                        }
+                    </button>
+                }
+            </div>
+
+            @if (!pool.IsEmpty)
+            {
+                <div class="flex flex-wrap gap-1 mt-2">
+                    @foreach (var kv in pool.Dice)
+                    {
+                        var sides = kv.Key;
+                        <span class="chip pool-chip">@(kv.Value)d@(sides)
+                            <button type="button" class="chip-x" aria-label="Remove one d@(sides)" @onclick="() => RemoveDie(sides)">−</button>
+                        </span>
+                    }
+                </div>
+            }
+
+            <div class="flex items-center gap-1.5 mt-2">
+                <span class="lbl">Modifier</span>
+                <button type="button" class="icon-btn" aria-label="Lower modifier" disabled="@(pool.Modifier <= -DicePool.ButtonModifierLimit)" @onclick="() => StepModifier(-1)">−</button>
+                <span class="num w-8 text-center">@Rules.Signed(pool.Modifier)</span>
+                <button type="button" class="icon-btn" aria-label="Raise modifier" disabled="@(pool.Modifier >= DicePool.ButtonModifierLimit)" @onclick="() => StepModifier(1)">+</button>
+            </div>
+
+            <label class="lbl block mt-2" for="dice-expr">Or type a roll</label>
+            <input id="dice-expr" class="field num" placeholder="e.g. 2d8+1d6+3" autocomplete="off" spellcheck="false"
+                   value="@exprText" @onchange="OnExpressionChanged" />
+            @if (!string.IsNullOrEmpty(exprError))
+            {
+                <p class="text-xs mt-1" style="color:var(--danger)">@exprError</p>
+            }
+
+            <div class="flex gap-1.5 mt-2">
+                <button type="button" class="btn btn-sm btn-primary btn-dice flex-1 truncate" disabled="@(pool.IsEmpty || !string.IsNullOrEmpty(exprError))" @onclick="RollPool">
+                    @(pool.IsEmpty ? "Pick dice to roll" : $"Roll {pool.ToDisplay()}")
+                </button>
+                <button type="button" class="btn btn-sm" disabled="@(pool.IsEmpty && pool.Modifier == 0 && exprText.Length == 0)" @onclick="ClearPool">Clear</button>
+            </div>
+        </section>
+    }
+
+    @if (open)
+    {
+        var r = Dice.Latest;
+        if (r is null)
+        {
+            <p class="muted text-sm mt-2">Click any bonus on the sheet to roll it.</p>
+        }
+        else
+        {
+            <div class="flex items-end gap-3 mt-2">
+                <div class="tray-total num @TotalClass(r)">@r.Total</div>
+                <div class="min-w-0 pb-0.5">
+                    <div class="font-semibold truncate">@r.Label</div>
+                    <div class="muted text-sm">@Breakdown(r)</div>
+                </div>
+            </div>
+            <div class="flex flex-wrap gap-1.5 mt-2">
+                @if (r.IsD20)
+                {
+                    <button type="button" class="btn btn-sm btn-gold" disabled="@(C.Luck <= 0)" @onclick="() => SpendLuck(r)"
+                            title="Spend 1 Luck to add +1 to this roll">Spend Luck +1 · @C.Luck</button>
+                    <button type="button" class="btn btn-sm" disabled="@(r.LuckGained || C.Luck >= Rules.MaxLuck)" @onclick="() => GainLuck(r)"
+                            title="You gain 1 Luck when you fail a d20 test">Failed · +1 Luck</button>
+                }
+                <button type="button" class="btn btn-sm" title="Roll the same thing again" @onclick="() => Reroll(r)">↻ Again</button>
+                @if (r.DamageExpression is not null)
+                {
+                    <button type="button" class="btn btn-sm btn-primary" @onclick="() => RollDamage(r, false)">Roll damage</button>
+                    <button type="button" class="btn btn-sm" @onclick="() => RollDamage(r, true)">Crit damage</button>
+                }
+            </div>
+
+            if (Dice.History.Count > 1)
+            {
+                <ul class="mt-2 pt-2 text-sm space-y-0.5" style="border-top:1px solid var(--ink-faint)">
+                    @foreach (var h in Dice.History.Skip(1).Take(4))
+                    {
+                        var past = h;
+                        <li class="flex items-center gap-2">
+                            <span class="num w-8 text-right">@past.Total</span>
+                            <span class="muted truncate flex-1">@past.Label</span>
+                            <button type="button" class="icon-btn reroll" title="Re-roll @past.Label" aria-label="Re-roll @past.Label" @onclick="() => Reroll(past)">↻</button>
+                        </li>
+                    }
+                </ul>
+            }
+        }
+    }
+</aside>
+
+@code {
+    [Parameter, EditorRequired] public Character C { get; set; } = default!;
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private bool open = true;
+    private bool pickerOpen;
+    private readonly DicePool pool = new();
+    private string exprText = "";
+    private string exprError = "";
+
+    protected override void OnInitialized() => Dice.Changed += OnDice;
+    public void Dispose() => Dice.Changed -= OnDice;
+    private void OnDice()
+    {
+        open = true;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void SetMode(RollMode m)
+    {
+        Dice.Mode = m;
+        Dice.Notify();
+    }
+
+    private static string TotalClass(RollResult r) => r.IsCrit ? "crit" : r.IsFumble ? "fumble" : "";
+
+    private static string Breakdown(RollResult r)
+    {
+        var dice = r.IsD20
+            ? $"d20 [{r.Natural}]" + (r.Dropped is int d ? $" ({r.Mode.ToString().ToLower()}, dropped {d})" : "")
+            : GroupedDice(r) + (r.Critical ? " (crit)" : "");
+        var mod = r.Modifier != 0 && r.IsD20 ? $" {Rules.Signed(r.Modifier)}" : (!r.IsD20 && r.Modifier != 0 ? $" {Rules.Signed(r.Modifier)}" : "");
+        var luck = r.LuckSpent > 0 ? $" +{r.LuckSpent} Luck" : "";
+        var tag = r.IsCrit ? " · natural 20!" : r.IsFumble ? " · natural 1" : "";
+        return dice + mod + luck + tag;
+    }
+
+    /// <summary>"d6 [4, 2] + d8 [5]" — each die grouped by type.</summary>
+    private static string GroupedDice(RollResult r)
+    {
+        if (r.Sides.Count != r.Dice.Count) return $"{r.Expression} [{string.Join(", ", r.Dice)}]";
+        return string.Join(" + ", r.Dice.Select((v, i) => (Value: v, Sides: r.Sides[i]))
+            .GroupBy(x => x.Sides)
+            .Select(g => $"d{g.Key} [{string.Join(", ", g.Select(x => x.Value))}]"));
+    }
+
+    // ---------- dice picker ----------
+
+    private void TogglePicker()
+    {
+        pickerOpen = !pickerOpen;
+        open = true;
+    }
+
+    private void SyncText()
+    {
+        exprText = pool.ToDisplay();
+        exprError = "";
+    }
+
+    private void AddDie(int sides)
+    {
+        if (!pool.Add(sides)) { exprError = $"Roll up to {DicePool.MaxDice} dice at a time."; return; }
+        SyncText();
+    }
+
+    private void RemoveDie(int sides)
+    {
+        pool.RemoveOne(sides);
+        SyncText();
+    }
+
+    private void StepModifier(int delta)
+    {
+        pool.StepModifier(delta);
+        SyncText();
+    }
+
+    private void OnExpressionChanged(ChangeEventArgs e)
+    {
+        var text = e.Value?.ToString() ?? "";
+        exprText = text;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            pool.Clear();
+            exprError = "";
+            return;
+        }
+        if (DicePool.TryParse(text, out var parsed, out var error))
+        {
+            pool.Clear();
+            foreach (var kv in parsed.Dice) pool.Dice[kv.Key] = kv.Value;
+            pool.Modifier = parsed.Modifier;
+            SyncText();
+        }
+        else exprError = error;
+    }
+
+    private void RollPool()
+    {
+        if (pool.IsEmpty || !string.IsNullOrEmpty(exprError)) return;
+        Dice.RollPool(pool); // the picked dice stay so the roll can be repeated
+    }
+
+    private void ClearPool()
+    {
+        pool.Clear();
+        exprText = "";
+        exprError = "";
+    }
+
+    private void Reroll(RollResult r) => Dice.Reroll(r);
+
+    private async Task SpendLuck(RollResult r)
+    {
+        if (C.Luck <= 0) return;
+        C.Luck--;
+        r.LuckSpent++;
+        await Changed.InvokeAsync();
+    }
+
+    private async Task GainLuck(RollResult r)
+    {
+        if (C.Luck >= Rules.MaxLuck || r.LuckGained) return;
+        C.Luck++;
+        r.LuckGained = true;
+        await Changed.InvokeAsync();
+    }
+
+    private void RollDamage(RollResult r, bool crit) =>
+        Dice.Roll(r.DamageLabel ?? "Damage", r.DamageExpression!, crit);
+}

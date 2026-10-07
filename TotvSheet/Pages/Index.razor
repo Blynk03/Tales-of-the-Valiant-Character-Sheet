@@ -1,0 +1,107 @@
+@page "/"
+@inject CharacterService Characters
+@inject ContentService Content
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Characters · Valiant Sheet</PageTitle>
+
+@if (!loaded)
+{
+    <p class="loading">Loading…</p>
+}
+else
+{
+    <div class="flex flex-wrap items-end gap-3 mb-4">
+        <div>
+            <h1 class="display font-extrabold text-2xl" style="color:var(--ink)">Your characters</h1>
+            <p class="muted">Saved in this browser. Pick one to open the sheet.</p>
+        </div>
+        <a class="btn btn-primary ml-auto" href="create">+ New character</a>
+    </div>
+
+    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        @foreach (var c in Characters.Characters.OrderByDescending(x => x.Updated))
+        {
+            var ch = c;
+            <div class="box flex flex-col gap-2">
+                <a href="@($"character/{ch.Id}")" class="block">
+                    <div class="display font-bold text-lg truncate" style="color:var(--ink)">@ch.Name</div>
+                    <div>@ch.ClassName @ch.Level @(string.IsNullOrEmpty(ch.SubclassName) ? "" : $"· {ch.SubclassName}")</div>
+                    <div class="muted text-sm">@string.Join(" · ", new[] { ch.LineageName, ch.HeritageName, ch.BackgroundName }.Where(s => !string.IsNullOrEmpty(s)))</div>
+                </a>
+                <div class="flex items-center gap-3 text-sm">
+                    <span>HP <span class="num">@ch.CurrentHp/@ch.MaxHp</span></span>
+                    <span>AC <span class="num">@ch.ArmorClass(ch.EquippedShield() is not null)</span></span>
+                    <span>Luck <span class="num">@ch.Luck</span></span>
+                </div>
+                <div class="flex gap-1.5 mt-auto">
+                    <a class="btn btn-sm btn-primary" href="@($"character/{ch.Id}")">Open</a>
+                    <button type="button" class="btn btn-sm" @onclick="() => Duplicate(ch)">Duplicate</button>
+                    <button type="button" class="btn btn-sm" @onclick="() => Export(ch)">Export</button>
+                    <button type="button" class="btn btn-sm btn-danger ml-auto" @onclick="() => Delete(ch)">Delete</button>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="mt-6 box">
+        <div class="box-title">Import a character</div>
+        <div class="flex flex-wrap items-center gap-2 justify-center">
+            <InputFile accept=".json,application/json" OnChange="Import" />
+            @if (!string.IsNullOrEmpty(message))
+            {
+                <span class="text-sm">@message</span>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private bool loaded;
+    private string message = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Content.EnsureLoadedAsync();
+        await Characters.EnsureLoadedAsync();
+        if (Characters.Characters.Count == 0)
+        {
+            Nav.NavigateTo("create");
+            return;
+        }
+        loaded = true;
+    }
+
+    private async Task Duplicate(Character c) => await Characters.DuplicateAsync(c);
+
+    private async Task Delete(Character c)
+    {
+        if (!await JS.InvokeAsync<bool>("totv.confirm", $"Delete {c.Name}? This can't be undone.")) return;
+        await Characters.DeleteAsync(c.Id);
+        if (Characters.Characters.Count == 0) Nav.NavigateTo("create");
+    }
+
+    private async Task Export(Character c)
+    {
+        var safe = string.Concat(c.Name.Where(char.IsLetterOrDigit));
+        await JS.InvokeVoidAsync("totv.download", $"{(safe.Length > 0 ? safe : "character")}.json", Json.Serialize(c, pretty: true));
+    }
+
+    private async Task Import(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            using var reader = new StreamReader(e.File.OpenReadStream(5_000_000));
+            var c = Json.Deserialize<Character>(await reader.ReadToEndAsync());
+            if (c is null) { message = "That file isn't a character."; return; }
+            c.Id = Guid.NewGuid();
+            await Characters.AddAsync(c);
+            message = $"Imported {c.Name}.";
+        }
+        catch (Exception ex)
+        {
+            message = $"Couldn't import: {ex.Message}";
+        }
+    }
+}

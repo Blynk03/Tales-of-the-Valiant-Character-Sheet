@@ -1,0 +1,17 @@
+@inherits LayoutComponentBase
+
+<header class="sticky top-0 z-30" style="background:var(--card);border-bottom:2px solid var(--ink)">
+    <div class="max-w-7xl mx-auto px-4 h-14 flex items-center gap-4">
+        <a href="" class="display font-extrabold text-lg whitespace-nowrap" style="color:var(--ink)">
+            <span aria-hidden="true">⚔</span> Valiant Sheet
+        </a>
+        <nav class="ml-auto flex items-center gap-1">
+            <NavLink class="btn btn-sm" ActiveClass="btn-primary" href="" Match="NavLinkMatch.All">Characters</NavLink>
+            <NavLink class="btn btn-sm" ActiveClass="btn-primary" href="settings">Content</NavLink>
+        </nav>
+    </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-4 py-4 pb-40">
+    @Body
+</main>

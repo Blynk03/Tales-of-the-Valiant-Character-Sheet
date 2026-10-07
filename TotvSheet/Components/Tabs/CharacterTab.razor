@@ -1,0 +1,52 @@
+@* Page 4 of the printed sheet: appearance, backstory, allies, notes. *@
+<div class="grid lg:grid-cols-2 gap-3">
+    <div class="flex flex-col gap-3">
+        <Box Title="Character Appearance">
+            <div class="grid sm:grid-cols-[12rem_minmax(0,1fr)] gap-3">
+                <div>
+                    <div class="aspect-[3/4] rounded-lg overflow-hidden grid place-items-center" style="border:2px solid var(--ink);background:var(--ink-faint)">
+                        @if (string.IsNullOrWhiteSpace(C.PortraitUrl))
+                        {
+                            <span class="lbl">Portrait</span>
+                        }
+                        else
+                        {
+                            <img src="@C.PortraitUrl" alt="Portrait of @C.Name" class="w-full h-full object-cover" />
+                        }
+                    </div>
+                    <input class="field text-sm mt-1" placeholder="Image URL" aria-label="Portrait image URL" @bind="C.PortraitUrl" @bind:after="Save" />
+                </div>
+                <div class="grid grid-cols-3 gap-x-2 gap-y-2 content-start">
+                    <div class="col-span-3"><div class="lbl">Character name</div><div class="display font-bold text-lg">@C.Name</div></div>
+                    <div><div class="lbl">Age</div><input class="field" @bind="C.Age" @bind:after="Save" /></div>
+                    <div><div class="lbl">Height</div><input class="field" @bind="C.Height" @bind:after="Save" /></div>
+                    <div><div class="lbl">Weight</div><input class="field" @bind="C.Weight" @bind:after="Save" /></div>
+                    <div><div class="lbl">Eyes</div><input class="field" @bind="C.Eyes" @bind:after="Save" /></div>
+                    <div><div class="lbl">Skin</div><input class="field" @bind="C.Skin" @bind:after="Save" /></div>
+                    <div><div class="lbl">Hair</div><input class="field" @bind="C.Hair" @bind:after="Save" /></div>
+                </div>
+            </div>
+            <div class="lbl mt-3">Appearance notes</div>
+            <textarea class="area" rows="3" @bind="C.AppearanceNotes" @bind:after="Save"></textarea>
+        </Box>
+        <Box Title="Personality"><textarea class="area" rows="6" @bind="C.Personality" @bind:after="Save"></textarea></Box>
+        <Box Title="Allies & Organizations"><textarea class="area" rows="6" @bind="C.Allies" @bind:after="Save"></textarea></Box>
+    </div>
+    <div class="flex flex-col gap-3">
+        <Box Title="Backstory">
+            <textarea class="area" rows="12" @bind="C.Backstory" @bind:after="Save"></textarea>
+            <div class="grid sm:grid-cols-2 gap-2 mt-2">
+                <div><div class="lbl">Homeland</div><textarea class="area" rows="3" @bind="C.Homeland" @bind:after="Save"></textarea></div>
+                <div><div class="lbl">Adventuring motivation</div><textarea class="area" rows="3" @bind="C.Motivation" @bind:after="Save"></textarea></div>
+            </div>
+        </Box>
+        <Box Title="Other Notes"><textarea class="area" rows="10" @bind="C.OtherNotes" @bind:after="Save"></textarea></Box>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Character C { get; set; } = default!;
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private Task Save() => Changed.InvokeAsync();
+}

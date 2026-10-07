@@ -1,0 +1,177 @@
+@using System.Collections
+@using System.Reflection
+@using System.Text.RegularExpressions
+
+@* Generic, recursive form for any content object. New content types and new
+   fields show up in Settings automatically without writing a form for them. *@
+<div class="grid sm:grid-cols-2 gap-x-4 gap-y-3">
+    @foreach (var prop in Props())
+    {
+        var p = prop;
+        var type = p.PropertyType;
+        var under = Nullable.GetUnderlyingType(type);
+        var value = p.GetValue(Target);
+        var hint = p.GetCustomAttribute<HintAttribute>()?.Text;
+        var wide = IsList(type) || p.GetCustomAttribute<MultilineAttribute>() is not null;
+
+        <div class="@(wide ? "sm:col-span-2" : "") min-w-0">
+            <label class="lbl block mb-0.5">@Label(p.Name)</label>
+
+            @if (type == typeof(string) && p.GetCustomAttribute<MultilineAttribute>() is not null)
+            {
+                <textarea class="area" rows="3" value="@(value as string)" @onchange="e => Set(p, e.Value?.ToString() ?? string.Empty)"></textarea>
+            }
+            else if (type == typeof(string))
+            {
+                <input class="field" value="@(value as string)" readonly="@(ReadOnlyId && p.Name == "Id")" @onchange="e => Set(p, e.Value?.ToString() ?? string.Empty)" />
+            }
+            else if (type == typeof(int))
+            {
+                <input type="number" class="field num w-28" value="@value" @onchange="e => Set(p, int.TryParse(e.Value?.ToString(), out var n) ? n : 0)" />
+            }
+            else if (type == typeof(bool))
+            {
+                <input type="checkbox" checked="@((bool)(value ?? false))" @onchange="e => Set(p, e.Value is bool b && b)" />
+            }
+            else if (type.IsEnum || (under?.IsEnum ?? false))
+            {
+                var enumType = under ?? type;
+                <select class="select" value="@(value?.ToString() ?? "")" @onchange="e => SetEnum(p, enumType, under is not null, e.Value?.ToString())">
+                    @if (under is not null)
+                    {
+                        <option value="">None</option>
+                    }
+                    @foreach (var name in Enum.GetNames(enumType))
+                    {
+                        <option value="@name">@name</option>
+                    }
+                </select>
+            }
+            else if (type == typeof(List<string>))
+            {
+                <input class="field" value="@(string.Join(", ", (List<string>)value!))" placeholder="Comma separated"
+                       @onchange="e => Set(p, SplitList(e.Value?.ToString()))" />
+            }
+            else if (type == typeof(List<int>))
+            {
+                <input class="field num" value="@(string.Join(", ", (List<int>)value!))" placeholder="e.g. 4, 3, 2"
+                       @onchange="e => Set(p, SplitList(e.Value?.ToString()).Select(x => int.TryParse(x, out var n) ? n : 0).ToList())" />
+            }
+            else if (IsList(type) && ElementType(type)!.IsEnum)
+            {
+                var list = (IList)value!;
+                var et = ElementType(type)!;
+                <div class="flex flex-wrap gap-1">
+                    @foreach (var ev in Enum.GetValues(et))
+                    {
+                        var enumValue = ev;
+                        var isOn = list.Contains(enumValue);
+                        <button type="button" class="btn btn-sm @(isOn ? "btn-primary" : "")" @onclick="() => ToggleEnum(list, enumValue)">@enumValue</button>
+                    }
+                </div>
+            }
+            else if (IsList(type))
+            {
+                var list = (IList)value!;
+                var et = ElementType(type)!;
+                <div class="flex flex-col gap-1.5">
+                    @for (int i = 0; i < list.Count; i++)
+                    {
+                        var index = i;
+                        var item = list[index]!;
+                        <details @key="item" class="rounded-lg" style="border:1px solid var(--line)">
+                            <summary class="cursor-pointer px-2 py-1 flex items-center gap-2">
+                                <span class="font-semibold">@ItemTitle(item, index)</span>
+                                <button type="button" class="icon-btn ml-auto" title="Remove" @onclick="() => RemoveAt(list, index)" @onclick:preventDefault="true">✕</button>
+                            </summary>
+                            <div class="p-2 pt-1">
+                                <ObjectEditor Target="item" OnChange="OnChange" Depth="Depth + 1" />
+                            </div>
+                        </details>
+                    }
+                    <button type="button" class="btn btn-sm self-start" @onclick="() => AddItem(list, et)">+ Add @Label(et.Name.Replace("Def", ""))</button>
+                </div>
+            }
+            else
+            {
+                <span class="muted text-sm">(not editable here; use the JSON editor)</span>
+            }
+
+            @if (!string.IsNullOrEmpty(hint))
+            {
+                <div class="text-xs muted mt-0.5">@hint</div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public object Target { get; set; } = default!;
+    [Parameter] public EventCallback OnChange { get; set; }
+    [Parameter] public int Depth { get; set; }
+    [Parameter] public bool ReadOnlyId { get; set; }
+
+    private IEnumerable<PropertyInfo> Props() =>
+        Target.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanRead && p.CanWrite)
+            .OrderBy(p => p.Name switch { "Id" => 0, "Name" => 1, "Source" => 2, "Description" => 4, _ => 3 });
+
+    private static string Label(string name) => Regex.Replace(name, "(?<=[a-z])(?=[A-Z])", " ");
+
+    private static bool IsList(Type t) => t.IsGenericType && t.GetGenericTypeDefinition() == typeof(List<>);
+    private static Type? ElementType(Type t) => IsList(t) ? t.GetGenericArguments()[0] : null;
+
+    private static List<string> SplitList(string? text) =>
+        (text ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+    private static string ItemTitle(object item, int index)
+    {
+        var type = item.GetType();
+        var level = type.GetProperty("Level")?.GetValue(item);
+        var name = type.GetProperty("Name")?.GetValue(item) as string;
+        if (type == typeof(ClassLevelDef) && item is ClassLevelDef l)
+        {
+            var extras = new List<string>();
+            if (l.Features.Count > 0) extras.Add(string.Join(", ", l.Features.Select(f => f.Name)));
+            if (l.GrantsTalent) extras.Add("talent");
+            if (l.GrantsAbilityIncrease) extras.Add("ability increase");
+            return $"Level {l.Level}" + (extras.Count > 0 ? $" — {string.Join(" · ", extras)}" : "");
+        }
+        if (!string.IsNullOrWhiteSpace(name)) return level is int lv ? $"{name} (level {lv})" : name;
+        return $"Item {index + 1}";
+    }
+
+    private async Task Set(PropertyInfo p, object? v)
+    {
+        p.SetValue(Target, v);
+        await OnChange.InvokeAsync();
+    }
+
+    private async Task SetEnum(PropertyInfo p, Type enumType, bool nullable, string? raw)
+    {
+        object? v = string.IsNullOrEmpty(raw)
+            ? (nullable ? null : Activator.CreateInstance(enumType))
+            : Enum.Parse(enumType, raw);
+        await Set(p, v);
+    }
+
+    private async Task ToggleEnum(IList list, object v)
+    {
+        if (list.Contains(v)) list.Remove(v); else list.Add(v);
+        await OnChange.InvokeAsync();
+    }
+
+    private async Task AddItem(IList list, Type et)
+    {
+        var item = Activator.CreateInstance(et)!;
+        if (item is ClassLevelDef cl) cl.Level = list.Count + 1;
+        list.Add(item);
+        await OnChange.InvokeAsync();
+    }
+
+    private async Task RemoveAt(IList list, int index)
+    {
+        if (index < list.Count) list.RemoveAt(index);
+        await OnChange.InvokeAsync();
+    }
+}
