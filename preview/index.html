@@ -229,6 +229,9 @@ input[type=number].field::-webkit-inner-spin-button { opacity: .4; }
 .die-btn:focus-visible, .chip-x:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .btn-dice { text-transform: none; letter-spacing: .02em; font-size: .8rem; }
+/* spell library filters (TVCS-97): share a row on wide screens, wrap on narrow ones */
+.spell-filter { width: auto; flex: 1 1 9rem; min-width: 8rem; max-width: 14rem; }
+
 </style>
 <div id="root"></div>
 <script>window.__SEED__ = {
@@ -3228,7 +3231,7 @@ const S = {
   route: 'sheet', charId: null, tab: 'main', chars: [], user: emptyLib(), disabled: [],
   dice: { mode: 'normal', history: [] }, trayOpen: true, picker: false, pool: { dice: {}, mod: 0, text: '', err: '' }, hpAmt: 0, modal: null, notice: '', castMsg: '',
   wiz: null, set: { kind: 'lineages', search: '', draft: null, isNew: false, core: false, json: false, jsonText: '', err: '', msg: '' },
-  pick: {}, lu: null, sort: 'level'
+  pick: {}, sf: { spell: { source: '', circle: '', school: '' }, ritual: { source: '', circle: '', school: '' } }, lu: null, sort: 'level'
 };
 const C = () => S.chars.find(c => c.id === S.charId);
 function persist() { store.set('vs.chars', S.chars); store.set('vs.content', S.user); store.set('vs.disabled', S.disabled); }
@@ -3474,12 +3477,37 @@ function characterTab(c) {
 }
 
 function slotFor(c, s) { if (s.circle === 0) return 0; for (let k = s.circle; k <= 9; k++) if (c.slotsExpended[k - 1] < c.slotsTotal[k - 1]) return k; return null; }
+// ---------- spell library filters (TVCS-97) ----------
+const SOURCES = ['Arcane', 'Divine', 'Primordial', 'Wyrd'];
+const SCHOOLS = ['Abjuration', 'Conjuration', 'Divination', 'Enchantment', 'Evocation', 'Illusion', 'Necromancy', 'Transmutation'];
+const spellCircle = s => s.ritual ? Math.max(1, s.circle) : s.circle;
+/** Filters only narrow the list; any spell can still be added to any character. */
+function spellMatches(s, f) {
+  if (f.source && !String(s.tradition || '').split(/\s*,\s*/).includes(f.source)) return false;
+  if (f.circle !== '' && spellCircle(s) !== +f.circle) return false;
+  if (f.school && s.school !== f.school) return false;
+  return true;
+}
+const libraryFor = kind => lib('spells').filter(s => !!s.ritual === (kind === 'ritual'));
+function spellFilterBar(kind) {
+  const f = S.sf[kind], n = libraryFor(kind).filter(s => spellMatches(s, f)).length;
+  const sel = (key, label, opts) => `<select class="select spell-filter" data-sfilter="${kind}.${key}" aria-label="${label}">${opts.map(([v, t]) => `<option value="${v}" ${String(f[key]) === String(v) ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
+  const circles = (kind === 'ritual' ? [] : [['0', 'Cantrip']]).concat(Array.from({ length: 9 }, (_, i) => [String(i + 1), circ(i + 1) + ' circle']));
+  return `<div class="flex flex-wrap gap-1.5 items-center mt-2" role="group" aria-label="Filter ${kind === 'ritual' ? 'rituals' : 'spells'}">
+    ${sel('source', 'Source', [['', 'Any Source']].concat(SOURCES.map(x => [x, x])))}
+    ${sel('circle', 'Circle', [['', 'Any Circle']].concat(circles))}
+    ${sel('school', 'School', [['', 'Any School']].concat(SCHOOLS.map(x => [x, x])))}
+    <span class="muted text-sm" aria-live="polite">${n} ${kind === 'ritual' ? (n === 1 ? 'ritual' : 'rituals') : (n === 1 ? 'spell' : 'spells')}</span></div>`;
+}
+function spellPicker(kind) {
+  const list = libraryFor(kind).filter(s => spellMatches(s, S.sf[kind])), groups = {};
+  list.forEach(s => (groups[spellCircle(s)] = groups[spellCircle(s)] || []).push(s));
+  const opts = Object.keys(groups).sort((a, b) => a - b).map(k => `<optgroup label="${+k === 0 ? 'Cantrips' : circ(+k) + ' circle'}">${groups[k].map(s => `<option value="${esc(s.id)}" ${S.pick[kind] === s.id ? 'selected' : ''}>${esc(s.name)}${s.tradition ? ' · ' + esc(s.tradition) : ''}</option>`).join('')}</optgroup>`).join('');
+  const empty = !list.length;
+  return `<select class="select" style="max-width:20rem" data-pick="${kind}" aria-label="Add ${kind}" ${empty ? 'disabled' : ''}><option value="">${empty ? `No ${kind === 'ritual' ? 'rituals' : 'spells'} match these filters` : `Add a ${kind} from library…`}</option>${opts}</select><button class="btn btn-sm btn-primary" data-act="add${kind === 'ritual' ? 'Ritual' : 'Spell'}" ${empty ? 'disabled' : ''}>Add</button>`;
+}
 function spellsTab(c) {
   const order = c.spells.map((s, i) => [s, i]).sort((a, b) => a[0].circle - b[0].circle || a[0].name.localeCompare(b[0].name));
-  const groups = {}, rgroups = {};
-  // rituals are their own category in ToV: they only appear in the ritual picker (TVCS-96)
-  lib('spells').forEach(s => { const g = s.ritual ? rgroups : groups; (g[s.circle] = g[s.circle] || []).push(s); });
-  const spellOpts = Object.keys(groups).sort((a, b) => a - b).map(k => `<optgroup label="${+k === 0 ? 'Cantrips' : circ(+k) + ' circle'}">${groups[k].map(s => `<option value="${esc(s.id)}">${esc(s.name)}${s.tradition ? ' · ' + esc(s.tradition) : ''}</option>`).join('')}</optgroup>`).join('');
   return `<div class="flex flex-col gap-3"><div class="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-3">
     ${box('Spellcasting', `<div class="lbl">Spellcaster class &amp; source</div>${inp('c.spellcasterClass', c.spellcasterClass, 'font-semibold')}
       <div class="lbl mt-2">Spellcasting ability</div><select class="select" data-f="c.spellAbility" data-t="ab"><option value="">None</option>${ABIL.map(a => `<option value="${a}" ${c.spellAbility === a ? 'selected' : ''}>${ABN[a]}</option>`).join('')}</select>
@@ -3498,10 +3526,10 @@ function spellsTab(c) {
         <td><button class="btn btn-sm" data-act="cast" data-a="${i}" ${slot == null ? 'disabled' : ''} title="${slot === 0 ? 'Cantrip: no slot needed' : slot == null ? 'No slots left at this circle or higher' : 'Uses a ' + circ(slot) + '-circle slot'}">Cast</button></td>
         <td><button class="icon-btn" data-act="rm" data-a="spells.${i}" title="Remove">✕</button></td></tr>`; }).join('')}</tbody></table></div>
       ${S.castMsg ? `<p class="text-sm mt-1" style="color:var(--ink)">${esc(S.castMsg)}</p>` : ''}
-      <div class="flex flex-wrap gap-1.5 items-center mt-2"><select class="select" style="max-width:20rem" data-pick="spell" aria-label="Add spell"><option value="">Add a spell from library…</option>${spellOpts}</select><button class="btn btn-sm btn-primary" data-act="addSpell">Add</button><button class="btn btn-sm" data-act="addCustomSpell">+ Custom spell</button></div>`)}
+      ${spellFilterBar('spell')}<div class="flex flex-wrap gap-1.5 items-center mt-1.5">${spellPicker('spell')}<button class="btn btn-sm" data-act="addCustomSpell">+ Custom spell</button></div>`)}
     ${box('Rituals', `<div class="scroll-x"><table class="tbl" style="min-width:36rem"><thead><tr><th>Circle</th><th>Ritual Name</th><th>Cast Time</th><th>Materials &amp; Cost</th><th>Duration</th><th></th></tr></thead><tbody>
       ${c.rituals.map((r, i) => `<tr><td>${num(`c.rituals.${i}.circle`, r.circle, 'w-9 text-center', 'min="1" max="9"')}</td><td>${inp(`c.rituals.${i}.name`, r.name, 'font-semibold')}</td><td>${inp(`c.rituals.${i}.castingTime`, r.castingTime, 'text-sm')}</td><td>${inp(`c.rituals.${i}.materials`, r.materials, 'text-sm')}</td><td>${inp(`c.rituals.${i}.duration`, r.duration, 'text-sm')}</td><td><button class="icon-btn" data-act="rm" data-a="rituals.${i}" title="Remove">✕</button></td></tr>`).join('')}</tbody></table></div>
-      <div class="flex flex-wrap gap-1.5 items-center mt-2"><select class="select" style="max-width:20rem" data-pick="ritual" aria-label="Add ritual"><option value="">Add a ritual from library…</option>${Object.keys(rgroups).sort((a, b) => a - b).map(k => `<optgroup label="${circ(Math.max(1, +k))} circle">${rgroups[k].map(s => `<option value="${esc(s.id)}">${esc(s.name)}${s.tradition ? ' · ' + esc(s.tradition) : ''}</option>`).join('')}</optgroup>`).join('')}</select><button class="btn btn-sm btn-primary" data-act="addRitual">Add</button><button class="btn btn-sm" data-act="addCustomRitual">+ Custom ritual</button></div>`)}
+      ${spellFilterBar('ritual')}<div class="flex flex-wrap gap-1.5 items-center mt-1.5">${spellPicker('ritual')}<button class="btn btn-sm" data-act="addCustomRitual">+ Custom ritual</button></div>`)}
   </div>`;
 }
 
@@ -3985,6 +4013,13 @@ root.addEventListener('change', e => {
   const el = e.target;
   if (el.dataset.act === 'toggleSource') { A.toggleSource(el.dataset.a); render(); return; }
   if (el.dataset.pick) { S.pick[el.dataset.pick] = el.value; return; }
+  if (el.dataset.sfilter) {
+    const [kind, key] = el.dataset.sfilter.split('.'); S.sf[kind][key] = el.value;
+    // drop a selection that the new filters hide
+    const picked = S.pick[kind] && find('spells', S.pick[kind]);
+    if (picked && !spellMatches(picked, S.sf[kind])) S.pick[kind] = '';
+    render(); return;
+  }
   if (el.dataset.file) { readFile(el); return; }
   if (el.dataset.search) return;
   if (el.dataset.poolexpr) {

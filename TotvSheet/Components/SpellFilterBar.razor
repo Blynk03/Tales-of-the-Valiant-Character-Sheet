@@ -1,0 +1,43 @@
+@* Source / circle / school filters for the spell library pickers (TVCS-97). *@
+<div class="flex flex-wrap gap-1.5 items-center mt-2" role="group" aria-label="@(Ritual ? "Filter rituals" : "Filter spells")">
+    <select class="select spell-filter" aria-label="Source" value="@Filter.Source" @onchange="e => Set(() => Filter.Source = e.Value?.ToString() ?? string.Empty)">
+        <option value="">Any Source</option>
+        @foreach (var s in SpellFilter.Sources)
+        {
+            <option value="@s">@s</option>
+        }
+    </select>
+    <select class="select spell-filter" aria-label="Circle" value="@(Filter.Circle?.ToString() ?? "")" @onchange="e => Set(() => Filter.Circle = int.TryParse(e.Value?.ToString(), out var n) ? n : null)">
+        <option value="">Any Circle</option>
+        @if (!Ritual)
+        {
+            <option value="0">Cantrip</option>
+        }
+        @for (int i = 1; i <= 9; i++)
+        {
+            var circle = i;
+            <option value="@circle">@Rules.CircleName(circle) circle</option>
+        }
+    </select>
+    <select class="select spell-filter" aria-label="School" value="@Filter.School" @onchange="e => Set(() => Filter.School = e.Value?.ToString() ?? string.Empty)">
+        <option value="">Any School</option>
+        @foreach (var s in SpellFilter.Schools)
+        {
+            <option value="@s">@s</option>
+        }
+    </select>
+    <span class="muted text-sm" aria-live="polite">@Count @(Ritual ? (Count == 1 ? "ritual" : "rituals") : (Count == 1 ? "spell" : "spells"))</span>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public SpellFilter Filter { get; set; } = default!;
+    [Parameter] public bool Ritual { get; set; }
+    [Parameter] public int Count { get; set; }
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private async Task Set(Action apply)
+    {
+        apply();
+        await Changed.InvokeAsync();
+    }
+}

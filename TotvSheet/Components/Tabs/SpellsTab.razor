@@ -89,10 +89,11 @@
         {
             <p class="text-sm mt-1" style="color:var(--ink)">@castMessage</p>
         }
-        <div class="flex flex-wrap gap-1.5 items-center mt-2">
-            <select class="select max-w-xs" aria-label="Add spell from library" @bind="spellToAdd">
-                <option value="">Add a spell from library…</option>
-                @foreach (var group in Content.Spells.Where(x => !x.Ritual).GroupBy(x => x.Circle).OrderBy(g => g.Key))
+        <SpellFilterBar Filter="spellFilter" Count="MatchingSpells().Count()" Changed="FiltersChanged" />
+        <div class="flex flex-wrap gap-1.5 items-center mt-1.5">
+            <select class="select max-w-xs" aria-label="Add spell from library" @bind="spellToAdd" disabled="@(!MatchingSpells().Any())">
+                <option value="">@(MatchingSpells().Any() ? "Add a spell from library…" : "No spells match these filters")</option>
+                @foreach (var group in MatchingSpells().GroupBy(x => x.Circle).OrderBy(g => g.Key))
                 {
                     <optgroup label="@(group.Key == 0 ? "Cantrips" : $"{Rules.CircleName(group.Key)} circle")">
                         @foreach (var opt in group)
@@ -127,11 +128,12 @@
                 </tbody>
             </table>
         </div>
-        <div class="flex flex-wrap gap-1.5 items-center mt-2">
-            <select class="select max-w-xs" aria-label="Add ritual from library" @bind="ritualToAdd">
-                <option value="">Add a ritual from library…</option>
+        <SpellFilterBar Filter="ritualFilter" Ritual="true" Count="MatchingRituals().Count()" Changed="FiltersChanged" />
+        <div class="flex flex-wrap gap-1.5 items-center mt-1.5">
+            <select class="select max-w-xs" aria-label="Add ritual from library" @bind="ritualToAdd" disabled="@(!MatchingRituals().Any())">
+                <option value="">@(MatchingRituals().Any() ? "Add a ritual from library…" : "No rituals match these filters")</option>
                 @* Rituals are their own category in ToV, so they only appear here (TVCS-96). *@
-                @foreach (var rgroup in Content.Spells.Where(x => x.Ritual).GroupBy(x => Math.Max(1, x.Circle)).OrderBy(g => g.Key))
+                @foreach (var rgroup in MatchingRituals().GroupBy(x => SpellFilter.CircleOf(x)).OrderBy(g => g.Key))
                 {
                     <optgroup label="@($"{Rules.CircleName(rgroup.Key)} circle")">
                         @foreach (var opt in rgroup)
@@ -206,6 +208,20 @@
     private async Task TogglePrepared(CharSpell s) { s.Prepared = !s.Prepared; await Save(); }
     private async Task RemoveSpell(CharSpell s) { C.Spells.Remove(s); await Save(); }
     private async Task RemoveRitual(Ritual r) { C.Rituals.Remove(r); await Save(); }
+
+    // ---------- library filters (TVCS-97) ----------
+    private readonly SpellFilter spellFilter = new();
+    private readonly SpellFilter ritualFilter = new();
+
+    private IEnumerable<SpellDef> MatchingSpells() => Content.Spells.Where(x => !x.Ritual && spellFilter.Matches(x));
+    private IEnumerable<SpellDef> MatchingRituals() => Content.Spells.Where(x => x.Ritual && ritualFilter.Matches(x));
+
+    /// <summary>Drop a selection that the new filters hide.</summary>
+    private void FiltersChanged()
+    {
+        if (!string.IsNullOrEmpty(spellToAdd) && MatchingSpells().All(x => x.Id != spellToAdd)) spellToAdd = "";
+        if (!string.IsNullOrEmpty(ritualToAdd) && MatchingRituals().All(x => x.Id != ritualToAdd)) ritualToAdd = "";
+    }
 
     private async Task AddSpell()
     {
