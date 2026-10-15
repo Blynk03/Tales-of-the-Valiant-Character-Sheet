@@ -359,7 +359,7 @@ public static class CharacterBuilder
     {
         Name = s.Name,
         Circle = Math.Max(1, s.Circle),
-        CastingTime = s.CastingTime + " + 10 minutes",
+        CastingTime = s.CastingTime, // the book prints the full ritual time (TVCS-96)
         Materials = s.Components,
         Duration = s.Duration,
     });

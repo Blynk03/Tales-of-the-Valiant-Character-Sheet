@@ -92,7 +92,7 @@
         <div class="flex flex-wrap gap-1.5 items-center mt-2">
             <select class="select max-w-xs" aria-label="Add spell from library" @bind="spellToAdd">
                 <option value="">Add a spell from library…</option>
-                @foreach (var group in Content.Spells.GroupBy(x => x.Circle).OrderBy(g => g.Key))
+                @foreach (var group in Content.Spells.Where(x => !x.Ritual).GroupBy(x => x.Circle).OrderBy(g => g.Key))
                 {
                     <optgroup label="@(group.Key == 0 ? "Cantrips" : $"{Rules.CircleName(group.Key)} circle")">
                         @foreach (var opt in group)
@@ -130,9 +130,15 @@
         <div class="flex flex-wrap gap-1.5 items-center mt-2">
             <select class="select max-w-xs" aria-label="Add ritual from library" @bind="ritualToAdd">
                 <option value="">Add a ritual from library…</option>
-                @foreach (var opt in Content.Spells.Where(x => x.Ritual))
+                @* Rituals are their own category in ToV, so they only appear here (TVCS-96). *@
+                @foreach (var rgroup in Content.Spells.Where(x => x.Ritual).GroupBy(x => Math.Max(1, x.Circle)).OrderBy(g => g.Key))
                 {
-                    <option value="@opt.Id">@opt.Name</option>
+                    <optgroup label="@($"{Rules.CircleName(rgroup.Key)} circle")">
+                        @foreach (var opt in rgroup)
+                        {
+                            <option value="@opt.Id">@opt.Name @(string.IsNullOrEmpty(opt.Tradition) ? "" : $"· {opt.Tradition}")</option>
+                        }
+                    </optgroup>
                 }
             </select>
             <button type="button" class="btn btn-sm btn-primary" disabled="@string.IsNullOrEmpty(ritualToAdd)" @onclick="AddRitual">Add</button>

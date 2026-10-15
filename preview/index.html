@@ -3476,7 +3476,9 @@ function characterTab(c) {
 function slotFor(c, s) { if (s.circle === 0) return 0; for (let k = s.circle; k <= 9; k++) if (c.slotsExpended[k - 1] < c.slotsTotal[k - 1]) return k; return null; }
 function spellsTab(c) {
   const order = c.spells.map((s, i) => [s, i]).sort((a, b) => a[0].circle - b[0].circle || a[0].name.localeCompare(b[0].name));
-  const groups = {}; lib('spells').forEach(s => (groups[s.circle] = groups[s.circle] || []).push(s));
+  const groups = {}, rgroups = {};
+  // rituals are their own category in ToV: they only appear in the ritual picker (TVCS-96)
+  lib('spells').forEach(s => { const g = s.ritual ? rgroups : groups; (g[s.circle] = g[s.circle] || []).push(s); });
   const spellOpts = Object.keys(groups).sort((a, b) => a - b).map(k => `<optgroup label="${+k === 0 ? 'Cantrips' : circ(+k) + ' circle'}">${groups[k].map(s => `<option value="${esc(s.id)}">${esc(s.name)}${s.tradition ? ' · ' + esc(s.tradition) : ''}</option>`).join('')}</optgroup>`).join('');
   return `<div class="flex flex-col gap-3"><div class="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-3">
     ${box('Spellcasting', `<div class="lbl">Spellcaster class &amp; source</div>${inp('c.spellcasterClass', c.spellcasterClass, 'font-semibold')}
@@ -3499,7 +3501,7 @@ function spellsTab(c) {
       <div class="flex flex-wrap gap-1.5 items-center mt-2"><select class="select" style="max-width:20rem" data-pick="spell" aria-label="Add spell"><option value="">Add a spell from library…</option>${spellOpts}</select><button class="btn btn-sm btn-primary" data-act="addSpell">Add</button><button class="btn btn-sm" data-act="addCustomSpell">+ Custom spell</button></div>`)}
     ${box('Rituals', `<div class="scroll-x"><table class="tbl" style="min-width:36rem"><thead><tr><th>Circle</th><th>Ritual Name</th><th>Cast Time</th><th>Materials &amp; Cost</th><th>Duration</th><th></th></tr></thead><tbody>
       ${c.rituals.map((r, i) => `<tr><td>${num(`c.rituals.${i}.circle`, r.circle, 'w-9 text-center', 'min="1" max="9"')}</td><td>${inp(`c.rituals.${i}.name`, r.name, 'font-semibold')}</td><td>${inp(`c.rituals.${i}.castingTime`, r.castingTime, 'text-sm')}</td><td>${inp(`c.rituals.${i}.materials`, r.materials, 'text-sm')}</td><td>${inp(`c.rituals.${i}.duration`, r.duration, 'text-sm')}</td><td><button class="icon-btn" data-act="rm" data-a="rituals.${i}" title="Remove">✕</button></td></tr>`).join('')}</tbody></table></div>
-      <div class="flex flex-wrap gap-1.5 items-center mt-2"><select class="select" style="max-width:20rem" data-pick="ritual" aria-label="Add ritual"><option value="">Add a ritual from library…</option>${lib('spells').filter(s => s.ritual).map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select><button class="btn btn-sm btn-primary" data-act="addRitual">Add</button><button class="btn btn-sm" data-act="addCustomRitual">+ Custom ritual</button></div>`)}
+      <div class="flex flex-wrap gap-1.5 items-center mt-2"><select class="select" style="max-width:20rem" data-pick="ritual" aria-label="Add ritual"><option value="">Add a ritual from library…</option>${Object.keys(rgroups).sort((a, b) => a - b).map(k => `<optgroup label="${circ(Math.max(1, +k))} circle">${rgroups[k].map(s => `<option value="${esc(s.id)}">${esc(s.name)}${s.tradition ? ' · ' + esc(s.tradition) : ''}</option>`).join('')}</optgroup>`).join('')}</select><button class="btn btn-sm btn-primary" data-act="addRitual">Add</button><button class="btn btn-sm" data-act="addCustomRitual">+ Custom ritual</button></div>`)}
   </div>`;
 }
 
@@ -3902,7 +3904,7 @@ const A = {
   cast(i) { const c = cur(), s = c.spells[+i], slot = slotFor(c, s); if (slot == null) return; if (slot > 0) c.slotsExpended[slot - 1]++; S.castMsg = slot === 0 ? `Cast ${s.name}.` : `Cast ${s.name} using a ${circ(slot)}-circle slot.${s.concentration ? ' Concentration started.' : ''}`; save(); },
   addSpell() { const s = find('spells', S.pick.spell); if (s) { cur().spells.push({ name: s.name, circle: s.circle, castingTime: s.castingTime, range: s.range, components: s.components, duration: s.duration, concentration: s.concentration, prepared: false, description: s.description }); save(); } S.pick.spell = ''; },
   addCustomSpell() { cur().spells.push({ name: 'New spell', circle: 1, castingTime: '', range: '', components: '', duration: '', concentration: false, prepared: false, description: '' }); save(); },
-  addRitual() { const s = find('spells', S.pick.ritual); if (s) { cur().rituals.push({ name: s.name, circle: Math.max(1, s.circle), castingTime: s.castingTime + ' + 10 minutes', materials: s.components, duration: s.duration }); save(); } S.pick.ritual = ''; },
+  addRitual() { const s = find('spells', S.pick.ritual); if (s) { cur().rituals.push({ name: s.name, circle: Math.max(1, s.circle), castingTime: s.castingTime, materials: s.components, duration: s.duration }); save(); } S.pick.ritual = ''; },
   addCustomRitual() { cur().rituals.push({ name: 'New ritual', circle: 1, castingTime: '', materials: '', duration: '' }); save(); },
   // level up
   openLevel() { S.lu = { roll: false, rolled: null, sub: '', mode: 'two', a: null, b: null, talent: '', impTalent: '' }; S.modal = 'level'; },
