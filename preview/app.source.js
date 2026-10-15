@@ -423,8 +423,8 @@ function mainTab(c) {
         <div><div class="lbl">Max</div>${num('c.maxHp', c.maxHp, 'text-center')}</div>
         <div><div class="lbl">Current</div>${num('c.currentHp', c.currentHp, 'text-center text-xl', `style="color:${c.maxHp > 0 && c.currentHp * 4 <= c.maxHp ? 'var(--danger)' : 'var(--text)'}"`)}</div>
         <div><div class="lbl">Temp</div>${num('c.tempHp', c.tempHp, 'text-center')}</div></div>
-        <div class="flex items-center gap-1 mt-2"><input type="number" min="0" class="field-box num w-16" placeholder="0" data-f="hpAmt" data-t="n" value="${S.hpAmt || ''}" aria-label="Amount">
-        <button class="btn btn-sm btn-danger" data-act="hp" data-a="dmg" title="Temp HP is used first">Dmg</button><button class="btn btn-sm" data-act="hp" data-a="heal">Heal</button><button class="btn btn-sm" data-act="hp" data-a="temp" title="Temp HP doesn't stack: keeps the higher value">Temp</button></div>
+        <div class="flex flex-wrap items-center gap-1 mt-2"><input type="number" min="0" class="field-box num w-16 flex-none" placeholder="0" data-f="hpAmt" data-t="n" value="${S.hpAmt || ''}" aria-label="Amount">
+        <button class="btn btn-sm btn-danger flex-1" data-act="hp" data-a="dmg" title="Temp HP is used first">Dmg</button><button class="btn btn-sm flex-1" data-act="hp" data-a="heal">Heal</button><button class="btn btn-sm flex-1" data-act="hp" data-a="temp" title="Temp HP doesn't stack: keeps the higher value">Temp</button></div>
         <div class="box-title mt-3">Hit Dice</div><div class="grid grid-cols-3 gap-1.5 text-center">
         <div><div class="lbl">Type</div><div class="num">d${c.hitDie}</div></div><div><div class="lbl">Used</div>${num('c.hitDiceUsed', c.hitDiceUsed, 'text-center', `min="0" max="${c.level}"`)}</div><div><div class="lbl">Max</div><div class="num">${c.level}</div></div></div>
         <button class="btn btn-sm w-full mt-2" data-act="hitDie" ${c.hitDiceUsed >= c.level ? 'disabled' : ''}>Spend hit die (d${c.hitDie}${sg(M(c, 'CON'))})</button>`)}

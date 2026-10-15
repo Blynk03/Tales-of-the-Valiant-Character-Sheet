@@ -112,11 +112,12 @@
                     <div><div class="lbl">Current</div><input type="number" class="field text-center num text-xl" style="color:@HpColor()" @bind="C.CurrentHp" @bind:after="Save" /></div>
                     <div><div class="lbl">Temp</div><input type="number" class="field text-center num" @bind="C.TempHp" @bind:after="Save" /></div>
                 </div>
-                <div class="flex items-center gap-1 mt-2">
-                    <input type="number" min="0" class="field-box num w-16" placeholder="0" aria-label="Amount" @bind="hpAmount" />
-                    <button type="button" class="btn btn-sm btn-danger" title="Temp HP is used first" @onclick="TakeDamage">Dmg</button>
-                    <button type="button" class="btn btn-sm" @onclick="Heal">Heal</button>
-                    <button type="button" class="btn btn-sm" title="Temp HP doesn't stack: keeps the higher value" @onclick="GainTemp">Temp</button>
+                @* Wraps so the buttons never spill out of a narrow Hit Points column (TVCS-94). *@
+                <div class="flex flex-wrap items-center gap-1 mt-2">
+                    <input type="number" min="0" class="field-box num w-16 flex-none" placeholder="0" aria-label="Amount" @bind="hpAmount" />
+                    <button type="button" class="btn btn-sm btn-danger flex-1" title="Temp HP is used first" @onclick="TakeDamage">Dmg</button>
+                    <button type="button" class="btn btn-sm flex-1" @onclick="Heal">Heal</button>
+                    <button type="button" class="btn btn-sm flex-1" title="Temp HP doesn't stack: keeps the higher value" @onclick="GainTemp">Temp</button>
                 </div>
 
                 <div class="box-title mt-3">Hit Dice</div>
