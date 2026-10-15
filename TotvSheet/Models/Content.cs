@@ -131,6 +131,8 @@ public class ItemDef : ContentEntry
     public string DamageType { get; set; } = "";
     public string Range { get; set; } = "";
     public string Properties { get; set; } = "";
+    [Hint("Weapons: weapon options, e.g. Disarm, Hamstring.")]
+    public string WeaponOptions { get; set; } = "";
     public bool Finesse { get; set; }
     public bool Ranged { get; set; }
     [Hint("Armor: base AC. Shields: the AC bonus (usually 2).")]

@@ -309,6 +309,7 @@ public static class CharacterBuilder
                     DamageType = item.DamageType,
                     Range = item.Range,
                     Properties = item.Properties,
+                    Options = item.WeaponOptions,
                     Finesse = item.Finesse,
                     Ranged = item.Ranged,
                     Proficient = item.WeaponCategory == "Martial" ? c.MartialWeapons : c.SimpleWeapons,
