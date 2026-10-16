@@ -2960,6 +2960,7 @@ input[type=number].field::-webkit-inner-spin-button { opacity: .4; }
 (function () {
 'use strict';
 const SEED = window.__SEED__;
+if (!SEED.magicItems) SEED.magicItems = []; // the built-in file has no magic items (TVCS-99)
 let pointerDown = false, pendingRender = false;
 const ABIL = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
 const ABN = { STR: 'Strength', DEX: 'Dexterity', CON: 'Constitution', INT: 'Intelligence', WIS: 'Wisdom', CHA: 'Charisma' };
@@ -2971,7 +2972,7 @@ const PB_COST = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9, 16: 11, 
 const ROLL_PLUS2_MAX = 16, ROLL_PLUS1_MAX = 17; // rolled scores: +2 to a score <= 16, +1 to another <= 17
 const MAX_LUCK = 5, LUCK_REROLL = 3;
 const HOMEBREW = 'Homebrew';
-const KINDS = [['lineages','Lineages','Lineage'],['heritages','Heritages','Heritage'],['backgrounds','Backgrounds','Background'],['classes','Classes','Class'],['subclasses','Subclasses','Subclass'],['talents','Talents','Talent'],['spells','Spells','Spell'],['items','Items','Item']];
+const KINDS = [['lineages','Lineages','Lineage'],['heritages','Heritages','Heritage'],['backgrounds','Backgrounds','Background'],['classes','Classes','Class'],['subclasses','Subclasses','Subclass'],['talents','Talents','Talent'],['spells','Spells','Spell'],['items','Items','Item'],['magicItems','Magic Items','Magic Item']];
 const DEFAULT_ACTIONS = 'Attack, Cast a Spell, Dash, Disengage, Dodge, Help, Hide, Ready, Search, Use an Object';
 
 // ---------- helpers ----------
@@ -3022,7 +3023,7 @@ function usesMax(c, f) {
 }
 
 // ---------- content ----------
-const emptyLib = () => ({ lineages: [], heritages: [], backgrounds: [], classes: [], subclasses: [], talents: [], spells: [], items: [] });
+const emptyLib = () => ({ lineages: [], heritages: [], backgrounds: [], classes: [], subclasses: [], talents: [], spells: [], items: [], magicItems: [] });
 /** Built-in entries are samples: once enabled book content (a user entry whose source isn't
     Homebrew) exists for a kind, the samples of that kind are hidden from lists. */
 function lib(kind, keepSamples) {
@@ -3088,6 +3089,47 @@ function addItem(c, i) {
   else if (i.type === 'Armor') c.armor.push({ name: i.name, baseAC: i.baseAC, category: i.armorCategory, isShield: false, properties: i.properties, magicBonus: 0, equipped: !wornArmor(c) });
   else if (i.type === 'Shield') c.armor.push({ name: i.name, baseAC: i.baseAC || 2, category: 'None', isShield: true, properties: i.properties, magicBonus: 0, equipped: !wornShield(c) });
   else { const g = c.gear.find(x => x.name === i.name); if (g) g.quantity++; else c.gear.push({ name: i.name, quantity: 1, notes: '' }); }
+}
+// ---------- magic item library (TVCS-99; mirror of Models/MagicItemFilter.cs) ----------
+const MI_RARITIES = ['Common', 'Uncommon', 'Rare', 'Very Rare', 'Legendary', 'Fabled', 'Artifact', 'Varies'];
+const MI_TYPES = ['Armor', 'Potion', 'Ring', 'Rod', 'Scroll', 'Staff', 'Wand', 'Weapon', 'Wondrous Item', 'Other'];
+function miType(m) {
+  const t = String(m.itemType || '').trim().toLowerCase();
+  if (t.startsWith('shield')) return 'Armor';
+  if (t.startsWith('wondrous')) return 'Wondrous Item';
+  return MI_TYPES.find(k => k !== 'Wondrous Item' && k !== 'Other' && t.startsWith(k.toLowerCase())) || 'Other';
+}
+const miMatches = (m, f) => (!f.rarity || String(m.rarity).toLowerCase() === f.rarity.toLowerCase()) && (!f.type || miType(m) === f.type)
+  && (!f.search.trim() || String(m.name || '').toLowerCase().includes(f.search.trim().toLowerCase()));
+function miRowType(m) {
+  const k = miType(m); if (k === 'Weapon') return 'Weapon'; if (k !== 'Armor') return null;
+  const t = String(m.itemType || '');
+  return /^shield/i.test(t) || /shield/i.test(t) || /^shield/i.test(m.name) ? 'Shield' : 'Armor';
+}
+function miBonus(m) {
+  const n = /\+(\d)\b/.exec(m.name || ''); if (n) return +n[1];
+  const d = /\+(\d)\s+(?:bonus\s+)?to\s+(?:its\s+|your\s+)?(?:attack|AC|Armor Class)/i.exec(m.description || ''); return d ? +d[1] : 0;
+}
+const miNorm = s => (String(s).toLowerCase().match(/[a-z]+/g) || []).filter(w => w !== 'armor').sort().join(' ');
+const miBases = m => { const t = miRowType(m); return t ? lib('items').filter(i => i.type === t) : []; };
+function miDefaultBase(m) {
+  const list = miBases(m); if (!list.length) return null;
+  if (miRowType(m) === 'Shield') return list.find(i => miNorm(i.name) === 'shield') || (list.length === 1 ? list[0] : null);
+  const b = /\(([^)]*)\)/.exec(m.itemType || ''); if (!b || /\b(any|or)\b|,/i.test(b[1])) return null;
+  return list.find(i => miNorm(i.name) === miNorm(b[1])) || null;
+}
+const attuneNote = m => String(m.attunement || '').trim().replace(/^requires attunement\s*/i, '');
+function addMagicItem(c, m, row, bonus) {
+  c.magicItems.push({ name: m.name, rarity: m.rarity || '', itemType: m.itemType || '', requiresAttunement: !!m.requiresAttunement, attunement: attuneNote(m), attuned: false, notes: m.description || '' });
+  if (!row) return;
+  const nw = c.weapons.length, na = c.armor.length; addItem(c, row);
+  const name = m.name.toLowerCase().includes(row.name.toLowerCase()) ? m.name : `${m.name} (${row.name})`;
+  const r = c.weapons.length > nw ? c.weapons[c.weapons.length - 1] : c.armor.length > na ? c.armor[c.armor.length - 1] : null;
+  if (r) { r.name = name; r.magicBonus = bonus; }
+}
+function miPick(id) {
+  const m = id ? find('magicItems', id) : null, b = m && miDefaultBase(m);
+  S.mi = { id: m ? id : '', alsoRow: !!(m && miRowType(m)), baseId: b ? b.id : '', bonus: m ? miBonus(m) : 0 };
 }
 function applySlots(c, slots) { if (!slots || !slots.length) return; for (let i = 0; i < 9; i++) c.slotsTotal[i] = slots[i] || 0; }
 function finalScore(w, a) { const i = ABIL.indexOf(a); let s = w.base[i]; if (w.plus2 === a) s += 2; if (w.plus1 === a) s += 1; return Math.min(20, s); }
@@ -3231,7 +3273,7 @@ const S = {
   route: 'sheet', charId: null, tab: 'main', chars: [], user: emptyLib(), disabled: [],
   dice: { mode: 'normal', history: [] }, trayOpen: true, picker: false, pool: { dice: {}, mod: 0, text: '', err: '' }, hpAmt: 0, modal: null, notice: '', castMsg: '',
   wiz: null, set: { kind: 'lineages', search: '', draft: null, isNew: false, core: false, json: false, jsonText: '', err: '', msg: '' },
-  pick: {}, sf: { spell: { source: '', circle: '', school: '' }, ritual: { source: '', circle: '', school: '' } }, lu: null, sort: 'level'
+  pick: {}, mf: { search: '', rarity: '', type: '' }, mi: { id: '', alsoRow: false, baseId: '', bonus: 0 }, sf: { spell: { source: '', circle: '', school: '' }, ritual: { source: '', circle: '', school: '' } }, lu: null, sort: 'level'
 };
 const C = () => S.chars.find(c => c.id === S.charId);
 function persist() { store.set('vs.chars', S.chars); store.set('vs.content', S.user); store.set('vs.disabled', S.disabled); }
@@ -3438,14 +3480,37 @@ function featuresTab(c) {
     </div></div></div>`;
 }
 
+function magicPicker() {
+  const all = lib('magicItems'), addBtn = '<button class="btn btn-sm" data-act="addMagic">+ Magic item</button>';
+  if (!all.length) return `<div class="mt-2">${addBtn}</div>`;
+  const f = S.mf, list = all.filter(m => miMatches(m, f)), n = list.length, sel = S.mi.id ? find('magicItems', S.mi.id) : null;
+  const opt = (v, t, cur) => `<option value="${esc(v)}" ${cur === v ? 'selected' : ''}>${esc(t)}</option>`;
+  const fsel = (key, label, anyLabel, opts) => `<select class="select spell-filter" data-mfilter="${key}" aria-label="${label}">${opt('', anyLabel, f[key])}${opts.map(o => opt(o, o, f[key])).join('')}</select>`;
+  const rowType = sel && miRowType(sel);
+  const details = !sel ? '' : `<div class="rounded-lg p-2 mt-1.5 text-sm" style="border:1px dashed var(--line)">
+    <div class="flex flex-wrap gap-1"><span class="chip">${esc(sel.itemType)}</span><span class="chip">${esc(sel.rarity)}</span>${sel.requiresAttunement ? `<span class="chip">${attuneNote(sel) ? 'Attunement ' + esc(attuneNote(sel)) : 'Requires attunement'}</span>` : ''}${sel.price ? `<span class="chip">${esc(sel.price)}</span>` : ''}<span class="chip">${esc(sel.source)}</span></div>
+    <p class="muted mt-1">${esc(sel.description)}</p>
+    ${rowType ? `<div class="flex flex-wrap gap-1.5 items-center mt-1.5"><label class="flex items-center gap-1.5"><input type="checkbox" data-mi="alsoRow" ${S.mi.alsoRow ? 'checked' : ''} aria-label="Also add as a row"> Also add to ${rowType === 'Weapon' ? 'Weapons' : 'Armor'} as</label>
+      <select class="select" style="width:auto;max-width:14rem" data-mi="baseId" aria-label="Base item">${opt('', 'Choose base item…', S.mi.baseId)}${miBases(sel).map(b => opt(b.id, b.name, S.mi.baseId)).join('')}</select>
+      <span class="lbl">Bonus</span><input type="number" min="0" max="5" class="field num w-12 text-center" data-mi="bonus" aria-label="Magic bonus" value="${S.mi.bonus}"></div>
+      ${S.mi.alsoRow && !S.mi.baseId ? '<div class="text-xs muted mt-0.5">Choose the base item to add the row, or untick to add only the magic item.</div>' : ''}` : ''}</div>`;
+  return `<div class="flex flex-wrap gap-1.5 items-center mt-2" role="group" aria-label="Filter magic items">
+    <input class="field spell-filter" style="max-width:12rem" placeholder="Search by name" aria-label="Search magic items" autocomplete="off" data-msearch="1" value="${esc(f.search)}">
+    ${fsel('rarity', 'Rarity', 'Any Rarity', MI_RARITIES)}${fsel('type', 'Item type', 'Any Type', MI_TYPES)}
+    <span class="muted text-sm" aria-live="polite">${n} ${n === 1 ? 'item' : 'items'}</span></div>
+    <div class="flex flex-wrap gap-1.5 items-center mt-1.5"><select class="select" style="max-width:20rem" data-mi="id" aria-label="Add a magic item from library" ${n ? '' : 'disabled'}>${opt('', n ? 'Add a magic item from library…' : 'No magic items match these filters', S.mi.id)}${list.map(m => opt(m.id, `${m.name} · ${m.rarity}`, S.mi.id)).join('')}</select>
+    <button class="btn btn-sm btn-primary" data-act="addMagicLib" ${sel ? '' : 'disabled'}>Add</button><span class="muted text-sm mx-1">or</span>${addBtn}</div>${details}`;
+}
 function holdingsTab(c) {
   const att = attuned(c);
   return `<div class="flex flex-col gap-3">
     ${box('Magic Items', `<div class="flex items-center justify-center gap-2 mb-2"><span class="lbl">Attunement slots</span>${num('c.attunementSlots', c.attunementSlots, 'w-12 text-center', 'min="0"')}<span class="chip ${att > c.attunementSlots ? 'user' : ''}">${att} / ${c.attunementSlots} attuned</span></div>
       <div class="grid md:grid-cols-2 gap-2">${c.magicItems.map((m, i) => `<div class="rounded-lg p-2" style="border:1px solid var(--line)"><div class="flex items-center gap-2"><span class="lbl">Item</span>${inp(`c.magicItems.${i}.name`, m.name, 'font-semibold', 'aria-label="Item name"')}<button class="icon-btn" data-act="rm" data-a="magicItems.${i}" title="Remove">✕</button></div>
+        ${m.itemType || m.rarity ? `<div class="flex flex-wrap gap-1 mt-1">${m.itemType ? `<span class="chip">${esc(m.itemType)}</span>` : ''}${m.rarity ? `<span class="chip">${esc(m.rarity)}</span>` : ''}</div>` : ''}
         <div class="flex items-center gap-3 mt-1"><label class="flex items-center gap-1.5 text-sm">${chk(`c.magicItems.${i}.requiresAttunement`, m.requiresAttunement, 'Requires attunement')} Requires attunement</label>
-        <label class="flex items-center gap-1.5 text-sm ml-auto"><button class="pip ${m.attuned ? 'on' : ''}" data-act="attune" data-a="${i}" ${!m.attuned && att >= c.attunementSlots ? 'disabled' : ''} title="Attune"></button> Attuned</label></div>
-        ${area(`c.magicItems.${i}.notes`, m.notes, 2, 'style="min-height:3rem" placeholder="Notes"')}</div>`).join('')}</div><button class="btn btn-sm mt-2" data-act="addMagic">+ Magic item</button>`)}
+        ${m.requiresAttunement || m.attuned || (!m.rarity && !m.itemType) ? `<label class="flex items-center gap-1.5 text-sm ml-auto"><button class="pip ${m.attuned ? 'on' : ''}" data-act="attune" data-a="${i}" ${!m.attuned && att >= c.attunementSlots ? 'disabled' : ''} title="Attune"></button> Attuned</label>` : ''}</div>
+        ${m.requiresAttunement && m.attunement ? `<div class="text-xs muted mt-0.5">Attunement: ${esc(m.attunement)}</div>` : ''}
+        ${area(`c.magicItems.${i}.notes`, m.notes, 2, 'style="min-height:3rem" placeholder="Notes"')}</div>`).join('')}</div>${magicPicker()}`)}
     ${box('Mounts &amp; Creatures', `<div class="grid md:grid-cols-2 gap-2">${c.mounts.map((m, i) => `<div class="rounded-lg p-2 grid grid-cols-4 gap-x-2 gap-y-1" style="border:1px solid var(--line)">
       <div class="col-span-2"><div class="lbl">Name</div>${inp(`c.mounts.${i}.name`, m.name, 'font-semibold')}</div><div><div class="lbl">Type</div>${inp(`c.mounts.${i}.type`, m.type)}</div><div class="flex items-end"><button class="icon-btn ml-auto" data-act="rm" data-a="mounts.${i}" title="Remove">✕</button></div>
       <div class="col-span-2"><div class="lbl">Speed</div>${inp(`c.mounts.${i}.speed`, m.speed)}</div><div class="col-span-2"><div class="lbl">Carrying capacity</div>${inp(`c.mounts.${i}.carryingCapacity`, m.carryingCapacity)}</div>
@@ -3746,9 +3811,10 @@ const BLANK = {
   subclasses: () => ({ id: '', name: 'New subclass', source: 'Homebrew', description: '', classId: '', features: [], talentCategories: [], spellcastingAbility: null, spellSlots: [] }),
   talents: () => ({ id: '', name: 'New talent', source: 'Homebrew', description: '', category: 'Martial', prerequisite: '', repeatable: false }),
   spells: () => ({ id: '', name: 'New spell', source: 'Homebrew', description: '', circle: 1, school: '', tradition: '', castingTime: '1 action', range: '', components: '', duration: 'Instantaneous', concentration: false, ritual: false }),
-  items: () => ({ id: '', name: 'New item', source: 'Homebrew', description: '', type: 'Gear', weaponCategory: '', damage: '', damageType: '', range: '', properties: '', weaponOptions: '', finesse: false, ranged: false, baseAC: 0, armorCategory: 'None', cost: '', weight: '' })
+  items: () => ({ id: '', name: 'New item', source: 'Homebrew', description: '', type: 'Gear', weaponCategory: '', damage: '', damageType: '', range: '', properties: '', weaponOptions: '', finesse: false, ranged: false, baseAC: 0, armorCategory: 'None', cost: '', weight: '' }),
+  magicItems: () => ({ id: '', name: 'New magic item', source: 'Homebrew', description: '', itemType: 'Wondrous Item', rarity: 'Uncommon', requiresAttunement: false, attunement: '', price: '' })
 };
-const HINTS = { id: 'Unique key. Reusing a built-in id overrides that entry.', source: "Book or homebrew label, e.g. 'Player's Guide', 'Homebrew'.", skillProficiencies: 'Skills always granted, exactly as on the sheet.', skillOptions: 'Skills the player can choose from.', skillChoices: 'How many of the skill options to choose.', talentId: 'Talent id always granted at level 1 (optional).', talentOptions: 'Talent ids the player chooses one from (optional).', languageChoices: 'How many extra languages the player picks.', talentCategories: 'Talent lists for Improvement levels (subclass: lists it adds).', resources: 'Feature uses that change at this level, e.g. Rage 3.', usesFrom: 'Optional: PB, or STR/DEX/CON/INT/WIS/CHA for that modifier, with an optional +N (e.g. PB+1). Min 1.', repeatable: 'Tick if the talent can be taken more than once.', slots: 'Total slots for circles 1-9, e.g. 3, 2.', armorProficiencies: 'Any of: Light, Medium, Heavy, Shields.', weaponProficiencies: 'Any of: Simple, Martial.', startingEquipment: 'Item ids from the Items list.', spellSlots: 'Total slots for circles 1-9, e.g. 4, 3, 2.', usesMax: '0 if it has no limited uses.', recharge: 'Short Rest, Long Rest or blank.', classId: 'Id of the parent class.', circle: '0 for cantrips.', subclassLevel: 'Level at which the subclass is chosen.' };
+const HINTS = { itemType: 'e.g. Wondrous Item, Weapon (longsword), Armor (plate), Armor (shield), Ring, Potion.', rarity: 'Common, Uncommon, Rare, Very Rare, Legendary, Fabled, Artifact or Varies.', attunement: "Who can attune, if limited, e.g. 'by a spellcaster'. Blank if anyone can.", id: 'Unique key. Reusing a built-in id overrides that entry.', source: "Book or homebrew label, e.g. 'Player's Guide', 'Homebrew'.", skillProficiencies: 'Skills always granted, exactly as on the sheet.', skillOptions: 'Skills the player can choose from.', skillChoices: 'How many of the skill options to choose.', talentId: 'Talent id always granted at level 1 (optional).', talentOptions: 'Talent ids the player chooses one from (optional).', languageChoices: 'How many extra languages the player picks.', talentCategories: 'Talent lists for Improvement levels (subclass: lists it adds).', resources: 'Feature uses that change at this level, e.g. Rage 3.', usesFrom: 'Optional: PB, or STR/DEX/CON/INT/WIS/CHA for that modifier, with an optional +N (e.g. PB+1). Min 1.', repeatable: 'Tick if the talent can be taken more than once.', slots: 'Total slots for circles 1-9, e.g. 3, 2.', armorProficiencies: 'Any of: Light, Medium, Heavy, Shields.', weaponProficiencies: 'Any of: Simple, Martial.', startingEquipment: 'Item ids from the Items list.', spellSlots: 'Total slots for circles 1-9, e.g. 4, 3, 2.', usesMax: '0 if it has no limited uses.', recharge: 'Short Rest, Long Rest or blank.', classId: 'Id of the parent class.', circle: '0 for cantrips.', subclassLevel: 'Level at which the subclass is chosen.' };
 /** Fills fields added in later versions so they show up in the editor. */
 function withDefaults(kind, e) {
   const d = Object.assign(BLANK[kind](), e);
@@ -3788,6 +3854,7 @@ function summary(kind, e) {
     case 'subclasses': return `${e.classId} · ${e.features.length} features`;
     case 'talents': return e.category;
     case 'spells': return `${circ(e.circle)}${e.circle ? ' circle' : ''} · ${e.school}${e.ritual ? ' · ritual' : ''}`;
+    case 'magicItems': return `${e.itemType} · ${e.rarity}${e.requiresAttunement ? ' · attunement' : ''}`;
     default: return e.type + (e.cost ? ' · ' + e.cost : '');
   }
 }
@@ -3922,7 +3989,12 @@ const A = {
   addGear() { cur().gear.push({ name: '', quantity: 1, notes: '' }); save(); },
   addItem() { const i = find('items', S.pick.item); if (i) { addItem(cur(), i); save(); } S.pick.item = ''; },
   equip(i) { const c = cur(), a = c.armor[+i], on = !a.equipped; if (on) c.armor.forEach(x => { if (x.isShield === a.isShield) x.equipped = false; }); a.equipped = on; save(); },
-  addMagic() { cur().magicItems.push({ name: '', requiresAttunement: false, attuned: false, notes: '' }); save(); },
+  addMagicLib() {
+    const m = S.mi.id && find('magicItems', S.mi.id); if (!m) return;
+    const row = S.mi.alsoRow && miRowType(m) && S.mi.baseId ? find('items', S.mi.baseId) : null;
+    addMagicItem(cur(), m, row, Math.max(0, +S.mi.bonus || 0)); miPick(''); save();
+  },
+  addMagic() { cur().magicItems.push({ name: '', requiresAttunement: false, attuned: false, notes: '', rarity: '', itemType: '', attunement: '' }); save(); },
   attune(i) { const c = cur(), m = c.magicItems[+i]; if (!m.attuned && attuned(c) >= c.attunementSlots) return; m.attuned = !m.attuned; save(); },
   addMount() { cur().mounts.push({ name: '', type: '', speed: '', carryingCapacity: '', notes: '' }); save(); },
   addVehicle() { cur().vehicles.push({ name: '', type: '', proficient: false, ac: 0, maxHp: 0, currentHp: 0, speedRound: '', speedTravel: '', crew: '', passengers: '', cargo: '', notes: '' }); save(); },
@@ -4019,6 +4091,17 @@ root.addEventListener('change', e => {
     const picked = S.pick[kind] && find('spells', S.pick[kind]);
     if (picked && !spellMatches(picked, S.sf[kind])) S.pick[kind] = '';
     render(); return;
+  }
+  if (el.dataset.mfilter || el.dataset.msearch) {
+    if (el.dataset.msearch) S.mf.search = el.value; else S.mf[el.dataset.mfilter] = el.value;
+    const picked = S.mi.id && find('magicItems', S.mi.id);
+    if (picked && !miMatches(picked, S.mf)) miPick(''); // drop a selection the new filters hide
+    renderSoon(); return;
+  }
+  if (el.dataset.mi) {
+    const k = el.dataset.mi;
+    if (k === 'id') miPick(el.value); else if (k === 'alsoRow') S.mi.alsoRow = el.checked; else if (k === 'bonus') S.mi.bonus = Math.max(0, +el.value || 0); else S.mi.baseId = el.value;
+    renderSoon(); return;
   }
   if (el.dataset.file) { readFile(el); return; }
   if (el.dataset.search) return;

@@ -297,6 +297,34 @@ public static class CharacterBuilder
     public static void AddTalent(Character c, TalentDef t) =>
         c.Talents.Add(new Talent { Name = t.Name, Category = t.Category, Description = t.Description });
 
+    /// <summary>The attunement restriction without a leading "requires attunement", which the checkbox already says
+    /// ("requires attunement by a cleric" → "by a cleric"; "requires attunement" alone → "").</summary>
+    public static string AttunementNote(MagicItemDef m) =>
+        System.Text.RegularExpressions.Regex.Replace((m.Attunement ?? "").Trim(), @"^requires attunement\s*", "",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>Records a library magic item on the Holdings tab (TVCS-99). With <paramref name="asRow"/>, also adds
+    /// a weapon or armor row built from <paramref name="baseItem"/>, named after the magic item and carrying its bonus.</summary>
+    public static void AddMagicItem(Character c, MagicItemDef m, ItemDef? asRow = null, int bonus = 0)
+    {
+        c.MagicItems.Add(new MagicItem
+        {
+            Name = m.Name,
+            Rarity = m.Rarity,
+            ItemType = m.ItemType,
+            RequiresAttunement = m.RequiresAttunement,
+            Attunement = AttunementNote(m),
+            Notes = m.Description,
+        });
+        if (asRow is null) return;
+        var weapons = c.Weapons.Count;
+        var armor = c.Armor.Count;
+        AddItem(c, asRow);
+        var name = m.Name.Contains(asRow.Name, StringComparison.OrdinalIgnoreCase) ? m.Name : $"{m.Name} ({asRow.Name})";
+        if (c.Weapons.Count > weapons) { c.Weapons[^1].Name = name; c.Weapons[^1].MagicBonus = bonus; }
+        else if (c.Armor.Count > armor) { c.Armor[^1].Name = name; c.Armor[^1].MagicBonus = bonus; }
+    }
+
     public static void AddItem(Character c, ItemDef item)
     {
         switch (item.Type)

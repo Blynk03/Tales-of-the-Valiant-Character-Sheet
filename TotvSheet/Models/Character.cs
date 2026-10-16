@@ -180,6 +180,11 @@ public class MagicItem
     public bool RequiresAttunement { get; set; }
     public bool Attuned { get; set; }
     public string Notes { get; set; } = "";
+    // Copied from the library when picked (TVCS-99); blank for hand-typed items.
+    public string Rarity { get; set; } = "";
+    public string ItemType { get; set; } = "";
+    /// <summary>Attunement restriction, e.g. "by a spellcaster".</summary>
+    public string Attunement { get; set; } = "";
 }
 
 public class Mount

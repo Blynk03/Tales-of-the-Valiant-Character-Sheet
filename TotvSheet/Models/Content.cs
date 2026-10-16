@@ -142,6 +142,19 @@ public class ItemDef : ContentEntry
     public string Weight { get; set; } = "";
 }
 
+/// <summary>A magic item in the library (TVCS-99). Picked onto the Holdings tab; the description becomes the item's notes.</summary>
+public class MagicItemDef : ContentEntry
+{
+    [Hint("e.g. Wondrous Item, Weapon (longsword), Armor (plate), Armor (shield), Ring, Potion, Staff, Wand.")]
+    public string ItemType { get; set; } = "Wondrous Item";
+    [Hint("Common, Uncommon, Rare, Very Rare, Legendary, Fabled, Artifact or Varies.")]
+    public string Rarity { get; set; } = "Uncommon";
+    public bool RequiresAttunement { get; set; }
+    [Hint("Who can attune, if limited, e.g. 'by a spellcaster'. Blank if anyone can.")]
+    public string Attunement { get; set; } = "";
+    public string Price { get; set; } = "";
+}
+
 public class ClassLevelDef
 {
     public int Level { get; set; } = 1;
@@ -200,4 +213,5 @@ public class ContentLibrary
     public List<TalentDef> Talents { get; set; } = new();
     public List<SpellDef> Spells { get; set; } = new();
     public List<ItemDef> Items { get; set; } = new();
+    public List<MagicItemDef> MagicItems { get; set; } = new();
 }

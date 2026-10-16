@@ -1,3 +1,5 @@
+@inject ContentService Content
+
 @* Page 3 of the printed sheet: magic items, mounts, vehicles, base. *@
 <div class="flex flex-col gap-3">
     <Box Title="Magic Items">
@@ -16,19 +18,117 @@
                         <input class="field font-semibold" aria-label="Item name" @bind="item.Name" @bind:after="Save" />
                         <button type="button" class="icon-btn" title="Remove" @onclick="() => Remove(C.MagicItems, item)">✕</button>
                     </div>
+                    @if (!string.IsNullOrEmpty(item.Rarity) || !string.IsNullOrEmpty(item.ItemType))
+                    {
+                        <div class="flex flex-wrap gap-1 mt-1">
+                            @if (!string.IsNullOrEmpty(item.ItemType))
+                            {
+                                <span class="chip">@item.ItemType</span>
+                            }
+                            @if (!string.IsNullOrEmpty(item.Rarity))
+                            {
+                                <span class="chip">@item.Rarity</span>
+                            }
+                        </div>
+                    }
                     <div class="flex items-center gap-3 mt-1">
                         <label class="flex items-center gap-1.5 text-sm"><input type="checkbox" @bind="item.RequiresAttunement" @bind:after="Save" /> Requires attunement</label>
-                        <label class="flex items-center gap-1.5 text-sm ml-auto">
-                            <button type="button" class="pip @(item.Attuned ? "on" : "")" disabled="@(!item.Attuned && C.AttunedCount() >= C.AttunementSlots)"
-                                    title="Attune" @onclick="() => ToggleAttune(item)"></button>
-                            Attuned
-                        </label>
+                        @if (item.RequiresAttunement || item.Attuned || IsHandTyped(item))
+                        {
+                            <label class="flex items-center gap-1.5 text-sm ml-auto">
+                                <button type="button" class="pip @(item.Attuned ? "on" : "")" disabled="@(!item.Attuned && C.AttunedCount() >= C.AttunementSlots)"
+                                        title="Attune" @onclick="() => ToggleAttune(item)"></button>
+                                Attuned
+                            </label>
+                        }
                     </div>
+                    @if (item.RequiresAttunement && !string.IsNullOrEmpty(item.Attunement))
+                    {
+                        <div class="text-xs muted mt-0.5">Attunement: @item.Attunement</div>
+                    }
                     <textarea class="area text-sm mt-1.5" rows="2" style="min-height:3rem" placeholder="Notes" @bind="item.Notes" @bind:after="Save"></textarea>
                 </div>
             }
         </div>
-        <button type="button" class="btn btn-sm mt-2" @onclick="AddMagicItem">+ Magic item</button>
+
+        @if (Content.MagicItems.Any())
+        {
+            var filtered = Filtered().ToList();
+            <div class="flex flex-wrap gap-1.5 items-center mt-2" role="group" aria-label="Filter magic items">
+                <input class="field spell-filter" style="max-width:12rem" placeholder="Search by name" aria-label="Search magic items" autocomplete="off"
+                       value="@filter.Search" @oninput="e => SetFilter(() => filter.Search = e.Value?.ToString() ?? string.Empty)" />
+                <select class="select spell-filter" aria-label="Rarity" value="@filter.Rarity" @onchange="e => SetFilter(() => filter.Rarity = e.Value?.ToString() ?? string.Empty)">
+                    <option value="">Any Rarity</option>
+                    @foreach (var r in MagicItemFilter.Rarities)
+                    {
+                        <option value="@r">@r</option>
+                    }
+                </select>
+                <select class="select spell-filter" aria-label="Item type" value="@filter.Type" @onchange="e => SetFilter(() => filter.Type = e.Value?.ToString() ?? string.Empty)">
+                    <option value="">Any Type</option>
+                    @foreach (var t in MagicItemFilter.Types)
+                    {
+                        <option value="@t">@t</option>
+                    }
+                </select>
+                <span class="muted text-sm" aria-live="polite">@filtered.Count @(filtered.Count == 1 ? "item" : "items")</span>
+            </div>
+            <div class="flex flex-wrap gap-1.5 items-center mt-1.5">
+                <select class="select" style="max-width:20rem" aria-label="Add a magic item from library" value="@toAdd" disabled="@(filtered.Count == 0)"
+                        @onchange="e => Pick(e.Value?.ToString())">
+                    <option value="">@(filtered.Count > 0 ? "Add a magic item from library…" : "No magic items match these filters")</option>
+                    @foreach (var m in filtered)
+                    {
+                        <option @key="m.Id" value="@m.Id">@m.Name · @m.Rarity</option>
+                    }
+                </select>
+                <button type="button" class="btn btn-sm btn-primary" disabled="@(Selected is null)" @onclick="AddFromLibrary">Add</button>
+                <span class="muted text-sm mx-1">or</span>
+                <button type="button" class="btn btn-sm" @onclick="AddMagicItem">+ Magic item</button>
+            </div>
+            if (Selected is { } sel)
+            {
+                <div class="rounded-lg p-2 mt-1.5 text-sm" style="border:1px dashed var(--line)">
+                    <div class="flex flex-wrap gap-1">
+                        <span class="chip">@sel.ItemType</span><span class="chip">@sel.Rarity</span>
+                        @if (sel.RequiresAttunement)
+                        {
+                            <span class="chip">@AttuneLabel(sel)</span>
+                        }
+                        @if (!string.IsNullOrEmpty(sel.Price))
+                        {
+                            <span class="chip">@sel.Price</span>
+                        }
+                        <span class="chip">@sel.Source</span>
+                    </div>
+                    <p class="muted mt-1">@sel.Description</p>
+                    @if (MagicGear.RowType(sel) is { } rowType)
+                    {
+                        <div class="flex flex-wrap gap-1.5 items-center mt-1.5">
+                            <label class="flex items-center gap-1.5"><input type="checkbox" checked="@alsoRow" @onchange="e => alsoRow = e.Value is bool b && b" aria-label="Also add as a row" />
+                                Also add to @(rowType == ItemType.Weapon ? "Weapons" : "Armor") as</label>
+                            <select class="select" style="width:auto;max-width:14rem" aria-label="Base item" value="@baseId" @onchange="e => baseId = e.Value?.ToString() ?? string.Empty">
+                                <option value="">Choose base item…</option>
+                                @foreach (var b in MagicGear.BaseCandidates(sel, Content.Items))
+                                {
+                                    <option value="@b.Id">@b.Name</option>
+                                }
+                            </select>
+                            <span class="lbl">Bonus</span>
+                            <input type="number" min="0" max="5" class="field num w-12 text-center" aria-label="Magic bonus" @bind="bonus" />
+                        </div>
+                        if (alsoRow && string.IsNullOrEmpty(baseId))
+                        {
+                            <div class="text-xs muted mt-0.5">Choose the base item to add the row, or untick to add only the magic item.</div>
+                        }
+                    }
+                </div>
+            }
+        }
+        else
+        {
+            <button type="button" class="btn btn-sm mt-2" @onclick="AddMagicItem">+ Magic item</button>
+        }
     </Box>
 
     <Box Title="Mounts & Creatures">
@@ -96,6 +196,48 @@
     private async Task AddMagicItem() { C.MagicItems.Add(new MagicItem()); await Save(); }
     private async Task AddMount() { C.Mounts.Add(new Mount()); await Save(); }
     private async Task AddVehicle() { C.Vehicles.Add(new Vehicle()); await Save(); }
+
+    // ---- magic item library picker (TVCS-99) ----
+    private readonly MagicItemFilter filter = new();
+    private string toAdd = "";
+    private bool alsoRow;
+    private string baseId = "";
+    private int bonus;
+
+    private IEnumerable<MagicItemDef> Filtered() => Content.MagicItems.Where(filter.Matches);
+    /// <summary>Hand-typed items (no library type or rarity) keep the attune pip, as before TVCS-99.</summary>
+    private static bool IsHandTyped(MagicItem m) => string.IsNullOrEmpty(m.Rarity) && string.IsNullOrEmpty(m.ItemType);
+
+    private static string AttuneLabel(MagicItemDef m) =>
+        CharacterBuilder.AttunementNote(m) is { Length: > 0 } note ? $"Attunement {note}" : "Requires attunement";
+
+    private MagicItemDef? Selected =>string.IsNullOrEmpty(toAdd) ? null : Content.MagicItem(toAdd);
+
+    /// <summary>Applies a filter change and drops a selection the new filters hide.</summary>
+    private void SetFilter(Action apply)
+    {
+        apply();
+        if (Selected is { } s && !filter.Matches(s)) Pick("");
+    }
+
+    private void Pick(string? id)
+    {
+        toAdd = id ?? "";
+        var m = Selected;
+        var row = m is null ? null : MagicGear.DefaultBase(m, Content.Items);
+        baseId = row?.Id ?? "";
+        alsoRow = m is not null && MagicGear.RowType(m) is not null;
+        bonus = m is null ? 0 : MagicGear.DefaultBonus(m);
+    }
+
+    private async Task AddFromLibrary()
+    {
+        if (Selected is not { } m) return;
+        var row = alsoRow && MagicGear.RowType(m) is not null && !string.IsNullOrEmpty(baseId) ? Content.Item(baseId) : null;
+        CharacterBuilder.AddMagicItem(C, m, row, Math.Max(0, bonus));
+        Pick("");
+        await Save();
+    }
 
     private async Task ToggleAttune(MagicItem m)
     {

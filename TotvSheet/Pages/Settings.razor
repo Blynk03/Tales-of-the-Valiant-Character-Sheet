@@ -166,6 +166,7 @@
         TalentDef t => t.Category.ToString(),
         SpellDef s => $"{Rules.CircleName(s.Circle)}{(s.Circle > 0 ? " circle" : "")} · {s.School}" + (s.Ritual ? " · ritual" : ""),
         ItemDef i => i.Type.ToString() + (string.IsNullOrEmpty(i.Cost) ? "" : $" · {i.Cost}"),
+        MagicItemDef m => $"{m.ItemType} · {m.Rarity}" + (m.RequiresAttunement ? " · attunement" : ""),
         _ => ""
     };
 

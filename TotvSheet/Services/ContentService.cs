@@ -36,6 +36,7 @@ public class ContentService
         new("talents", "Talents", typeof(TalentDef), l => l.Talents),
         new("spells", "Spells", typeof(SpellDef), l => l.Spells),
         new("items", "Items", typeof(ItemDef), l => l.Items),
+        new("magicItems", "Magic Items", typeof(MagicItemDef), l => l.MagicItems),
     };
 
     public ContentLibrary Core { get; private set; } = new();
@@ -77,6 +78,7 @@ public class ContentService
     public IEnumerable<TalentDef> Talents => Merge(Core.Talents, User.Talents);
     public IEnumerable<SpellDef> Spells => Merge(Core.Spells, User.Spells);
     public IEnumerable<ItemDef> Items => Merge(Core.Items, User.Items);
+    public IEnumerable<MagicItemDef> MagicItems => Merge(Core.MagicItems, User.MagicItems);
 
     // Lookups by id ignore sample hiding, so characters built from a retired sample entry keep working.
     public ClassDef? Class(string id) => Merge(Core.Classes, User.Classes, hideSamples: false).FirstOrDefault(c => c.Id == id);
@@ -84,6 +86,7 @@ public class ContentService
     public IEnumerable<SubclassDef> SubclassesFor(string classId) => Subclasses.Where(s => s.ClassId == classId);
     public TalentDef? Talent(string id) => Merge(Core.Talents, User.Talents, hideSamples: false).FirstOrDefault(t => t.Id == id);
     public ItemDef? Item(string id) => Merge(Core.Items, User.Items, hideSamples: false).FirstOrDefault(i => i.Id == id);
+    public MagicItemDef? MagicItem(string id) => Merge(Core.MagicItems, User.MagicItems, hideSamples: false).FirstOrDefault(i => i.Id == id);
 
     /// <summary>Homebrew entries never push the built-in samples aside; imported book content does.</summary>
     public const string HomebrewSource = "Homebrew";
