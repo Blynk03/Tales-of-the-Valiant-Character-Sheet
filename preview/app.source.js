@@ -340,6 +340,9 @@ function render() {
   const sel = f && document.activeElement.selectionStart != null ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
   root.innerHTML = header() + '<main class="wrap">' + body() + '</main>' + modal();
   if (f) { const el = root.querySelector(`[data-f="${CSS.escape(f)}"]`); if (el) { el.focus(); try { if (sel) el.setSelectionRange(sel[0], sel[1]); } catch (e) {} } }
+  // Re-rendering resets scroll rows to the start; keep the chosen content kind visible (TVCS-100).
+  const kn = root.querySelector('.kind-nav'), kb = kn && kn.querySelector('.btn-primary');
+  if (kb && kn.scrollWidth > kn.clientWidth) { const l = kb.offsetLeft - kn.offsetLeft; if (l < kn.scrollLeft || l + kb.offsetWidth > kn.scrollLeft + kn.clientWidth) kn.scrollLeft = l - 8; }
 }
 function header() {
   const nav = (r, label) => `<button class="btn btn-sm ${S.route === r || (r === 'list' && S.route === 'sheet' && false) ? 'btn-primary' : ''}" data-act="go" data-a="${r}">${label}</button>`;
@@ -908,7 +911,7 @@ function settingsView() {
     <p class="muted" style="max-width:42rem">Add lineages, heritages, backgrounds, classes, subclasses, talents, spells and items from books you own or your own homebrew. Character creation and level up use everything here. Built-in entries are samples: customize them to match your book.</p></div>
     <div class="ml-auto flex gap-1.5"><button class="btn btn-sm" data-act="exportContent">Export my content</button><label class="btn btn-sm" style="cursor:pointer">Import…<input type="file" accept=".json,application/json" data-file="content" hidden></label></div></div>
     ${st.msg ? `<p class="text-sm mb-3" style="color:var(--good)">${esc(st.msg)}</p>` : ''}
-    <div class="grid lg:grid-cols-[13rem_minmax(0,1fr)] gap-4"><aside class="flex flex-col gap-3">
+    <div class="grid grid-cols-1 lg:grid-cols-[13rem_minmax(0,1fr)] gap-4"><aside class="flex flex-col gap-3 min-w-0">
       <nav class="kind-nav">${KINDS.map(([key, l]) => `<button class="btn ${st.kind === key ? 'btn-primary' : ''}" data-act="setKind" data-a="${key}">${l} <span style="opacity:.7">(${allEntries(key).length})</span></button>`).join('')}</nav>
       ${box('Sources', `<p class="muted text-xs mb-1.5">Turn a source off to hide it from creation and level up.</p>${allSources().map(s => `<label class="flex items-center gap-2 text-sm py-0.5" style="cursor:pointer"><input type="checkbox" data-act="toggleSource" data-a="${esc(s)}" ${S.disabled.includes(s) ? '' : 'checked'}> <span class="truncate">${esc(s)}</span></label>`).join('')}`)}
     </aside>

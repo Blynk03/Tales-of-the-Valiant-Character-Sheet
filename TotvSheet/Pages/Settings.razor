@@ -27,9 +27,9 @@
     <p class="text-sm mb-3" style="color:var(--good)">@message</p>
 }
 
-<div class="grid lg:grid-cols-[13rem_minmax(0,1fr)] gap-4">
-    <aside class="flex flex-col gap-3">
-        <nav class="flex lg:flex-col gap-1 overflow-x-auto">
+<div class="grid grid-cols-1 lg:grid-cols-[13rem_minmax(0,1fr)] gap-4">
+    <aside class="flex flex-col gap-3 min-w-0">
+        <nav class="flex lg:flex-col gap-1 overflow-x-auto min-w-0">
             @foreach (var k in ContentService.Kinds)
             {
                 var kindRef = k;
