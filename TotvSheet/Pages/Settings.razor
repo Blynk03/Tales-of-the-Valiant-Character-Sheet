@@ -16,10 +16,10 @@
     </div>
     <div class="ml-auto flex gap-1.5">
         <button type="button" class="btn btn-sm" @onclick="Export">Export my content</button>
-        <label class="btn btn-sm cursor-pointer">
-            Import…
-            <InputFile class="hidden" accept=".json,application/json" OnChange="Import" />
-        </label>
+        @* A real button opens the visually hidden picker: some browsers ignore a label wrapping a display:none
+           input inside an embedded page, and iOS greys out .json files under an accept filter (TVCS-101). *@
+        <button type="button" class="btn btn-sm" @onclick="PickImport">Import…</button>
+        <InputFile id="content-import" class="vh" tabindex="-1" aria-label="Import content files" multiple OnChange="Import" />
     </div>
 </div>
 @if (!string.IsNullOrEmpty(message))
@@ -182,7 +182,7 @@
     private async Task ToggleSource(string source)
     {
         if (!Content.DisabledSources.Remove(source)) Content.DisabledSources.Add(source);
-        await Content.SaveAsync();
+        await Content.SaveSourcesAsync();
     }
 
     private void New()
@@ -272,18 +272,40 @@
     private async Task Export() =>
         await JS.InvokeVoidAsync("totv.download", "valiant-content.json", Content.ExportUserJson());
 
+    private async Task PickImport() => await JS.InvokeVoidAsync("totv.clickElement", "content-import");
+
+    /// <summary>Imports one or more picked files, saving once at the end, and reports each file's result.</summary>
     private async Task Import(InputFileChangeEventArgs e)
     {
-        try
+        var files = e.GetMultipleFiles(Math.Max(1, e.FileCount));
+        var lines = new List<string>();
+        int total = 0;
+        message = $"Importing {files.Count} file{(files.Count == 1 ? "" : "s")}…";
+        StateHasChanged();
+        foreach (var file in files)
         {
-            using var reader = new StreamReader(e.File.OpenReadStream(10_000_000));
-            var count = await Content.ImportAsync(await reader.ReadToEndAsync());
-            message = $"Imported {count} entries.";
+            try
+            {
+                using var reader = new StreamReader(file.OpenReadStream(20_000_000));
+                var n = await Content.ImportAsync(await reader.ReadToEndAsync(), save: false);
+                if (n == 0) throw new InvalidDataException("it has no content entries");
+                total += n;
+                lines.Add($"{file.Name}: {n} entries");
+            }
+            catch (JsonException)
+            {
+                lines.Add($"{file.Name}: couldn't import (not a JSON file)");
+            }
+            catch (Exception ex)
+            {
+                lines.Add($"{file.Name}: couldn't import ({ex.Message})");
+            }
         }
-        catch (Exception ex)
-        {
-            message = $"Couldn't import: {ex.Message}";
-        }
+        var saved = total == 0 || await Content.SaveAsync();
+        message = files.Count == 1 && total > 0
+            ? $"Imported {total} entries."
+            : (files.Count > 1 ? $"Imported {total} entries from {files.Count} files. " : "") + string.Join(" · ", lines);
+        if (!saved) message += " Not saved: this browser's storage is full or blocked, so the import lasts only until the page closes.";
     }
 
     private static string Slug(string name)

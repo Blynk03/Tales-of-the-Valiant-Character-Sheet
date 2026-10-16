@@ -15,6 +15,9 @@ public class ContentService
 {
     private const string UserKey = "totv.content";
     private const string DisabledKey = "totv.disabledSources";
+    /// <summary>Set once the library has been saved to IndexedDB, so a failed open later isn't mistaken for "no library".</summary>
+    private const string InIdbKey = "totv.contentInIdb";
+    private bool _locked;
 
     private readonly HttpClient _http;
     private readonly StorageService _storage;
@@ -56,14 +59,39 @@ public class ContentService
         {
             Console.WriteLine($"Could not load core content: {ex.Message}");
         }
-        User = await _storage.GetAsync<ContentLibrary>(UserKey) ?? new();
+        // The library lives in IndexedDB (TVCS-101); a copy saved in localStorage by an older version is moved across once.
+        // A copy in localStorage exists only when it is newer than IndexedDB's (from an older version, or saved while
+        // IndexedDB was unavailable): a successful IndexedDB save always removes it. So it wins, and is moved across.
+        var local = await _storage.GetAsync<ContentLibrary>(UserKey);
+        if (local is not null)
+        {
+            User = local;
+            await _storage.SetLargeAsync(UserKey, User);
+        }
+        else
+        {
+            var (available, found, stored) = await _storage.GetLargeAsync<ContentLibrary>(UserKey);
+            User = found ? stored ?? new() : new();
+            // IndexedDB holds the library but didn't open this time: don't let a save from an empty library replace it.
+            if (!available && await _storage.GetAsync<bool>(InIdbKey)) { _locked = true; _storage.ReportFailure(); }
+        }
         DisabledSources = await _storage.GetAsync<HashSet<string>>(DisabledKey) ?? new();
         _loaded = true;
     }
 
-    public async Task SaveAsync()
+    /// <summary>Saves the library and sources. Returns false if the browser refused (the layout shows a warning).</summary>
+    public async Task<bool> SaveAsync()
     {
-        await _storage.SetAsync(UserKey, User);
+        var ok = !_locked && await _storage.SetLargeAsync(UserKey, User);
+        if (_locked) _storage.ReportFailure();
+        ok &= await _storage.SetAsync(DisabledKey, DisabledSources);
+        Changed?.Invoke();
+        return ok;
+    }
+
+    /// <summary>Saves only the enabled/disabled sources (the library itself is unchanged).</summary>
+    public async Task SaveSourcesAsync()
+    {
         await _storage.SetAsync(DisabledKey, DisabledSources);
         Changed?.Invoke();
     }
@@ -145,7 +173,7 @@ public class ContentService
     public string ExportUserJson() => Json.Serialize(User, pretty: true);
 
     /// <summary>Merges an exported content file into the user's content. Returns entries imported.</summary>
-    public async Task<int> ImportAsync(string json)
+    public async Task<int> ImportAsync(string json, bool save = true)
     {
         var incoming = Json.Deserialize<ContentLibrary>(json) ?? new();
         int count = 0;
@@ -161,7 +189,7 @@ public class ContentService
                 count++;
             }
         }
-        await SaveAsync();
+        if (save) await SaveAsync();
         return count;
     }
 }

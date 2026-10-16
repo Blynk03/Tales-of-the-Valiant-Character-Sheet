@@ -1,4 +1,6 @@
 @inherits LayoutComponentBase
+@implements IDisposable
+@inject StorageService Storage
 
 <header class="sticky top-0 z-30" style="background:var(--card);border-bottom:2px solid var(--ink)">
     <div class="max-w-7xl mx-auto px-4 h-14 flex items-center gap-2 sm:gap-4">
@@ -10,8 +12,23 @@
             <NavLink class="btn btn-sm" ActiveClass="btn-primary" href="settings">Content</NavLink>
         </nav>
     </div>
+    @if (Storage.SaveFailed)
+    {
+        <div class="storage-warn" role="alert">
+            This browser isn't saving changes (its storage is full or blocked). Anything you change now is kept only until
+            this page closes. Export your characters to keep them.
+        </div>
+    }
 </header>
 
 <main class="max-w-7xl mx-auto px-4 py-4 pb-40">
     @Body
 </main>
+
+@code {
+    protected override void OnInitialized() => Storage.SaveFailedChanged += OnSaveFailed;
+
+    private void OnSaveFailed() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Storage.SaveFailedChanged -= OnSaveFailed;
+}

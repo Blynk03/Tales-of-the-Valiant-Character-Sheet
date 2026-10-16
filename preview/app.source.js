@@ -30,8 +30,34 @@ const die = n => 1 + Math.floor(Math.random() * n);
 const hitAvg = d => Math.floor(d / 2) + 1;
 const store = {
   get(k) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } },
-  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage blocked: keep in memory */ } }
+  /** Returns false when the browser refuses (storage full or blocked) so callers can warn instead of failing silently. */
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } },
+  remove(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } }
 };
+// The content library outgrew localStorage (~5 MB per site, ~2.5M characters in Safari), so it lives in IndexedDB (TVCS-101).
+// get() resolves undefined when IndexedDB is unavailable (or doesn't answer), null when the key is missing.
+const idb = (() => {
+  let dbp = null;
+  const open = () => dbp || (dbp = new Promise((res, rej) => {
+    const r = indexedDB.open('valiant-sheet', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error('blocked'));
+  }).catch(e => { dbp = null; throw e; })); // try again on the next call
+  const timeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+  return {
+    async get(k) {
+      try { const db = await timeout(open(), 2000);
+        return await new Promise((res, rej) => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result === undefined ? null : q.result); q.onerror = () => rej(q.error); });
+      } catch (e) { return undefined; }
+    },
+    async set(k, v) {
+      try { const db = await timeout(open(), 2000);
+        await new Promise((res, rej) => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = () => res(); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error || new Error('aborted')); });
+        return true;
+      } catch (e) { return false; }
+    }
+  };
+})();
 
 // ---------- derived values (mirror of Models/Rules.cs) ----------
 const M = (c, a) => mod(c.scores[ABIL.indexOf(a)]);
@@ -319,7 +345,22 @@ const S = {
   pick: {}, mf: { search: '', rarity: '', type: '' }, mi: { id: '', alsoRow: false, baseId: '', bonus: 0 }, sf: { spell: { source: '', circle: '', school: '' }, ritual: { source: '', circle: '', school: '' } }, lu: null, sort: 'level'
 };
 const C = () => S.chars.find(c => c.id === S.charId);
-function persist() { store.set('vs.chars', S.chars); store.set('vs.content', S.user); store.set('vs.disabled', S.disabled); }
+const STORAGE_WARN = "This browser isn't saving changes (its storage is full or blocked). Anything you change now is kept only until this page closes. Export your characters to keep them.";
+/** Saves characters and settings; pass true when the content library changed too (it is large, so it isn't rewritten on every edit). */
+function persist(content) {
+  const ok = store.set('vs.chars', S.chars) & store.set('vs.disabled', S.disabled);
+  if (!ok) S.storageWarn = STORAGE_WARN;
+  if (content) saveContent();
+}
+let contentSave = Promise.resolve();
+function saveContent() {
+  const snapshot = S.user;
+  if (S.contentLocked) return;
+  contentSave = contentSave.then(async () => {
+    if (await idb.set('vs.content', snapshot)) { store.remove('vs.content'); store.set('vs.contentInIdb', 1); return; }
+    if (!store.set('vs.content', snapshot)) { S.storageWarn = STORAGE_WARN; render(); }
+  }).catch(() => { /* keep the chain alive for later saves */ });
+}
 function save() { const c = C(); if (c) c.updated = new Date().toISOString(); persist(); }
 
 function exampleCharacter() {
@@ -349,7 +390,7 @@ function header() {
   return `<header class="topbar"><div class="topbar-in">
     <button class="brand display" data-act="go" data-a="list"><span aria-hidden="true">⚔</span> Valiant Sheet</button>
     <span class="chip hide-sm">Preview of the Blazor prototype</span>
-    <nav class="ml-auto flex gap-1">${nav('list', 'Characters')}${nav('settings', 'Content')}</nav></div></header>`;
+    <nav class="ml-auto flex gap-1">${nav('list', 'Characters')}${nav('settings', 'Content')}</nav></div>${S.storageWarn ? `<div class="storage-warn" role="alert">${esc(S.storageWarn)}</div>` : ''}</header>`;
 }
 function body() {
   if (S.route === 'list') return listView();
@@ -387,7 +428,7 @@ function listView() {
     <p class="muted">Saved in this browser. Pick one to open the sheet.</p></div>
     <button class="btn btn-primary ml-auto" data-act="startCreate">+ New character</button></div>
     ${S.chars.length ? `<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">${cards}</div>` : `<div class="box text-center py-8"><p class="mb-3">No saved characters yet.</p><button class="btn btn-primary" data-act="startCreate">Create your first character</button></div>`}
-    <div class="box mt-6"><div class="box-title">Import a character</div><div class="flex justify-center"><input type="file" accept=".json,application/json" data-file="char" aria-label="Import character JSON"></div></div>`;
+    <div class="box mt-6"><div class="box-title">Import a character</div><div class="flex justify-center"><input type="file" data-file="char" aria-label="Import character JSON"></div></div>`;
 }
 
 // ---------- sheet ----------
@@ -909,7 +950,7 @@ function settingsView() {
   const rows = allEntries(st.kind).filter(r => !st.search || (r.e.name + ' ' + r.e.source).toLowerCase().includes(st.search.toLowerCase()));
   return `<div class="flex flex-wrap items-end gap-3 mb-4"><div><h1 class="display font-extrabold text-2xl" style="color:var(--ink)">Content library</h1>
     <p class="muted" style="max-width:42rem">Add lineages, heritages, backgrounds, classes, subclasses, talents, spells and items from books you own or your own homebrew. Character creation and level up use everything here. Built-in entries are samples: customize them to match your book.</p></div>
-    <div class="ml-auto flex gap-1.5"><button class="btn btn-sm" data-act="exportContent">Export my content</button><label class="btn btn-sm" style="cursor:pointer">Import…<input type="file" accept=".json,application/json" data-file="content" hidden></label></div></div>
+    <div class="ml-auto flex gap-1.5"><button class="btn btn-sm" data-act="exportContent">Export my content</button><button class="btn btn-sm" data-act="pickImport">Import…</button><input type="file" multiple data-file="content" class="vh" tabindex="-1" aria-label="Import content files"></div></div>
     ${st.msg ? `<p class="text-sm mb-3" style="color:var(--good)">${esc(st.msg)}</p>` : ''}
     <div class="grid grid-cols-1 lg:grid-cols-[13rem_minmax(0,1fr)] gap-4"><aside class="flex flex-col gap-3 min-w-0">
       <nav class="kind-nav">${KINDS.map(([key, l]) => `<button class="btn ${st.kind === key ? 'btn-primary' : ''}" data-act="setKind" data-a="${key}">${l} <span style="opacity:.7">(${allEntries(key).length})</span></button>`).join('')}</nav>
@@ -1097,7 +1138,7 @@ const A = {
   edNew() { Object.assign(S.set, { draft: BLANK[S.set.kind](), isNew: true, core: false, json: false, err: '' }); S.open = {}; S.modal = 'editor'; },
   edOpen(id) { const r = allEntries(S.set.kind).find(x => x.e.id === id); Object.assign(S.set, { draft: withDefaults(S.set.kind, clone(r.e)), isNew: false, core: !r.user, json: false, err: '' }); S.open = {}; S.modal = 'editor'; },
   edCopy(id) { const r = allEntries(S.set.kind).find(x => x.e.id === id), d = withDefaults(S.set.kind, clone(r.e)); d.id = ''; d.name += ' (copy)'; d.source = 'Homebrew'; Object.assign(S.set, { draft: d, isNew: true, core: false, json: false, err: '' }); S.open = {}; S.modal = 'editor'; },
-  edDelete(id) { const r = allEntries(S.set.kind).find(x => x.e.id === id); S.modal = { confirm: r.over ? `Revert ${r.e.name} to the built-in version?` : `Delete ${r.e.name}?`, yes: r.over ? 'Revert' : 'Delete', danger: true, then() { S.user[S.set.kind] = S.user[S.set.kind].filter(x => x.id !== id); persist(); S.set.msg = (r.over ? 'Reverted ' : 'Deleted ') + r.e.name + '.'; } }; },
+  edDelete(id) { const r = allEntries(S.set.kind).find(x => x.e.id === id); S.modal = { confirm: r.over ? `Revert ${r.e.name} to the built-in version?` : `Delete ${r.e.name}?`, yes: r.over ? 'Revert' : 'Delete', danger: true, then() { S.user[S.set.kind] = S.user[S.set.kind].filter(x => x.id !== id); persist(true); S.set.msg = (r.over ? 'Reverted ' : 'Deleted ') + r.e.name + '.'; } }; },
   edToggle(p) { const [path, v] = p.split('|'); const { obj, key } = resolve(path); const l = obj[key], i = l.indexOf(v); if (i >= 0) l.splice(i, 1); else l.push(v); },
   edAdd(p) { const [path, k] = p.split('|'); const { obj, key } = resolve(path); obj[key].push(TEMPLATES[k](obj[key])); S.open = S.open || {}; S.open[`${path}.${obj[key].length - 1}`] = true; },
   edRemove(p) { const [path, i] = p.split('|'); const { obj, key } = resolve(path); obj[key].splice(+i, 1); },
@@ -1108,9 +1149,11 @@ const A = {
     const d = st.draft; if (!d.name || !d.name.trim()) { st.err = 'Give it a name.'; return; }
     if (!d.id) d.id = 'hb-' + (d.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || uid().slice(0, 6));
     if (st.isNew && allEntries(st.kind).some(r => r.e.id === d.id)) { st.err = `The id '${d.id}' is already used. Change the Id field.`; return; }
-    const list = S.user[st.kind] = (S.user[st.kind] || []).filter(x => x.id !== d.id); list.push(d); persist();
+    const list = S.user[st.kind] = (S.user[st.kind] || []).filter(x => x.id !== d.id); list.push(d); persist(true);
     st.msg = `Saved ${d.name}.`; S.modal = null; st.draft = null;
   },
+  // A real button opens the (visually hidden) picker: some browsers ignore a label wrapping a display:none input inside an embedded page (TVCS-101).
+  pickImport() { const i = root.querySelector('input[data-file=content]'); if (i) i.click(); return 'norender'; },
   exportContent() { S.modal = { title: 'Export my content', json: JSON.stringify(S.user, null, 2) }; }
 };
 
@@ -1176,26 +1219,50 @@ document.addEventListener('pointerup', () => { pointerDown = false; if (pendingR
 function renderSoon() { if (pointerDown) pendingRender = true; else render(); }
 root.addEventListener('toggle', e => { const d = e.target; if (d.dataset && d.dataset.open) { S.open = S.open || {}; S.open[d.dataset.open] = d.open; } }, true);
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.modal) { S.modal = null; render(); } });
-function readFile(el) {
-  const file = el.files && el.files[0]; if (!file) return;
-  const fr = new FileReader();
-  fr.onload = () => {
+const readText = file => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(fr.error || new Error('unreadable')); fr.readAsText(file); });
+async function readFile(el) {
+  const files = [...(el.files || [])]; el.value = ''; // reset so picking the same file again still fires
+  if (!files.length) return;
+  if (el.dataset.file === 'char') {
+    try { const data = JSON.parse(await readText(files[0])); if (!data.scores) throw new Error("that file isn't a character"); data.id = uid(); S.chars.push(Object.assign(newChar(), data)); persist(); }
+    catch (err) { S.set.msg = "Couldn't import: " + (err instanceof SyntaxError ? `${files[0].name} isn't a JSON file` : err.message); }
+    render(); return;
+  }
+  S.set.msg = `Importing ${files.length} file${files.length > 1 ? 's' : ''}…`; render();
+  const lines = []; let total = 0;
+  for (const file of files) {
     try {
-      const data = JSON.parse(fr.result);
-      if (el.dataset.file === 'char') { if (!data.scores) throw new Error("that file isn't a character"); data.id = uid(); S.chars.push(Object.assign(newChar(), data)); persist(); }
-      else { let n = 0; KINDS.forEach(([k]) => (data[k] || []).forEach(en => { if (!en.id) en.id = uid().slice(0, 8); S.user[k] = (S.user[k] || []).filter(x => x.id !== en.id); S.user[k].push(en); n++; })); persist(); S.set.msg = `Imported ${n} entries.`; }
-    } catch (err) { S.set.msg = "Couldn't import: " + err.message; }
-    render();
-  };
-  fr.readAsText(file);
+      const data = JSON.parse(await readText(file)); let n = 0;
+      KINDS.forEach(([k]) => (Array.isArray(data[k]) ? data[k] : []).forEach(en => { if (!en.id) en.id = uid().slice(0, 8); S.user[k] = (S.user[k] || []).filter(x => x.id !== en.id); S.user[k].push(en); n++; }));
+      if (!n) throw new Error('it has no content entries');
+      total += n; lines.push(`${file.name}: ${n} entries`);
+    } catch (err) { lines.push(`${file.name}: couldn't import (${err instanceof SyntaxError ? "not a JSON file" : err.message})`); }
+  }
+  if (total) persist(true);
+  S.set.msg = (files.length > 1 ? `Imported ${total} entries from ${files.length} files. ` : '') + lines.join(' · ');
+  if (files.length === 1 && total) S.set.msg = `Imported ${total} entries.`;
+  render();
 }
 
 // ---------- boot ----------
-S.user = Object.assign(emptyLib(), store.get('vs.content') || {});
+S.user = emptyLib();
 S.disabled = store.get('vs.disabled') || [];
 S.chars = store.get('vs.chars') || [];
 if (!S.chars.length) { S.chars = [exampleCharacter()]; }
 S.charId = S.chars[0].id;
 d20('Perception check', skB(C(), 'Perception'));
-render();
+// Load the content library from IndexedDB, moving any copy left in localStorage across first.
+(async () => {
+  // A copy in localStorage exists only when it is newer than IndexedDB's (from an older version, or saved while
+  // IndexedDB was unavailable): a successful IndexedDB save always removes it. So it wins, and is moved across.
+  let content = store.get('vs.content');
+  if (content) { if (await idb.set('vs.content', content)) { store.remove('vs.content'); store.set('vs.contentInIdb', 1); } }
+  else {
+    content = await idb.get('vs.content');
+    // IndexedDB holds the library but didn't open this time: don't let a save from an empty library replace it.
+    if (content === undefined && store.get('vs.contentInIdb')) { S.contentLocked = true; S.storageWarn = "Your content library couldn't be opened this time, so changes to it won't be saved. Reload the page to try again."; }
+  }
+  S.user = Object.assign(emptyLib(), content || {});
+  render();
+})();
 })();
