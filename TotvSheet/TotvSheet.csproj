@@ -5,6 +5,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>TotvSheet</RootNamespace>
+    <!-- Shown in the footer and on problem reports; CI adds the commit (SourceRevisionId) after a '+'. -->
+    <Version>1.0.0</Version>
     <!-- Offline support (TVCS-105): list every published file with its hash for the service worker. -->
     <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
   </PropertyGroup>

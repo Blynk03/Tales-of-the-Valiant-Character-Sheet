@@ -32,6 +32,12 @@ To move or back up:
 - **Characters:** on the character list, use **Export** on each character, then **Import a character** on the other device.
 - **Content:** re-import the same content files, or use **Export my content** on the Content page and import that file.
 
+**Found a problem?** Use **Report a problem** at the bottom of any page. It opens a GitHub issue form with the app
+version, the page you were on and your device already filled in (you'll need a free GitHub account). Reports land in
+this repository's [Issues](https://github.com/Blynk03/Tales-of-the-Valiant-Character-Sheet/issues), labelled
+`from-app`. To send reports somewhere else, change `ReportProblem:Url` in `TotvSheet/wwwroot/appsettings.json` (see
+`TotvSheet/Services/ProblemReport.cs`); leave it blank to hide the link.
+
 If you used the earlier preview on claude.ai, its data stays there: export your characters from it and import them here.
 
 ## Quick start

@@ -201,3 +201,8 @@ input[type=number].field::-webkit-inner-spin-button { opacity: .4; }
   background: var(--card); color: var(--text); border: 2px solid var(--ink); border-radius: 9999px; padding: .4rem .5rem .4rem 1rem;
   box-shadow: 0 10px 30px -12px rgba(0,0,0,.45); max-width: calc(100vw - 32px); }
 .update-bar[hidden] { display: none; }
+
+/* TVCS-106: footer with the "Report a problem" link */
+.site-foot { margin-top: 2.5rem; padding-top: .75rem; border-top: 1px solid var(--ink-faint); font-size: .9rem; color: var(--ink-soft); text-align: center; }
+.site-foot a { color: var(--ink); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.site-foot-ver { margin-left: .5rem; opacity: .7; font-size: .8rem; }

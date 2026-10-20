@@ -21,6 +21,18 @@ window.totv = {
   lsRemove: function (key) {
     try { localStorage.removeItem(key); } catch (e) { /* ignore */ }
   },
+  // Short device description for problem reports (TVCS-106), e.g. "Chrome 141 · Android 14 · 800×1280 · installed".
+  deviceInfo: function () {
+    const ua = navigator.userAgent;
+    const m = (re) => { const r = ua.match(re); return r ? r[1] : null; };
+    const browser = m(/Edg\/(\d+)/) ? 'Edge ' + m(/Edg\/(\d+)/) : m(/SamsungBrowser\/(\d+)/) ? 'Samsung Internet ' + m(/SamsungBrowser\/(\d+)/)
+      : m(/Firefox\/(\d+)/) ? 'Firefox ' + m(/Firefox\/(\d+)/) : m(/Chrome\/(\d+)/) ? 'Chrome ' + m(/Chrome\/(\d+)/)
+      : m(/Version\/([\d.]+).*Safari/) ? 'Safari ' + m(/Version\/([\d.]+).*Safari/) : 'Unknown browser';
+    const os = m(/Android ([\d.]+)/) ? 'Android ' + m(/Android ([\d.]+)/) : /iPhone|iPad|iPod/.test(ua) ? 'iOS ' + (m(/OS (\d+[_\d]*)/) || '').replace(/_/g, '.')
+      : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'macOS' : /CrOS/.test(ua) ? 'ChromeOS' : /Linux/.test(ua) ? 'Linux' : 'Unknown OS';
+    const installed = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone ? 'installed' : 'in browser';
+    return [browser, os, screen.width + '×' + screen.height, installed].join(' · ');
+  },
   // Opens a visually hidden file input from a real button.
   clickElement: function (id) {
     const el = document.getElementById(id);

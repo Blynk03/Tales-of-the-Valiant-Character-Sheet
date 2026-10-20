@@ -1,6 +1,9 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject StorageService Storage
+@inject NavigationManager Nav
+@inject Microsoft.Extensions.Configuration.IConfiguration Config
+@inject IJSRuntime JS
 
 <header class="sticky top-0 z-30" style="background:var(--card);border-bottom:2px solid var(--ink)">
     <div class="max-w-7xl mx-auto px-4 h-14 flex items-center gap-2 sm:gap-4">
@@ -23,12 +26,41 @@
 
 <main class="max-w-7xl mx-auto px-4 py-4 pb-40">
     @Body
+    @if (ReportUrl is { } url)
+    {
+        <footer class="site-foot">
+            Something wrong or missing? <a href="@url" target="_blank" rel="noopener">Report a problem</a>
+            <span class="site-foot-ver">v@(ProblemReport.AppVersion)</span>
+        </footer>
+    }
 </main>
 
 @code {
-    protected override void OnInitialized() => Storage.SaveFailedChanged += OnSaveFailed;
+    private string _device = "";
+
+    // Page path (without any query) for the report link; character ids are random, not personal.
+    private string? ReportUrl => ProblemReport.Build(Config["ReportProblem:Url"], Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0], _device);
+
+    protected override void OnInitialized()
+    {
+        Storage.SaveFailedChanged += OnSaveFailed;
+        Nav.LocationChanged += OnLocationChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try { _device = await JS.InvokeAsync<string>("totv.deviceInfo"); } catch { _device = "unknown"; }
+        StateHasChanged();
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => InvokeAsync(StateHasChanged);
 
     private void OnSaveFailed() => InvokeAsync(StateHasChanged);
 
-    public void Dispose() => Storage.SaveFailedChanged -= OnSaveFailed;
+    public void Dispose()
+    {
+        Storage.SaveFailedChanged -= OnSaveFailed;
+        Nav.LocationChanged -= OnLocationChanged;
+    }
 }

@@ -1,0 +1,46 @@
+name: Report a problem
+description: Something in Valiant Sheet is wrong, broken or confusing.
+title: "Problem: "
+labels: ["bug", "from-app"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Valiant Sheet. The **Report a problem** link in the app fills in the version,
+        page and device for you. Please don't paste text copied from the books; a page reference is plenty.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you see, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can we see it?
+      description: The steps that lead to the problem, if you know them.
+      placeholder: |
+        1. Open a level 3 rogue
+        2. Level up
+        3. ...
+  - type: input
+    id: book
+    attributes:
+      label: Book and page (if it's about content)
+      placeholder: "Player's Guide p. 112"
+  - type: input
+    id: version
+    attributes:
+      label: App version
+  - type: input
+    id: page
+    attributes:
+      label: Page in the app
+  - type: input
+    id: device
+    attributes:
+      label: Device and browser
+  - type: markdown
+    attributes:
+      value: A screenshot helps a lot. Drag it into the "What happened?" box.

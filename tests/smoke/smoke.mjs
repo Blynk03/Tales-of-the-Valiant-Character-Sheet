@@ -37,6 +37,10 @@ try {
   });
   check('Tailwind styles apply', look.tailwind === 'flex', `.flex element has display ${look.tailwind}`);
   check('Bundled fonts load', look.cinzel && look.crimson, JSON.stringify(look));
+  // "Report a problem" (TVCS-106) opens the issue form with the version, page and device filled in.
+  const report = await page.locator('.site-foot a', { hasText: 'Report a problem' }).getAttribute('href').catch(() => null);
+  check('Report a problem link is filled in', report && /template=problem-report\.yml/.test(report) && /version=1\./.test(report)
+    && /[?&]page=/.test(report) && /[?&]device=[^&·]+%C2%B7/.test(report), report || 'no link');
   if (await page.getByRole('link', { name: '+ New character' }).isVisible()) await page.getByRole('link', { name: '+ New character' }).click();
 
   // Create a character with the built-in sample content, choosing whatever each step needs.

@@ -38,13 +38,13 @@ jobs:
           git diff --quiet -- wwwroot/css/tailwind.css || echo "::warning file=TotvSheet/wwwroot/css/tailwind.css::Committed tailwind.css is out of date; rebuild it (see TotvSheet/README.md)."
 
       - name: Build
-        run: dotnet build TotvSheet/TotvSheet.csproj -c Release
+        run: dotnet build TotvSheet/TotvSheet.csproj -c Release -p:SourceRevisionId=${{ github.sha }}
 
       # Lists compiler warnings on the check run without failing the build.
       - name: Report warnings
         continue-on-error: true
         run: |
-          dotnet build TotvSheet/TotvSheet.csproj -c Release --no-incremental -v q 2>&1 | grep -E ': warning [A-Z]+[0-9]+' | sort -u > warnings.txt || true
+          dotnet build TotvSheet/TotvSheet.csproj -c Release --no-incremental -v q -p:SourceRevisionId=${{ github.sha }} 2>&1 | grep -E ': warning [A-Z]+[0-9]+' | sort -u > warnings.txt || true
           echo "Compiler warnings: $(wc -l < warnings.txt)"
           echo "::notice title=Compiler warnings::$(wc -l < warnings.txt) warning(s)"
           head -40 warnings.txt | sed -E 's#^.*/(TotvSheet/[^(]+)\(([0-9]+),[0-9]+\): warning ([A-Z]+[0-9]+): (.*) \[.*$#::warning file=\1,line=\2::\3 \4#'
@@ -79,7 +79,7 @@ jobs:
           BASE="/${{ github.event.repository.name }}/"
           sed -i "s#<base href=\"/\" />#<base href=\"$BASE\" />#" TotvSheet/wwwroot/index.html
           grep -q "<base href=\"$BASE\"" TotvSheet/wwwroot/index.html
-          dotnet publish TotvSheet/TotvSheet.csproj -c Release -o publish-pages
+          dotnet publish TotvSheet/TotvSheet.csproj -c Release -o publish-pages -p:SourceRevisionId=${{ github.sha }}
           cp -r publish-pages/wwwroot pages
           grep -q "<base href=\"$BASE\"" pages/index.html
           cp pages/index.html pages/404.html
