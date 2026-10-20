@@ -54,6 +54,6 @@ jobs:
 
       - name: Smoke test the published app
         run: |
-          python3 -m http.server 8080 --directory publish/wwwroot > /dev/null 2>&1 &
+          node tests/smoke/serve.mjs publish/wwwroot 8080 &
           sleep 2
           node tests/smoke/smoke.mjs http://localhost:8080/
