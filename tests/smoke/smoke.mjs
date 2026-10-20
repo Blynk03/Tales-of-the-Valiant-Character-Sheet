@@ -38,6 +38,8 @@ try {
     const box = page.locator('.box').last();
     const choices = box.locator('button.choice:not([disabled])');
     if (await box.locator('.choice.selected').count() === 0 && await choices.count()) { actions.push('choice'); await choices.first().click(); continue; }
+    const radios = box.locator('button[role=radio]:not([disabled])');
+    if (await radios.count() && await box.locator('button[role=radio][aria-checked=true]').count() === 0) { actions.push('radio'); await radios.first().click(); continue; }
     let filled = false;
     for (const inp of await box.locator('input.field:not([type=number])').all()) { if (!(await inp.inputValue())) { await inp.fill('Common'); await inp.press('Tab'); filled = true; actions.push('text'); } }
     if (filled) continue;
