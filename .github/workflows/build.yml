@@ -1,4 +1,4 @@
-name: Build
+name: Build and deploy
 
 on:
   push:
@@ -9,6 +9,11 @@ on:
 
 permissions:
   contents: read
+
+# One deployment at a time; a newer push replaces a queued one.
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -57,3 +62,60 @@ jobs:
           node tests/smoke/serve.mjs publish/wwwroot 8080 &
           sleep 2
           node tests/smoke/smoke.mjs http://localhost:8080/
+
+      # GitHub Pages serves the site under /<repo>/: set the base path, add a 404.html copy of index.html so
+      # deep links like /settings load, and .nojekyll so the _framework folder is served (TVCS-104).
+      - name: Prepare GitHub Pages site
+        run: |
+          BASE="/${{ github.event.repository.name }}/"
+          cp -r publish/wwwroot pages
+          sed -i "s#<base href=\"/\" />#<base href=\"$BASE\" />#" pages/index.html
+          grep -q "<base href=\"$BASE\"" pages/index.html
+          cp pages/index.html pages/404.html
+          touch pages/.nojekyll
+          echo "BASE=$BASE" >> "$GITHUB_ENV"
+
+      - name: Smoke test the Pages site under its sub-path
+        run: |
+          node tests/smoke/serve.mjs pages 8081 "$BASE" &
+          sleep 2
+          node tests/smoke/smoke.mjs "http://localhost:8081$BASE"
+
+      - name: Upload Pages artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
+
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  check-live:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install smoke-test browser
+        working-directory: tests/smoke
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Smoke test the live site
+        run: |
+          URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
+          for i in $(seq 1 20); do curl -fsS -o /dev/null "$URL" && break; sleep 15; done
+          node tests/smoke/smoke.mjs "$URL"

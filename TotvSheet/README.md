@@ -17,7 +17,13 @@ Then open http://localhost:5180. Characters and your content are saved in the br
 localStorage (per browser, per device). Use **Export** on the character list or the Content
 page to back them up as JSON.
 
-To publish as a static site (GitHub Pages, Azure Static Web Apps, Netlify…):
+**Hosting.** Every push to `main` is built, smoke-tested and deployed to GitHub Pages by
+[`.github/workflows/build.yml`](../.github/workflows/build.yml) (TVCS-103/104). The workflow sets `<base href>` to
+`/<repo>/`, adds a `404.html` copy of `index.html` so deep links like `/settings` load, adds `.nojekyll`, smoke-tests
+the site under that sub-path, deploys it, then smoke-tests the live site. One-time setup: in the repository's
+**Settings → Pages**, set **Source** to **GitHub Actions**.
+
+To publish elsewhere as a static site (Azure Static Web Apps, Netlify…):
 
 ```bash
 dotnet publish -c Release
