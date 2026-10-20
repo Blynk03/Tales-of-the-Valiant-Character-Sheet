@@ -1,0 +1,15 @@
+{
+  "_note": "Original sample data for the automated smoke test. Not taken from any book.",
+  "lineages": [
+    { "id": "smoke-lineage", "name": "Smoke Test Lineage", "source": "Smoke Test", "description": "A made-up lineage used only by the build's smoke test.",
+      "size": "Medium", "speed": 30, "traits": [ { "name": "Test Trait", "level": 1, "description": "Does nothing; proves imports work.", "usesMax": 0, "usesFrom": "", "recharge": "" } ] }
+  ],
+  "spells": [
+    { "id": "smoke-spell", "name": "Smoke Test Spark", "source": "Smoke Test", "description": "A made-up cantrip used only by the smoke test.",
+      "circle": 0, "school": "Evocation", "tradition": "Arcane", "castingTime": "1 action", "range": "30 feet", "components": "V", "duration": "Instantaneous", "concentration": false, "ritual": false }
+  ],
+  "magicItems": [
+    { "id": "smoke-item", "name": "Smoke Test Charm", "source": "Smoke Test", "itemType": "Wondrous Item", "rarity": "Common", "requiresAttunement": false, "attunement": "", "price": "1 gp",
+      "description": "A made-up trinket used only by the smoke test." }
+  ]
+}
