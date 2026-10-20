@@ -10,7 +10,8 @@ const results = [];
 const check = (name, ok, detail = '') => { results.push({ name, ok: !!ok, detail }); console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${ok ? '' : ' :: ' + detail}`); };
 
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+const page = await context.newPage();
 const errors = [];
 page.on('pageerror', e => errors.push('pageerror: ' + e.message));
 // "Failed to load resource" console lines are judged from the responses below instead, where the URL is known.
@@ -26,6 +27,16 @@ try {
   // With no saved characters the app opens straight on the creation wizard.
   await page.getByRole('heading', { name: /Your characters|Create a character/ }).first().waitFor({ timeout: 60000 });
   check('App loads', true);
+  // Styles and fonts now ship with the app instead of the Tailwind CDN and Google Fonts (TVCS-105).
+  const look = await page.evaluate(async () => {
+    await document.fonts.ready;
+    const flex = document.querySelector('[class~="flex"]');
+    return { tailwind: flex ? getComputedStyle(flex).display : 'no .flex element',
+             cinzel: [...document.fonts].some(f => f.family.replace(/"/g, '') === 'Cinzel' && f.status === 'loaded'),
+             crimson: [...document.fonts].some(f => f.family.replace(/"/g, '') === 'Crimson Pro' && f.status === 'loaded') };
+  });
+  check('Tailwind styles apply', look.tailwind === 'flex', `.flex element has display ${look.tailwind}`);
+  check('Bundled fonts load', look.cinzel && look.crimson, JSON.stringify(look));
   if (await page.getByRole('link', { name: '+ New character' }).isVisible()) await page.getByRole('link', { name: '+ New character' }).click();
 
   // Create a character with the built-in sample content, choosing whatever each step needs.
@@ -70,6 +81,37 @@ try {
   const lineages = await page.getByRole('button', { name: /Lineages/ }).first().textContent();
   await page.getByRole('button', { name: /Magic Items/ }).first().click();
   check('Imported content survives a reload', (await page.content()).includes('Smoke Test Charm'), `lineage button reads "${lineages}"`);
+
+  // Install and offline (TVCS-105): manifest and icons load, the service worker takes control, and the app
+  // with its saved character still opens with the network switched off.
+  const manifestHref = await page.locator('link[rel=manifest]').getAttribute('href').catch(() => null);
+  const manifestRes = manifestHref ? await page.request.get(new URL(manifestHref, page.url()).href) : null;
+  const manifest = manifestRes && manifestRes.ok() ? await manifestRes.json().catch(() => null) : null;
+  check('Web app manifest loads', manifest && manifest.name && manifest.icons?.length >= 2, `href=${manifestHref} status=${manifestRes?.status()}`);
+  if (manifest) {
+    const icon = await page.request.get(new URL(manifest.icons[0].src, new URL(manifestHref, page.url())).href);
+    check('App icon loads', icon.ok(), `status ${icon.status()}`);
+  }
+  const ready = await page.evaluate(() => Promise.race([
+    navigator.serviceWorker.ready.then(() => true),
+    new Promise(r => setTimeout(() => r(false), 30000))])).catch(() => false);
+  check('Service worker installs', ready);
+  await page.goto(base);
+  await page.getByRole('heading', { name: 'Your characters' }).waitFor({ timeout: 30000 });
+  check('Service worker controls the page', await page.evaluate(() => !!navigator.serviceWorker.controller));
+  await context.setOffline(true);
+  try {
+    await page.goto(base);
+    await page.getByRole('heading', { name: 'Your characters' }).waitFor({ timeout: 30000 });
+    check('App opens offline with its saved character', (await page.content()).includes('Smoke Tester'));
+    await page.goto(base + 'settings');
+    await page.getByRole('heading', { name: 'Content library' }).waitFor({ timeout: 30000 });
+    check('A deep link opens offline', true);
+  } catch (e) {
+    check('App opens offline with its saved character', false, e.message.split('\n')[0]);
+  } finally {
+    await context.setOffline(false);
+  }
 } catch (e) {
   check('Smoke test ran to the end', false, e.message.split('\n')[0]);
   const text = await page.evaluate(() => document.body ? document.body.innerText : '(no body)').catch(() => '(unreadable)');

@@ -25,6 +25,18 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # The app ships its own Tailwind CSS so it works offline (TVCS-105). Rebuild it from the markup, and flag a
+      # stale committed copy (dotnet run uses the committed one).
+      - name: Build Tailwind CSS
+        working-directory: TotvSheet
+        run: |
+          npx --yes tailwindcss@3.4.17 -c tailwind.config.js -i Styles/tailwind.input.css -o wwwroot/css/tailwind.css --minify
+          git diff --quiet -- wwwroot/css/tailwind.css || echo "::warning file=TotvSheet/wwwroot/css/tailwind.css::Committed tailwind.css is out of date; rebuild it (see TotvSheet/README.md)."
+
       - name: Build
         run: dotnet build TotvSheet/TotvSheet.csproj -c Release
 
@@ -47,10 +59,6 @@ jobs:
           path: publish/wwwroot
           if-no-files-found: error
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
       - name: Install smoke-test browser
         working-directory: tests/smoke
         run: |
@@ -65,11 +73,14 @@ jobs:
 
       # GitHub Pages serves the site under /<repo>/: set the base path, add a 404.html copy of index.html so
       # deep links like /settings load, and .nojekyll so the _framework folder is served (TVCS-104).
+      # The base path is set before publishing again, so the offline file list's hash of index.html matches (TVCS-105).
       - name: Prepare GitHub Pages site
         run: |
           BASE="/${{ github.event.repository.name }}/"
-          cp -r publish/wwwroot pages
-          sed -i "s#<base href=\"/\" />#<base href=\"$BASE\" />#" pages/index.html
+          sed -i "s#<base href=\"/\" />#<base href=\"$BASE\" />#" TotvSheet/wwwroot/index.html
+          grep -q "<base href=\"$BASE\"" TotvSheet/wwwroot/index.html
+          dotnet publish TotvSheet/TotvSheet.csproj -c Release -o publish-pages
+          cp -r publish-pages/wwwroot pages
           grep -q "<base href=\"$BASE\"" pages/index.html
           cp pages/index.html pages/404.html
           touch pages/.nojekyll

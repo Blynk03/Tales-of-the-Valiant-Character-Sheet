@@ -67,9 +67,17 @@ Black Flag Reference Document (ORC license) via the Content page. Only redistrib
 content you have the rights to.
 
 ## Prototype notes and next steps
-- Tailwind is loaded from the Play CDN in `wwwroot/index.html` for speed. For production,
-  add the Tailwind CLI build (`npx tailwindcss -i ./Styles/input.css -o ./wwwroot/css/tailwind.css`)
-  and remove the CDN script.
+- **Styles and fonts ship with the app** so it works offline (TVCS-105). Tailwind is built with the CLI into
+  `wwwroot/css/tailwind.css` (committed, so `dotnet run` needs no Node). After adding Tailwind classes, rebuild it
+  from `TotvSheet/`:
+  `npx tailwindcss@3.4.17 -c tailwind.config.js -i Styles/tailwind.input.css -o wwwroot/css/tailwind.css --minify`.
+  CI rebuilds it anyway and warns if the committed copy is stale. Fonts (Cinzel, Crimson Pro; SIL Open Font
+  License, see `wwwroot/fonts/OFL-*.txt`) are in `wwwroot/fonts/`.
+- **Install and offline.** `manifest.webmanifest` and the icons in `wwwroot/icons/` make the app installable;
+  `service-worker.published.js` caches every published file on the first visit so it opens without a connection
+  (in `dotnet run` the no-op `service-worker.js` is used, so edits show on refresh). When a new version is deployed,
+  a "new version is ready" bar offers **Reload**; nothing reloads on its own. `js/pwa.js` also asks the browser to
+  keep the site's storage so saved characters and books aren't cleared when space runs low.
 - Persistence is localStorage only. Next step: a small ASP.NET Core API + accounts for sync.
 - Out of scope for the prototype: multiclassing, online sync, accounts.
 - Exhaustion and conditions are tracked but don't apply automatic penalties yet.
