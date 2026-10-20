@@ -13,10 +13,13 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 const errors = [];
 page.on('pageerror', e => errors.push('pageerror: ' + e.message));
-page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+// "Failed to load resource" console lines are judged from the responses below instead, where the URL is known.
+page.on('console', m => { if (m.type() === 'error' && !m.text().startsWith('Failed to load resource')) errors.push('console: ' + m.text()); });
 const bad = [];
 page.on('requestfailed', r => bad.push(`${r.failure()?.errorText} ${r.url()}`));
-page.on('response', r => { if (r.status() >= 400) bad.push(`${r.status()} ${r.url()}`); });
+// A deep link like /settings is served by GitHub Pages' 404.html (a copy of index.html), so a 404 on a page
+// navigation is expected; a 404 on any file the page loads is a real error.
+page.on('response', r => { if (r.status() >= 400) { bad.push(`${r.status()} ${r.url()}`); if (!r.request().isNavigationRequest()) errors.push(`${r.status()} ${r.url()}`); } });
 
 try {
   await page.goto(base);
