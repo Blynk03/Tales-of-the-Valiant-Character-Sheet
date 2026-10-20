@@ -27,24 +27,26 @@ try {
 
   // Create a character with the built-in sample content, choosing whatever each step needs.
   await page.locator('input.field').first().fill('Smoke Tester');
+  await page.locator('input.field').first().press('Tab'); // fields save on change (blur)
+  const actions = [];
   let created = false;
   for (let i = 0; i < 60 && !created; i++) {
     const createBtn = page.getByRole('button', { name: 'Create character' });
-    if (await createBtn.isVisible() && await createBtn.isEnabled()) { await createBtn.click(); created = true; break; }
+    if (await createBtn.isVisible() && await createBtn.isEnabled()) { actions.push('create'); await createBtn.click(); created = true; break; }
     const next = page.getByRole('button', { name: 'Next' });
-    if (await next.isVisible() && await next.isEnabled()) { await next.click(); continue; }
+    if (await next.isVisible() && await next.isEnabled()) { actions.push('next'); await next.click(); continue; }
     const box = page.locator('.box').last();
     const choices = box.locator('button.choice:not([disabled])');
-    if (await box.locator('.choice.selected').count() === 0 && await choices.count()) { await choices.first().click(); continue; }
-    const empty = box.locator('input.field').filter({ hasNot: page.locator('[value]:not([value=""])') });
+    if (await box.locator('.choice.selected').count() === 0 && await choices.count()) { actions.push('choice'); await choices.first().click(); continue; }
     let filled = false;
-    for (const inp of await box.locator('input.field').all()) { if (!(await inp.inputValue())) { await inp.fill('Common'); filled = true; } }
+    for (const inp of await box.locator('input.field:not([type=number])').all()) { if (!(await inp.inputValue())) { await inp.fill('Common'); await inp.press('Tab'); filled = true; actions.push('text'); } }
     if (filled) continue;
     const skill = box.locator('button.btn-sm:not(.btn-primary):not([disabled])');
-    if (await skill.count()) { await skill.first().click(); continue; }
+    if (await skill.count()) { actions.push('skill'); await skill.first().click(); continue; }
     break;
   }
-  check('A character can be created', created, 'the wizard never enabled "Create character"');
+  const stuck = created ? '' : (await page.locator('.box').last().innerText()).replace(/\s+/g, ' ').slice(0, 300);
+  check('A character can be created', created, `stuck after [${actions.join(',')}]: ${stuck}`);
   if (created) {
     await page.waitForURL(/character\//, { timeout: 15000 });
     check('The new character opens on its sheet', (await page.content()).includes('Smoke Tester'));
