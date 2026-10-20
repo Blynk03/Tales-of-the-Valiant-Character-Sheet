@@ -20,11 +20,12 @@ page.on('response', r => { if (r.status() >= 400) bad.push(`${r.status()} ${r.ur
 
 try {
   await page.goto(base);
-  await page.getByRole('heading', { name: 'Your characters' }).waitFor({ timeout: 60000 });
-  check('Character list loads', true);
+  // With no saved characters the app opens straight on the creation wizard.
+  await page.getByRole('heading', { name: /Your characters|Create a character/ }).first().waitFor({ timeout: 60000 });
+  check('App loads', true);
+  if (await page.getByRole('link', { name: '+ New character' }).isVisible()) await page.getByRole('link', { name: '+ New character' }).click();
 
   // Create a character with the built-in sample content, choosing whatever each step needs.
-  await page.getByRole('link', { name: '+ New character' }).click();
   await page.locator('input.field').first().fill('Smoke Tester');
   let created = false;
   for (let i = 0; i < 60 && !created; i++) {
@@ -47,6 +48,9 @@ try {
   if (created) {
     await page.waitForURL(/character\//, { timeout: 15000 });
     check('The new character opens on its sheet', (await page.content()).includes('Smoke Tester'));
+    await page.goto(base);
+    await page.getByRole('heading', { name: 'Your characters' }).waitFor({ timeout: 30000 });
+    check('Character list shows the saved character', (await page.content()).includes('Smoke Tester'));
   }
 
   // Import the sample content file on the Content page, then reload: it must still be there (IndexedDB).
