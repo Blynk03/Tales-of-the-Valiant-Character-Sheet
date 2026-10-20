@@ -14,6 +14,9 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 const errors = [];
 page.on('pageerror', e => errors.push('pageerror: ' + e.message));
 page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+const bad = [];
+page.on('requestfailed', r => bad.push(`${r.failure()?.errorText} ${r.url()}`));
+page.on('response', r => { if (r.status() >= 400) bad.push(`${r.status()} ${r.url()}`); });
 
 try {
   await page.goto(base);
@@ -58,6 +61,9 @@ try {
   check('Imported content survives a reload', (await page.content()).includes('Smoke Test Charm'), `lineage button reads "${lineages}"`);
 } catch (e) {
   check('Smoke test ran to the end', false, e.message.split('\n')[0]);
+  const text = await page.evaluate(() => document.body ? document.body.innerText : '(no body)').catch(() => '(unreadable)');
+  console.log(`::error title=Page at failure::${page.url()} :: ${text.replace(/\s+/g, ' ').slice(0, 400)}`);
+  if (bad.length) console.log(`::error title=Failed requests::${bad.slice(0, 8).join(' | ')}`);
 }
 check('No page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 await browser.close();
