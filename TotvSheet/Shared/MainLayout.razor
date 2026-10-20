@@ -26,10 +26,10 @@
 
 <main class="max-w-7xl mx-auto px-4 py-4 pb-40">
     @Body
-    @if (ReportUrl is { } url)
+    @if (_device.Length > 0 && ReportUrl is { } url)
     {
         <footer class="site-foot">
-            Something wrong or missing? <a href="@url" target="_blank" rel="noopener">Report a problem</a>
+            Something wrong or missing? <a href="@url" target="_blank" rel="noopener">Report a problem<span class="vh"> (opens in a new tab)</span></a>
             <span class="site-foot-ver">v@(ProblemReport.AppVersion)</span>
         </footer>
     }

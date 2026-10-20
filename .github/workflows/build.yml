@@ -83,6 +83,7 @@ jobs:
           cp -r publish-pages/wwwroot pages
           grep -q "<base href=\"$BASE\"" pages/index.html
           cp pages/index.html pages/404.html
+          echo "${{ github.sha }}" > pages/version.txt
           touch pages/.nojekyll
           echo "BASE=$BASE" >> "$GITHUB_ENV"
 
@@ -128,5 +129,6 @@ jobs:
       - name: Smoke test the live site
         run: |
           URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
-          for i in $(seq 1 20); do curl -fsS -o /dev/null "$URL" && break; sleep 15; done
-          node tests/smoke/smoke.mjs "$URL"
+          # Wait until Pages serves this build, not the previous one still in its cache.
+          for i in $(seq 1 40); do [ "$(curl -fsS "${URL}version.txt?t=$i" 2>/dev/null)" = "${{ github.sha }}" ] && break; sleep 15; done
+          EXPECT_VERSION="${GITHUB_SHA::7}" node tests/smoke/smoke.mjs "$URL"

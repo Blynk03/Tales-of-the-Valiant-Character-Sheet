@@ -392,10 +392,12 @@ const PREVIEW_VERSION = 'preview v12';
 function deviceInfo() {
   const ua = navigator.userAgent;
   const m = (re) => { const r = ua.match(re); return r ? r[1] : null; };
-  const browser = m(/Edg\/(\d+)/) ? 'Edge ' + m(/Edg\/(\d+)/) : m(/SamsungBrowser\/(\d+)/) ? 'Samsung Internet ' + m(/SamsungBrowser\/(\d+)/)
+  const browser = m(/CriOS\/(\d+)/) ? 'Chrome ' + m(/CriOS\/(\d+)/) : m(/FxiOS\/(\d+)/) ? 'Firefox ' + m(/FxiOS\/(\d+)/) : m(/EdgiOS\/(\d+)/) ? 'Edge ' + m(/EdgiOS\/(\d+)/)
+    : m(/Edg\/(\d+)/) ? 'Edge ' + m(/Edg\/(\d+)/) : m(/SamsungBrowser\/(\d+)/) ? 'Samsung Internet ' + m(/SamsungBrowser\/(\d+)/)
     : m(/Firefox\/(\d+)/) ? 'Firefox ' + m(/Firefox\/(\d+)/) : m(/Chrome\/(\d+)/) ? 'Chrome ' + m(/Chrome\/(\d+)/)
     : m(/Version\/([\d.]+).*Safari/) ? 'Safari ' + m(/Version\/([\d.]+).*Safari/) : 'Unknown browser';
   const os = m(/Android ([\d.]+)/) ? 'Android ' + m(/Android ([\d.]+)/) : /iPhone|iPad|iPod/.test(ua) ? 'iOS ' + (m(/OS (\d+[_\d]*)/) || '').replace(/_/g, '.')
+    : /Mac OS X/.test(ua) && navigator.maxTouchPoints > 1 ? 'iPadOS'
     : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'macOS' : /CrOS/.test(ua) ? 'ChromeOS' : /Linux/.test(ua) ? 'Linux' : 'Unknown OS';
   return [browser, os, screen.width + '×' + screen.height, 'preview'].join(' · ');
 }
@@ -408,7 +410,7 @@ function reportUrl() {
 }
 function footer() {
   const u = reportUrl();
-  return u ? `<footer class="site-foot">Something wrong or missing? <a href="${esc(u)}" target="_blank" rel="noopener">Report a problem</a><span class="site-foot-ver">${esc(PREVIEW_VERSION)}</span></footer>` : '';
+  return u ? `<footer class="site-foot">Something wrong or missing? <a href="${esc(u)}" target="_blank" rel="noopener">Report a problem<span class="vh"> (opens in a new tab)</span></a><span class="site-foot-ver">${esc(PREVIEW_VERSION)}</span></footer>` : '';
 }
 function header() {
   const nav = (r, label) => `<button class="btn btn-sm ${S.route === r || (r === 'list' && S.route === 'sheet' && false) ? 'btn-primary' : ''}" data-act="go" data-a="${r}">${label}</button>`;

@@ -23,7 +23,9 @@ public static class ProblemReport
     public static string? Build(string? target, string page, string device)
     {
         if (string.IsNullOrWhiteSpace(target)) return null;
-        var page2 = string.IsNullOrEmpty(page) ? "Characters" : "/" + page;
+        // Keep the kind of page, not which character: "/character/3f2a…" becomes "/character/…".
+        var parts = page.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var page2 = parts.Length == 0 ? "Characters" : "/" + parts[0] + (parts.Length > 1 ? "/…" : "");
         string E(string s) => Uri.EscapeDataString(s);
         if (target.Contains('{'))
             return target.Replace("{version}", E(AppVersion)).Replace("{page}", E(page2)).Replace("{device}", E(device));

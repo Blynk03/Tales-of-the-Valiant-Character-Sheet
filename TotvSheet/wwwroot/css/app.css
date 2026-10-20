@@ -205,4 +205,4 @@ input[type=number].field::-webkit-inner-spin-button { opacity: .4; }
 /* TVCS-106: footer with the "Report a problem" link */
 .site-foot { margin-top: 2.5rem; padding-top: .75rem; border-top: 1px solid var(--ink-faint); font-size: .9rem; color: var(--ink-soft); text-align: center; }
 .site-foot a { color: var(--ink); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
-.site-foot-ver { margin-left: .5rem; opacity: .7; font-size: .8rem; }
+.site-foot-ver { margin-left: .5rem; font-size: .8rem; }

@@ -38,7 +38,14 @@ try {
   check('Tailwind styles apply', look.tailwind === 'flex', `.flex element has display ${look.tailwind}`);
   check('Bundled fonts load', look.cinzel && look.crimson, JSON.stringify(look));
   // "Report a problem" (TVCS-106) opens the issue form with the version, page and device filled in.
-  const report = await page.locator('.site-foot a', { hasText: 'Report a problem' }).getAttribute('href').catch(() => null);
+  const reportLink = page.locator('.site-foot a', { hasText: 'Report a problem' });
+  await reportLink.waitFor({ timeout: 15000 }).catch(() => { });
+  const report = await reportLink.getAttribute('href').catch(() => null);
+  // The live check passes the commit it deployed, so an old build still in the Pages cache can't pass.
+  if (process.env.EXPECT_VERSION) {
+    const ver = await page.locator('.site-foot-ver').textContent().catch(() => '');
+    check('Live site serves this build', ver.includes(process.env.EXPECT_VERSION), `footer shows "${ver}", expected ${process.env.EXPECT_VERSION}`);
+  }
   check('Report a problem link is filled in', report && /template=problem-report\.yml/.test(report) && /version=1\./.test(report)
     && /[?&]page=/.test(report) && /[?&]device=[^&·]+%C2%B7/.test(report), report || 'no link');
   if (await page.getByRole('link', { name: '+ New character' }).isVisible()) await page.getByRole('link', { name: '+ New character' }).click();

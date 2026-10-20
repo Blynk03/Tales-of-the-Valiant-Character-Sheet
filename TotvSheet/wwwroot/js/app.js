@@ -25,10 +25,12 @@ window.totv = {
   deviceInfo: function () {
     const ua = navigator.userAgent;
     const m = (re) => { const r = ua.match(re); return r ? r[1] : null; };
-    const browser = m(/Edg\/(\d+)/) ? 'Edge ' + m(/Edg\/(\d+)/) : m(/SamsungBrowser\/(\d+)/) ? 'Samsung Internet ' + m(/SamsungBrowser\/(\d+)/)
+    const browser = m(/CriOS\/(\d+)/) ? 'Chrome ' + m(/CriOS\/(\d+)/) : m(/FxiOS\/(\d+)/) ? 'Firefox ' + m(/FxiOS\/(\d+)/) : m(/EdgiOS\/(\d+)/) ? 'Edge ' + m(/EdgiOS\/(\d+)/)
+      : m(/Edg\/(\d+)/) ? 'Edge ' + m(/Edg\/(\d+)/) : m(/SamsungBrowser\/(\d+)/) ? 'Samsung Internet ' + m(/SamsungBrowser\/(\d+)/)
       : m(/Firefox\/(\d+)/) ? 'Firefox ' + m(/Firefox\/(\d+)/) : m(/Chrome\/(\d+)/) ? 'Chrome ' + m(/Chrome\/(\d+)/)
       : m(/Version\/([\d.]+).*Safari/) ? 'Safari ' + m(/Version\/([\d.]+).*Safari/) : 'Unknown browser';
     const os = m(/Android ([\d.]+)/) ? 'Android ' + m(/Android ([\d.]+)/) : /iPhone|iPad|iPod/.test(ua) ? 'iOS ' + (m(/OS (\d+[_\d]*)/) || '').replace(/_/g, '.')
+      : /Mac OS X/.test(ua) && navigator.maxTouchPoints > 1 ? 'iPadOS'
       : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'macOS' : /CrOS/.test(ua) ? 'ChromeOS' : /Linux/.test(ua) ? 'Linux' : 'Unknown OS';
     const installed = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone ? 'installed' : 'in browser';
     return [browser, os, screen.width + '×' + screen.height, installed].join(' · ');
