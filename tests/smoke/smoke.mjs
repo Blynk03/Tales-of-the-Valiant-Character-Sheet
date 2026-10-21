@@ -3,6 +3,8 @@
 import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
 
 const base = (process.argv[2] || 'http://localhost:8080/').replace(/\/?$/, '/');
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -87,6 +89,17 @@ try {
   await page.getByRole('heading', { name: 'Content library' }).waitFor({ timeout: 30000 });
   await page.setInputFiles('#content-import', path.join(here, 'sample-content.json'));
   await page.getByText('Imported 3 entries.').waitFor({ timeout: 15000 }).then(() => check('Content page imports a content file', true), e => check('Content page imports a content file', false, e.message));
+  // A book-sized file (about 700 KB, made up here) must finish importing too, with progress shown (TVCS-107).
+  const big = { spells: Array.from({ length: 1500 }, (_, i) => ({ id: `smoke-big-${i}`, name: `Smoke Filler ${i}`, source: 'Smoke Test Big',
+    description: 'Filler text for the large import check. '.repeat(10), circle: i % 10, school: 'Evocation', tradition: 'Arcane',
+    castingTime: '1 action', range: '30 feet', components: 'V', duration: 'Instantaneous', concentration: false, ritual: false })) };
+  const bigPath = path.join(os.tmpdir(), 'smoke-big-content.json');
+  fs.writeFileSync(bigPath, JSON.stringify(big));
+  const t0 = Date.now();
+  await page.setInputFiles('#content-import', bigPath);
+  await page.getByText('Imported 1500 entries.').waitFor({ timeout: 90000 })
+    .then(() => check(`A book-sized file imports (${fs.statSync(bigPath).size} bytes, ${((Date.now() - t0) / 1000).toFixed(1)} s)`, true),
+          async e => check('A book-sized file imports', false, (await page.locator('p.text-sm').first().textContent().catch(() => '')) || e.message));
   await page.reload();
   await page.getByRole('heading', { name: 'Content library' }).waitFor({ timeout: 30000 });
   const lineages = await page.getByRole('button', { name: /Lineages/ }).first().textContent();

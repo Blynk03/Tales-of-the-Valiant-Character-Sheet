@@ -52,7 +52,7 @@ const idb = (() => {
     },
     async set(k, v) {
       try { const db = await timeout(open(), 2000);
-        await new Promise((res, rej) => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = () => res(); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error || new Error('aborted')); });
+        await new Promise((res, rej) => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = () => res(); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error || new Error('aborted')); setTimeout(() => rej(new Error('timeout')), 30000); });
         return true;
       } catch (e) { return false; }
     }
@@ -388,7 +388,7 @@ function render() {
 // "Report a problem" (TVCS-106): opens the project's GitHub issue form with the version, page and device filled in.
 // Set REPORT_URL to '' to hide the link; {version}, {page} and {device} placeholders are filled in if present.
 const REPORT_URL = 'https://github.com/Blynk03/Tales-of-the-Valiant-Character-Sheet/issues/new?template=problem-report.yml';
-const PREVIEW_VERSION = 'preview v12';
+const PREVIEW_VERSION = 'preview v14';
 function deviceInfo() {
   const ua = navigator.userAgent;
   const m = (re) => { const r = ua.match(re); return r ? r[1] : null; };
@@ -1246,7 +1246,7 @@ document.addEventListener('pointerup', () => { pointerDown = false; if (pendingR
 function renderSoon() { if (pointerDown) pendingRender = true; else render(); }
 root.addEventListener('toggle', e => { const d = e.target; if (d.dataset && d.dataset.open) { S.open = S.open || {}; S.open[d.dataset.open] = d.open; } }, true);
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.modal) { S.modal = null; render(); } });
-const readText = file => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(fr.error || new Error('unreadable')); fr.readAsText(file); });
+const readText = file => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(fr.error || new Error('unreadable')); fr.readAsText(file); setTimeout(() => rej(new Error('reading took longer than 60 s')), 60000); });
 async function readFile(el) {
   const files = [...(el.files || [])]; el.value = ''; // reset so picking the same file again still fires
   if (!files.length) return;

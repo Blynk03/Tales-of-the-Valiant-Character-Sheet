@@ -35,6 +35,25 @@ window.totv = {
     const installed = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone ? 'installed' : 'in browser';
     return [browser, os, screen.width + '×' + screen.height, installed].join(' · ');
   },
+  // Reads the files picked in a file input as text (TVCS-107). Reading in JS, as the preview does, avoids Blazor's
+  // chunked file stream, which can stall on Android when the file comes from Google Drive or another cloud picker.
+  // Each file gets a time limit, so a stalled read reports an error instead of hanging the import.
+  readPickedFiles: async function (id, timeoutMs) {
+    const el = document.getElementById(id);
+    const files = el && el.files ? Array.from(el.files) : [];
+    const readOne = function (f) {
+      const text = typeof f.text === 'function' ? f.text() : new Promise(function (res, rej) {
+        const r = new FileReader(); r.onload = function () { res(r.result); }; r.onerror = function () { rej(r.error); }; r.readAsText(f);
+      });
+      const limit = new Promise(function (_, rej) { setTimeout(function () { rej(new Error('reading took longer than ' + Math.round(timeoutMs / 1000) + ' s')); }, timeoutMs); });
+      return Promise.race([text, limit])
+        .then(function (t) { return { name: f.name, text: t, error: null }; })
+        .catch(function (e) { return { name: f.name, text: null, error: (e && e.message) || String(e) }; });
+    };
+    const out = [];
+    for (const f of files) out.push(await readOne(f));
+    return out;
+  },
   // Opens a visually hidden file input from a real button.
   clickElement: function (id) {
     const el = document.getElementById(id);
@@ -77,6 +96,8 @@ window.totv = {
         t.oncomplete = function () { res(); };
         t.onerror = function () { rej(t.error); };
         t.onabort = function () { rej(t.error || new Error("aborted")); };
+        // A save that never finishes is reported as failed rather than leaving the caller waiting (TVCS-107).
+        setTimeout(function () { rej(new Error("timeout")); }, 30000);
       });
       return true;
     } catch (e) { return false; }

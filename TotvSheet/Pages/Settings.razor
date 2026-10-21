@@ -274,38 +274,87 @@
 
     private async Task PickImport() => await JS.InvokeVoidAsync("totv.clickElement", "content-import");
 
-    /// <summary>Imports one or more picked files, saving once at the end, and reports each file's result.</summary>
+    private record PickedFile(string Name, string? Text, string? Error);
+
+    /// <summary>Shows how far the import has got, and lets the page draw it before the next step (TVCS-107).</summary>
+    private async Task Progress(string text)
+    {
+        message = text;
+        StateHasChanged();
+        await Task.Delay(1);
+    }
+
+    /// <summary>Imports one or more picked files, saving once at the end, and reports each file's result.
+    /// Every step has a time limit or a catch, so the message always ends with a result (TVCS-107).</summary>
     private async Task Import(InputFileChangeEventArgs e)
     {
-        var files = e.GetMultipleFiles(Math.Max(1, e.FileCount));
         var lines = new List<string>();
-        int total = 0;
-        message = $"Importing {files.Count} file{(files.Count == 1 ? "" : "s")}…";
-        StateHasChanged();
-        foreach (var file in files)
+        int total = 0, count = Math.Max(1, e.FileCount);
+        try
+        {
+            await Progress($"Reading {count} file{(count == 1 ? "" : "s")}…");
+            var picked = await ReadPicked(e);
+            count = picked.Count;
+            foreach (var (file, i) in picked.Select((f, i) => (f, i)))
+            {
+                if (file.Text is null) { lines.Add($"{file.Name}: couldn't read the file ({file.Error})"); continue; }
+                await Progress($"Adding {file.Name}" + (count > 1 ? $" ({i + 1} of {count})…" : "…"));
+                try
+                {
+                    var n = await Content.ImportAsync(file.Text, save: false);
+                    if (n == 0) throw new InvalidDataException("it has no content entries");
+                    total += n;
+                    lines.Add($"{file.Name}: {n} entries");
+                }
+                catch (JsonException)
+                {
+                    lines.Add($"{file.Name}: couldn't import (not a content file)");
+                }
+                catch (Exception ex)
+                {
+                    lines.Add($"{file.Name}: couldn't import ({ex.Message})");
+                }
+            }
+            var saved = true;
+            if (total > 0)
+            {
+                await Progress($"Saving {total} entries…");
+                saved = await Content.SaveAsync();
+            }
+            message = count == 1 && total > 0
+                ? $"Imported {total} entries."
+                : (count > 1 ? $"Imported {total} entries from {count} files. " : "") + string.Join(" · ", lines);
+            if (!saved) message += " Not saved: this browser's storage is full or blocked, so the import lasts only until the page closes.";
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Import failed: {ex}");
+            message = $"Import stopped: {ex.Message}. " + string.Join(" · ", lines);
+        }
+    }
+
+    /// <summary>Reads the picked files in JavaScript; falls back to Blazor's file stream (with a time limit) if that fails.</summary>
+    private async Task<List<PickedFile>> ReadPicked(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var viaJs = await JS.InvokeAsync<PickedFile[]>("totv.readPickedFiles", "content-import", 60_000);
+            if (viaJs.Length > 0) return viaJs.ToList();
+        }
+        catch (Exception ex) { Console.WriteLine($"Reading files in JS failed, using the stream: {ex.Message}"); }
+        var result = new List<PickedFile>();
+        foreach (var file in e.GetMultipleFiles(Math.Max(1, e.FileCount)))
         {
             try
             {
-                using var reader = new StreamReader(file.OpenReadStream(20_000_000));
-                var n = await Content.ImportAsync(await reader.ReadToEndAsync(), save: false);
-                if (n == 0) throw new InvalidDataException("it has no content entries");
-                total += n;
-                lines.Add($"{file.Name}: {n} entries");
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                using var reader = new StreamReader(file.OpenReadStream(20_000_000, cts.Token));
+                result.Add(new(file.Name, await reader.ReadToEndAsync(cts.Token), null));
             }
-            catch (JsonException)
-            {
-                lines.Add($"{file.Name}: couldn't import (not a JSON file)");
-            }
-            catch (Exception ex)
-            {
-                lines.Add($"{file.Name}: couldn't import ({ex.Message})");
-            }
+            catch (OperationCanceledException) { result.Add(new(file.Name, null, "reading took longer than 60 s")); }
+            catch (Exception ex) { result.Add(new(file.Name, null, ex.Message)); }
         }
-        var saved = total == 0 || await Content.SaveAsync();
-        message = files.Count == 1 && total > 0
-            ? $"Imported {total} entries."
-            : (files.Count > 1 ? $"Imported {total} entries from {files.Count} files. " : "") + string.Join(" · ", lines);
-        if (!saved) message += " Not saved: this browser's storage is full or blocked, so the import lasts only until the page closes.";
+        return result;
     }
 
     private static string Slug(string name)
