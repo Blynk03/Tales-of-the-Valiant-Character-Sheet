@@ -97,7 +97,8 @@ window.totv = {
         t.onerror = function () { rej(t.error); };
         t.onabort = function () { rej(t.error || new Error("aborted")); };
         // A save that never finishes is reported as failed rather than leaving the caller waiting (TVCS-107).
-        setTimeout(function () { rej(new Error("timeout")); }, 30000);
+        const timer = setTimeout(function () { try { t.abort(); } catch (e) { } rej(new Error("timeout")); }, 30000);
+        t.addEventListener("complete", function () { clearTimeout(timer); });
       });
       return true;
     } catch (e) { return false; }

@@ -52,7 +52,7 @@ const idb = (() => {
     },
     async set(k, v) {
       try { const db = await timeout(open(), 2000);
-        await new Promise((res, rej) => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = () => res(); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error || new Error('aborted')); setTimeout(() => rej(new Error('timeout')), 30000); });
+        await new Promise((res, rej) => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = () => res(); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error || new Error('aborted')); const tm = setTimeout(() => { try { t.abort(); } catch (e) { } rej(new Error('timeout')); }, 30000); t.addEventListener('complete', () => clearTimeout(tm)); });
         return true;
       } catch (e) { return false; }
     }

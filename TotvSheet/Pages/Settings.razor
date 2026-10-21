@@ -18,7 +18,7 @@
         <button type="button" class="btn btn-sm" @onclick="Export">Export my content</button>
         @* A real button opens the visually hidden picker: some browsers ignore a label wrapping a display:none
            input inside an embedded page, and iOS greys out .json files under an accept filter (TVCS-101). *@
-        <button type="button" class="btn btn-sm" @onclick="PickImport">Import…</button>
+        <button type="button" class="btn btn-sm" @onclick="PickImport" disabled="@importing">@(importing ? "Importing…" : "Import…")</button>
         <InputFile id="content-import" class="vh" tabindex="-1" aria-label="Import content files" multiple OnChange="Import" />
     </div>
 </div>
@@ -140,6 +140,7 @@
     private ContentKind kind = ContentService.Kinds[0];
     private string search = "";
     private string message = "";
+    private bool importing;
 
     private ContentEntry? draft;
     private bool isNew;
@@ -288,6 +289,8 @@
     /// Every step has a time limit or a catch, so the message always ends with a result (TVCS-107).</summary>
     private async Task Import(InputFileChangeEventArgs e)
     {
+        if (importing) return;
+        importing = true;
         var lines = new List<string>();
         int total = 0, count = Math.Max(1, e.FileCount);
         try
@@ -331,6 +334,7 @@
             Console.WriteLine($"Import failed: {ex}");
             message = $"Import stopped: {ex.Message}. " + string.Join(" · ", lines);
         }
+        finally { importing = false; }
     }
 
     /// <summary>Reads the picked files in JavaScript; falls back to Blazor's file stream (with a time limit) if that fails.</summary>
