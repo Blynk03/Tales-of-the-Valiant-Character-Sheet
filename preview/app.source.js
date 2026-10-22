@@ -229,20 +229,25 @@ function resourceChanges(c, cls, n) {
   return ((d && d.resources) || []).map(r => { const f = [...c.features].reverse().find(x => x.name === r.name); return { name: r.name, from: f ? usesMax(c, f) : 0, to: r.usesMax }; }).filter(x => x.from !== x.to);
 }
 const addTalent = (c, t) => c.talents.push({ name: t.name, category: t.category, description: t.description });
-/** Weapon proficiency (v15): the Simple/Martial categories, plus weapons named in Other Proficiencies
-    (e.g. "rapier, scimitar, shortsword" or "martial weapons with the Finesse property"). */
-const wpSingular = t => t.replace(/\bweapons?\b/g, '').trim().replace(/(?<!s)s$/, '');
-const wpNorm = t => wpSingular(String(t || '').toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, ' ').trim());
-function namedWeaponProf(text, name, finesse, category) {
-  const n = wpNorm(name);
-  return String(text || '').toLowerCase().split(/[,;\n]|\band\b/).map(x => x.replace(/^\s*(weapons?|proficienc(y|ies))\s*:\s*/, '').trim()).filter(Boolean).some(tok => {
-    if (/finesse/.test(tok)) return !!finesse && (!/martial/.test(tok) || category === 'Martial') && (!/simple/.test(tok) || category === 'Simple');
-    const t = wpNorm(tok); return !!t && !['simple', 'martial'].includes(t) && t === n;
+/** Weapon proficiency (TVCS-111, mirror of Models/WeaponProficiency.cs): the Simple/Martial groups, plus weapons a class
+    lists one by one in Other Proficiencies (the Duelist's "Rapier, Scimitar, Hand crossbow, Firearms", a Rogue's
+    "Martial weapons with the Finesse property"). Word order and plurals don't matter ("Hand crossbow" = "Crossbow, hand"). */
+const WP_SKIP = ['weapon', 'weapons', 'proficiency', 'proficiencies', 'with', 'the', 'property'];
+const wpKey = s => (String(s || '').toLowerCase().match(/[a-z]+/g) || []).filter(w => !WP_SKIP.includes(w))
+  .map(w => w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w).sort().join(' ');
+const isFirearm = (name, props, desc) => /gunpowder/i.test(props || '') || /firearm/i.test(desc || '') || /\b(pistol|musket|rifle|blunderbuss|firearm)/i.test(name || '');
+function namedWeaponProf(text, name, finesse, category, props, desc) {
+  const key = wpKey(name);
+  return String(text || '').split(/[,;\n]|\band\b/i).map(x => x.replace(/^\s*(weapons?|proficienc(y|ies))\s*:\s*/i, '').trim()).filter(Boolean).some(tok => {
+    const t = tok.toLowerCase();
+    if (/finesse/.test(t)) return !!finesse && (!/martial/.test(t) || category === 'Martial') && (!/simple/.test(t) || category === 'Simple');
+    if (/\bfirearms?\b/.test(t)) return isFirearm(name, props, desc);
+    const k = wpKey(tok); return !!k && k !== 'simple' && k !== 'martial' && k === key;
   });
 }
 function weaponProf(c, i) {
   const cat = i.weaponCategory || '';
-  return (cat === 'Martial' ? !!c.martialWeapons : cat === 'Simple' ? !!c.simpleWeapons : false) || namedWeaponProf(c.otherProficiencies, i.name, i.finesse, cat);
+  return (cat === 'Martial' ? !!c.martialWeapons : cat === 'Simple' ? !!c.simpleWeapons : false) || namedWeaponProf(c.otherProficiencies, i.name, i.finesse, cat, i.properties, i.description);
 }
 function addItem(c, i) {
   if (i.type === 'Weapon') c.weapons.push({ name: i.name, damage: i.damage || '1d4', damageType: i.damageType, range: i.range, properties: i.properties, options: i.weaponOptions || '', finesse: !!i.finesse, ranged: !!i.ranged, proficient: weaponProf(c, i), magicBonus: 0, abilityOverride: null });
@@ -481,7 +486,7 @@ function render() {
 // "Report a problem" (TVCS-106): opens the project's GitHub issue form with the version, page and device filled in.
 // Set REPORT_URL to '' to hide the link; {version}, {page} and {device} placeholders are filled in if present.
 const REPORT_URL = 'https://github.com/Blynk03/Tales-of-the-Valiant-Character-Sheet/issues/new?template=problem-report.yml';
-const PREVIEW_VERSION = 'preview v16';
+const PREVIEW_VERSION = 'preview v17';
 function deviceInfo() {
   const ua = navigator.userAgent;
   const m = (re) => { const r = ua.match(re); return r ? r[1] : null; };
@@ -1388,12 +1393,13 @@ S.user = emptyLib();
 S.disabled = store.get('vs.disabled') || [];
 S.chars = store.get('vs.chars') || [];
 if (!S.chars.length) { S.chars = [exampleCharacter()]; }
-/** v15: weapons added before named weapon proficiencies counted (e.g. a duelist's rapier) get proficiency once. */
+/** Once per character (TVCS-111): weapons added before listed weapons counted (a Duelist's rapier or hand crossbow)
+    get proficiency. Version 2 also covers word order and firearms. Afterwards the Prof box is the player's to set. */
 function fixWeaponProf() {
   let changed = false;
-  S.chars.forEach(c => { if (c.weaponProfFix) return; c.weaponProfFix = 1; changed = true;
-    (c.weapons || []).forEach(w => { if (w.proficient) return; const it = lib('items', true).find(x => x.type === 'Weapon' && wpNorm(x.name) === wpNorm(w.name));
-      if (weaponProf(c, { name: w.name, finesse: w.finesse, weaponCategory: it ? it.weaponCategory : '' })) w.proficient = true; }); });
+  S.chars.forEach(c => { if ((c.weaponProfFix || 0) >= 2) return; c.weaponProfFix = 2; changed = true;
+    (c.weapons || []).forEach(w => { if (w.proficient) return; const it = lib('items', true).concat(S.user.items || []).find(x => x.type === 'Weapon' && wpKey(x.name) === wpKey(w.name));
+      if (weaponProf(c, it || { name: w.name, finesse: w.finesse, weaponCategory: '', properties: w.properties })) w.proficient = true; }); });
   if (changed) persist();
 }
 S.charId = S.chars[0].id;

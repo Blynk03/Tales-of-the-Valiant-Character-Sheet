@@ -60,6 +60,8 @@ public class Character
     public bool MartialWeapons { get; set; }
     public string Languages { get; set; } = "";
     public string OtherProficiencies { get; set; } = "";
+    /// <summary>Set to 2 once <see cref="Services.CharacterBuilder.FixWeaponProficiency"/> has run (TVCS-111).</summary>
+    public int WeaponProfFix { get; set; }
 
     public List<Talent> Talents { get; set; } = new();
     public List<Feature> Features { get; set; } = new();

@@ -116,9 +116,13 @@ public static class CharacterBuilder
             c.MediumArmor = cls.ArmorProficiencies.Contains("Medium");
             c.HeavyArmor = cls.ArmorProficiencies.Contains("Heavy");
             c.Shields = cls.ArmorProficiencies.Contains("Shields");
-            c.SimpleWeapons = cls.WeaponProficiencies.Contains("Simple");
-            c.MartialWeapons = cls.WeaponProficiencies.Contains("Martial");
+            var (simple, martial, named) = WeaponProficiency.Split(cls.WeaponProficiencies);
+            c.SimpleWeapons = simple;
+            c.MartialWeapons = martial;
+            // Weapons the class lists one by one (e.g. the Duelist's rapier) count as proficient (TVCS-111).
+            if (named.Count > 0) other.Add("Weapons: " + string.Join(", ", named));
             if (!string.IsNullOrWhiteSpace(cls.OtherProficiencies)) other.Add(cls.OtherProficiencies);
+            c.OtherProficiencies = string.Join("; ", other); // read by AddItem for the starting gear
             foreach (var s in ch.ClassSkills) c.Skills[s] = ProfLevel.Proficient;
 
             if (cls.SpellcastingAbility is Ability sa)
@@ -293,6 +297,24 @@ public static class CharacterBuilder
     /// so characters made before a content file gained these rules pick them up (TVCS-108/109/110). Text, uses and the
     /// player's pick are left alone. Returns true if anything changed.
     /// </summary>
+    /// <summary>
+    /// Once per character (TVCS-111): weapons added before named weapon proficiencies counted (a Duelist's rapier, a
+    /// Rogue's finesse martial weapon) get proficiency. Afterwards the Prof box is the player's to set. Returns true if run.
+    /// </summary>
+    public static bool FixWeaponProficiency(Character c, ContentService content)
+    {
+        if (c.WeaponProfFix >= 2) return false;
+        c.WeaponProfFix = 2;
+        foreach (var w in c.Weapons.Where(w => !w.Proficient))
+        {
+            var item = content.Items.Concat(content.Core.Items).Concat(content.User.Items)
+                .FirstOrDefault(i => i.Type == ItemType.Weapon && WeaponProficiency.Key(i.Name) == WeaponProficiency.Key(w.Name));
+            var probe = item ?? new ItemDef { Name = w.Name, WeaponCategory = "", Finesse = w.Finesse, Properties = w.Properties };
+            if (WeaponProficiency.For(c, probe)) w.Proficient = true;
+        }
+        return true;
+    }
+
     public static bool RefreshFeatureRules(Character c, ContentService content)
     {
         var changed = false;
@@ -372,7 +394,7 @@ public static class CharacterBuilder
                     Options = item.WeaponOptions,
                     Finesse = item.Finesse,
                     Ranged = item.Ranged,
-                    Proficient = item.WeaponCategory == "Martial" ? c.MartialWeapons : c.SimpleWeapons,
+                    Proficient = WeaponProficiency.For(c, item),
                 });
                 break;
             case ItemType.Armor:
