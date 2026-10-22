@@ -293,28 +293,34 @@ public static class CharacterBuilder
     public static string ChoiceKey(ContentEntry owner, FeatureDef trait) => $"{owner.Id}/{trait.Name}";
 
     /// <summary>
-    /// Brings each feature's rules (effects and options) up to date with the content library, matching by source and name,
-    /// so characters made before a content file gained these rules pick them up (TVCS-108/109/110). Text, uses and the
-    /// player's pick are left alone. Returns true if anything changed.
-    /// </summary>
-    /// <summary>
-    /// Once per character (TVCS-111): weapons added before named weapon proficiencies counted (a Duelist's rapier, a
-    /// Rogue's finesse martial weapon) get proficiency. Afterwards the Prof box is the player's to set. Returns true if run.
+    /// Once per character (TVCS-111): characters made before weapons listed one by one counted (a Duelist's rapier, a
+    /// Rogue's finesse martial weapon) get the class's "Weapons: ..." line added to Other Proficiencies, and their weapons
+    /// that it lists become proficient. Only listed weapons are touched, so a group weapon the player unticked stays
+    /// unticked, and afterwards the Prof box is the player's to set. Returns true if anything changed.
     /// </summary>
     public static bool FixWeaponProficiency(Character c, ContentService content)
     {
         if (c.WeaponProfFix >= 2) return false;
         c.WeaponProfFix = 2;
+        var named = content.Class(c.ClassId) is { } cls ? WeaponProficiency.Split(cls.WeaponProficiencies).Named : new();
+        if (named.Count > 0 && !c.OtherProficiencies.Contains("Weapons:", StringComparison.OrdinalIgnoreCase))
+            c.OtherProficiencies = string.Join("; ", new[] { c.OtherProficiencies, "Weapons: " + string.Join(", ", named) }
+                .Where(s => !string.IsNullOrWhiteSpace(s)));
         foreach (var w in c.Weapons.Where(w => !w.Proficient))
         {
             var item = content.Items.Concat(content.Core.Items).Concat(content.User.Items)
                 .FirstOrDefault(i => i.Type == ItemType.Weapon && WeaponProficiency.Key(i.Name) == WeaponProficiency.Key(w.Name));
-            var probe = item ?? new ItemDef { Name = w.Name, WeaponCategory = "", Finesse = w.Finesse, Properties = w.Properties };
-            if (WeaponProficiency.For(c, probe)) w.Proficient = true;
+            if (WeaponProficiency.Listed(c.OtherProficiencies, w.Name, item?.WeaponCategory ?? "", item?.Finesse ?? w.Finesse,
+                    item?.Properties ?? w.Properties, item?.Description ?? "")) w.Proficient = true;
         }
         return true;
     }
 
+    /// <summary>
+    /// Brings each feature's rules (effects and options) up to date with the content library, matching by source and name,
+    /// so characters made before a content file gained these rules pick them up (TVCS-108/109/110). Text, uses and the
+    /// player's pick are left alone. Returns true if anything changed.
+    /// </summary>
     public static bool RefreshFeatureRules(Character c, ContentService content)
     {
         var changed = false;

@@ -324,7 +324,7 @@ function buildCharacter(w) {
     cls.savingThrows.forEach(a => c.saveProficiencies[ABIL.indexOf(a)] = true);
     const ap = cls.armorProficiencies, wp = cls.weaponProficiencies;
     c.lightArmor = ap.includes('Light'); c.mediumArmor = ap.includes('Medium'); c.heavyArmor = ap.includes('Heavy'); c.shields = ap.includes('Shields');
-    c.simpleWeapons = wp.some(x => /^simple/i.test(x)); c.martialWeapons = wp.some(x => /^martial( weapons?)?$/i.test(x));
+    c.simpleWeapons = wp.some(x => /^simple( weapons?)?$/i.test(x)); c.martialWeapons = wp.some(x => /^martial( weapons?)?$/i.test(x));
     const namedWp = wp.filter(x => !/^(simple|martial)( weapons?)?$/i.test(x)); if (namedWp.length) other.push('Weapons: ' + namedWp.join(', '));
     if (cls.otherProficiencies) other.push(cls.otherProficiencies);
     c.otherProficiencies = other.join('; '); // read by weaponProf for the starting gear below
@@ -486,7 +486,7 @@ function render() {
 // "Report a problem" (TVCS-106): opens the project's GitHub issue form with the version, page and device filled in.
 // Set REPORT_URL to '' to hide the link; {version}, {page} and {device} placeholders are filled in if present.
 const REPORT_URL = 'https://github.com/Blynk03/Tales-of-the-Valiant-Character-Sheet/issues/new?template=problem-report.yml';
-const PREVIEW_VERSION = 'preview v17';
+const PREVIEW_VERSION = 'preview v18';
 function deviceInfo() {
   const ua = navigator.userAgent;
   const m = (re) => { const r = ua.match(re); return r ? r[1] : null; };
@@ -1398,8 +1398,12 @@ if (!S.chars.length) { S.chars = [exampleCharacter()]; }
 function fixWeaponProf() {
   let changed = false;
   S.chars.forEach(c => { if ((c.weaponProfFix || 0) >= 2) return; c.weaponProfFix = 2; changed = true;
+    // Characters made before listed weapons counted get the class's "Weapons: ..." line first.
+    const cls = find('classes', c.classId), named = cls ? (cls.weaponProficiencies || []).filter(x => !/^(simple|martial)( weapons?)?$/i.test(x)) : [];
+    if (named.length && !/weapons:/i.test(c.otherProficiencies || '')) c.otherProficiencies = [c.otherProficiencies, 'Weapons: ' + named.join(', ')].filter(Boolean).join('; ');
+    // Only listed weapons are ticked, so a group weapon the player unticked stays unticked.
     (c.weapons || []).forEach(w => { if (w.proficient) return; const it = lib('items', true).concat(S.user.items || []).find(x => x.type === 'Weapon' && wpKey(x.name) === wpKey(w.name));
-      if (weaponProf(c, it || { name: w.name, finesse: w.finesse, weaponCategory: '', properties: w.properties })) w.proficient = true; }); });
+      if (namedWeaponProf(c.otherProficiencies, w.name, it ? it.finesse : w.finesse, it ? it.weaponCategory : '', it ? it.properties : w.properties, it ? it.description : '')) w.proficient = true; }); });
   if (changed) persist();
 }
 S.charId = S.chars[0].id;
