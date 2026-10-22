@@ -3253,8 +3253,23 @@ function resourceChanges(c, cls, n) {
   return ((d && d.resources) || []).map(r => { const f = [...c.features].reverse().find(x => x.name === r.name); return { name: r.name, from: f ? usesMax(c, f) : 0, to: r.usesMax }; }).filter(x => x.from !== x.to);
 }
 const addTalent = (c, t) => c.talents.push({ name: t.name, category: t.category, description: t.description });
+/** Weapon proficiency (v15): the Simple/Martial categories, plus weapons named in Other Proficiencies
+    (e.g. "rapier, scimitar, shortsword" or "martial weapons with the Finesse property"). */
+const wpSingular = t => t.replace(/\bweapons?\b/g, '').trim().replace(/(?<!s)s$/, '');
+const wpNorm = t => wpSingular(String(t || '').toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, ' ').trim());
+function namedWeaponProf(text, name, finesse, category) {
+  const n = wpNorm(name);
+  return String(text || '').toLowerCase().split(/[,;\n]|\band\b/).map(x => x.replace(/^\s*(weapons?|proficienc(y|ies))\s*:\s*/, '').trim()).filter(Boolean).some(tok => {
+    if (/finesse/.test(tok)) return !!finesse && (!/martial/.test(tok) || category === 'Martial') && (!/simple/.test(tok) || category === 'Simple');
+    const t = wpNorm(tok); return !!t && !['simple', 'martial'].includes(t) && t === n;
+  });
+}
+function weaponProf(c, i) {
+  const cat = i.weaponCategory || '';
+  return (cat === 'Martial' ? !!c.martialWeapons : cat === 'Simple' ? !!c.simpleWeapons : false) || namedWeaponProf(c.otherProficiencies, i.name, i.finesse, cat);
+}
 function addItem(c, i) {
-  if (i.type === 'Weapon') c.weapons.push({ name: i.name, damage: i.damage || '1d4', damageType: i.damageType, range: i.range, properties: i.properties, options: i.weaponOptions || '', finesse: !!i.finesse, ranged: !!i.ranged, proficient: i.weaponCategory === 'Martial' ? c.martialWeapons : c.simpleWeapons, magicBonus: 0, abilityOverride: null });
+  if (i.type === 'Weapon') c.weapons.push({ name: i.name, damage: i.damage || '1d4', damageType: i.damageType, range: i.range, properties: i.properties, options: i.weaponOptions || '', finesse: !!i.finesse, ranged: !!i.ranged, proficient: weaponProf(c, i), magicBonus: 0, abilityOverride: null });
   else if (i.type === 'Armor') c.armor.push({ name: i.name, baseAC: i.baseAC, category: i.armorCategory, isShield: false, properties: i.properties, magicBonus: 0, equipped: !wornArmor(c) });
   else if (i.type === 'Shield') c.armor.push({ name: i.name, baseAC: i.baseAC || 2, category: 'None', isShield: true, properties: i.properties, magicBonus: 0, equipped: !wornShield(c) });
   else { const g = c.gear.find(x => x.name === i.name); if (g) g.quantity++; else c.gear.push({ name: i.name, quantity: 1, notes: '' }); }
@@ -3328,8 +3343,10 @@ function buildCharacter(w) {
     cls.savingThrows.forEach(a => c.saveProficiencies[ABIL.indexOf(a)] = true);
     const ap = cls.armorProficiencies, wp = cls.weaponProficiencies;
     c.lightArmor = ap.includes('Light'); c.mediumArmor = ap.includes('Medium'); c.heavyArmor = ap.includes('Heavy'); c.shields = ap.includes('Shields');
-    c.simpleWeapons = wp.includes('Simple'); c.martialWeapons = wp.includes('Martial');
+    c.simpleWeapons = wp.some(x => /^simple/i.test(x)); c.martialWeapons = wp.some(x => /^martial( weapons?)?$/i.test(x));
+    const namedWp = wp.filter(x => !/^(simple|martial)( weapons?)?$/i.test(x)); if (namedWp.length) other.push('Weapons: ' + namedWp.join(', '));
     if (cls.otherProficiencies) other.push(cls.otherProficiencies);
+    c.otherProficiencies = other.join('; '); // read by weaponProf for the starting gear below
     w.skills.forEach(s => c.skills[s] = 'Proficient');
     if (cls.spellcastingAbility) { c.spellAbility = cls.spellcastingAbility; c.spellcasterClass = cls.name; }
     const l1 = cls.levels.find(l => l.level === 1);
@@ -3488,7 +3505,7 @@ function render() {
 // "Report a problem" (TVCS-106): opens the project's GitHub issue form with the version, page and device filled in.
 // Set REPORT_URL to '' to hide the link; {version}, {page} and {device} placeholders are filled in if present.
 const REPORT_URL = 'https://github.com/Blynk03/Tales-of-the-Valiant-Character-Sheet/issues/new?template=problem-report.yml';
-const PREVIEW_VERSION = 'preview v14';
+const PREVIEW_VERSION = 'preview v16';
 function deviceInfo() {
   const ua = navigator.userAgent;
   const m = (re) => { const r = ua.match(re); return r ? r[1] : null; };
@@ -4046,7 +4063,7 @@ const BLANK = {
   items: () => ({ id: '', name: 'New item', source: 'Homebrew', description: '', type: 'Gear', weaponCategory: '', damage: '', damageType: '', range: '', properties: '', weaponOptions: '', finesse: false, ranged: false, baseAC: 0, armorCategory: 'None', cost: '', weight: '' }),
   magicItems: () => ({ id: '', name: 'New magic item', source: 'Homebrew', description: '', itemType: 'Wondrous Item', rarity: 'Uncommon', requiresAttunement: false, attunement: '', price: '' })
 };
-const HINTS = { itemType: 'e.g. Wondrous Item, Weapon (longsword), Armor (plate), Armor (shield), Ring, Potion.', rarity: 'Common, Uncommon, Rare, Very Rare, Legendary, Fabled, Artifact or Varies.', attunement: "Who can attune, if limited, e.g. 'by a spellcaster'. Blank if anyone can.", id: 'Unique key. Reusing a built-in id overrides that entry.', source: "Book or homebrew label, e.g. 'Player's Guide', 'Homebrew'.", skillProficiencies: 'Skills always granted, exactly as on the sheet.', skillOptions: 'Skills the player can choose from.', skillChoices: 'How many of the skill options to choose.', talentId: 'Talent id always granted at level 1 (optional).', talentOptions: 'Talent ids the player chooses one from (optional).', languageChoices: 'How many extra languages the player picks.', talentCategories: 'Talent lists for Improvement levels (subclass: lists it adds).', resources: 'Feature uses that change at this level, e.g. Rage 3.', usesFrom: 'Optional: PB, or STR/DEX/CON/INT/WIS/CHA for that modifier, with an optional +N (e.g. PB+1). Min 1.', repeatable: 'Tick if the talent can be taken more than once.', slots: 'Total slots for circles 1-9, e.g. 3, 2.', armorProficiencies: 'Any of: Light, Medium, Heavy, Shields.', weaponProficiencies: 'Any of: Simple, Martial.', startingEquipment: 'Item ids from the Items list.', spellSlots: 'Total slots for circles 1-9, e.g. 4, 3, 2.', usesMax: '0 if it has no limited uses.', recharge: 'Short Rest, Long Rest or blank.', classId: 'Id of the parent class.', circle: '0 for cantrips.', subclassLevel: 'Level at which the subclass is chosen.' };
+const HINTS = { itemType: 'e.g. Wondrous Item, Weapon (longsword), Armor (plate), Armor (shield), Ring, Potion.', rarity: 'Common, Uncommon, Rare, Very Rare, Legendary, Fabled, Artifact or Varies.', attunement: "Who can attune, if limited, e.g. 'by a spellcaster'. Blank if anyone can.", id: 'Unique key. Reusing a built-in id overrides that entry.', source: "Book or homebrew label, e.g. 'Player's Guide', 'Homebrew'.", skillProficiencies: 'Skills always granted, exactly as on the sheet.', skillOptions: 'Skills the player can choose from.', skillChoices: 'How many of the skill options to choose.', talentId: 'Talent id always granted at level 1 (optional).', talentOptions: 'Talent ids the player chooses one from (optional).', languageChoices: 'How many extra languages the player picks.', talentCategories: 'Talent lists for Improvement levels (subclass: lists it adds).', resources: 'Feature uses that change at this level, e.g. Rage 3.', usesFrom: 'Optional: PB, or STR/DEX/CON/INT/WIS/CHA for that modifier, with an optional +N (e.g. PB+1). Min 1.', repeatable: 'Tick if the talent can be taken more than once.', slots: 'Total slots for circles 1-9, e.g. 3, 2.', armorProficiencies: 'Any of: Light, Medium, Heavy, Shields.', weaponProficiencies: 'Simple, Martial, and/or specific weapons (e.g. Rapier, Scimitar). Named weapons can also go in Other Proficiencies.', startingEquipment: 'Item ids from the Items list.', spellSlots: 'Total slots for circles 1-9, e.g. 4, 3, 2.', usesMax: '0 if it has no limited uses.', recharge: 'Short Rest, Long Rest or blank.', classId: 'Id of the parent class.', circle: '0 for cantrips.', subclassLevel: 'Level at which the subclass is chosen.' };
 /** Fills fields added in later versions so they show up in the editor. */
 function withDefaults(kind, e) {
   const d = Object.assign(BLANK[kind](), e);
@@ -4395,6 +4412,14 @@ S.user = emptyLib();
 S.disabled = store.get('vs.disabled') || [];
 S.chars = store.get('vs.chars') || [];
 if (!S.chars.length) { S.chars = [exampleCharacter()]; }
+/** v15: weapons added before named weapon proficiencies counted (e.g. a duelist's rapier) get proficiency once. */
+function fixWeaponProf() {
+  let changed = false;
+  S.chars.forEach(c => { if (c.weaponProfFix) return; c.weaponProfFix = 1; changed = true;
+    (c.weapons || []).forEach(w => { if (w.proficient) return; const it = lib('items', true).find(x => x.type === 'Weapon' && wpNorm(x.name) === wpNorm(w.name));
+      if (weaponProf(c, { name: w.name, finesse: w.finesse, weaponCategory: it ? it.weaponCategory : '' })) w.proficient = true; }); });
+  if (changed) persist();
+}
 S.charId = S.chars[0].id;
 d20('Perception check', skB(C(), 'Perception'));
 // Load the content library from IndexedDB, moving any copy left in localStorage across first.
@@ -4409,6 +4434,7 @@ d20('Perception check', skB(C(), 'Perception'));
     if (content === undefined && store.get('vs.contentInIdb')) { S.contentLocked = true; S.storageWarn = "Your content library couldn't be opened this time, so changes to it won't be saved. Reload the page to try again."; }
   }
   S.user = Object.assign(emptyLib(), content || {});
+  fixWeaponProf();
   // Characters pick up rules (effects and options) their content gained since they were made (TVCS-108/109/110).
   if (S.chars.map(refreshFeatureRules).some(Boolean)) persist();
   render();
