@@ -573,7 +573,7 @@ function speedBox(c) {
   const b = speedBonuses(c), x = extraSpeeds(c), total = walkSpeed(c);
   if (total == null || (!b.length && !x.length)) return inp('c.speed', c.speed, 'text-center num text-lg', 'aria-label="Speed"');
   return `<div class="text-center num text-lg leading-tight" title="${esc(b.map(v => sg(v.feet) + ' ft. ' + v.source).join(', '))}">${total} ft.</div>${x.map(s => `<div class="text-center text-xs">${esc(s)}</div>`).join('')}
-    <label class="lbl block text-center mt-1">Base ${inp('c.speed', c.speed, 'text-center num text-sm', 'aria-label="Base speed"')}</label>`;
+    <div class="lbl text-center mt-1" aria-hidden="true">Base</div>${inp('c.speed', c.speed, 'text-center num text-sm', 'aria-label="Base speed"')}`;
 }
 function mainTab(c) {
   const armor = wornArmor(c), shield = wornShield(c), una = !armor && bestUnarmored(c, false);

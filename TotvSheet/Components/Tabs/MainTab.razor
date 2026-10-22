@@ -49,9 +49,8 @@
                     {
                         <div class="text-center text-xs">@s</div>
                     }
-                    <label class="lbl block text-center mt-1">Base
-                        <input class="field text-center num text-sm" aria-label="Base speed" @bind="C.Speed" @bind:after="Save" />
-                    </label>
+                    <div class="lbl text-center mt-1" aria-hidden="true">Base</div>
+                    <input class="field text-center num text-sm" aria-label="Base speed" @bind="C.Speed" @bind:after="Save" />
                 }
                 else
                 {

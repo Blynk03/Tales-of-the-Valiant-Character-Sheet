@@ -58,9 +58,9 @@ try {
   const actions = [];
   let created = false;
   for (let i = 0; i < 60 && !created; i++) {
-    const createBtn = page.getByRole('button', { name: 'Create character' });
+    const createBtn = page.getByRole('button', { name: 'Create character', exact: true });
     if (await createBtn.isVisible() && await createBtn.isEnabled()) { actions.push('create'); await createBtn.click(); created = true; break; }
-    const next = page.getByRole('button', { name: 'Next' });
+    const next = page.getByRole('button', { name: 'Next', exact: true });
     if (await next.isVisible() && await next.isEnabled()) { actions.push('next'); await next.click(); continue; }
     const box = page.locator('.box').last();
     const choices = box.locator('button.choice:not([disabled])');
