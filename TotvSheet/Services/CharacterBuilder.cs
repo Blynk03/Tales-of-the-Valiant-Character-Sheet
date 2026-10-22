@@ -298,10 +298,12 @@ public static class CharacterBuilder
         var changed = false;
         foreach (var f in c.Features)
         {
-            var def = content.FindFeatureDef(f.Source, f.Name);
+            var def = content.FindFeatureDef(c, f);
             if (def is null) continue;
             if (Json.Serialize(f.Effects) != Json.Serialize(def.Effects)) { f.Effects = Clone(def.Effects); changed = true; }
             if (Json.Serialize(f.Options) != Json.Serialize(def.Options)) { f.Options = Clone(def.Options) ?? new(); changed = true; }
+            // A pick whose option was renamed or removed in the content is cleared, so the sheet asks again.
+            if (f.Chosen.Length > 0 && !f.Options.Any(o => o.Name == f.Chosen)) { f.Chosen = ""; changed = true; }
         }
         return changed;
     }

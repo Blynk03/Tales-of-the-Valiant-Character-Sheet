@@ -41,10 +41,17 @@
             </Box>
             <Box Title="Speed(s)">
                 @{ var bonuses = C.SpeedBonuses().ToList(); var extra = C.ExtraSpeeds().ToList(); var walk = C.WalkSpeed(); }
-                @if (walk is int total && (bonuses.Count > 0 || extra.Count > 0))
+                @if (bonuses.Count > 0 || extra.Count > 0)
                 {
                     @* Features change the speed (TVCS-108/109): show the result; the field below stays the base speed. *@
-                    <div class="text-center num text-lg leading-tight" title="@string.Join(", ", bonuses.Select(b => $"{Rules.Signed(b.Feet)} ft. {b.Source}"))">@total ft.</div>
+                    @if (walk is int total)
+                    {
+                        <div class="text-center num text-lg leading-tight">@total ft.</div>
+                    }
+                    @if (bonuses.Count > 0)
+                    {
+                        <div class="text-center text-xs muted">@string.Join(", ", bonuses.Select(b => $"{Rules.Signed(b.Feet)} {b.Source}"))</div>
+                    }
                     @foreach (var s in extra)
                     {
                         <div class="text-center text-xs">@s</div>

@@ -96,13 +96,13 @@ function scaled(spec, level) {
   String(spec || '').split(';').map(x => x.trim()).filter(Boolean).forEach(p => { const m = /^(\d+)\s*:\s*(.+)$/.exec(p); if (!m) { if (!r) r = p; } else if (level >= +m[1]) r = m[2].trim(); });
   return r;
 }
-const speedBonuses = c => activeEffects(c).filter(([, e]) => (!e.speedBonusUnarmored || unarmoredNoShield(c)) && (!e.speedBonusNoHeavyArmor || (wornArmor(c) || {}).category !== 'Heavy')).map(([f, e]) => ({ feet: parseInt(scaled(e.speedBonus, c.level), 10) || 0, source: f.name })).filter(b => b.feet);
+const speedBonuses = c => activeEffects(c).filter(([, e]) => (!e.speedBonusUnarmored || unarmoredNoShield(c)) && (!e.speedBonusNoHeavyArmor || (wornArmor(c) || {}).category !== 'Heavy')).map(([f, e]) => { const m = /-?\d+/.exec(scaled(e.speedBonus, c.level)); return { feet: m ? +m[0] : 0, source: f.name }; }).filter(b => b.feet);
 function walkSpeed(c) { const m = /\d+/.exec(c.speed || ''); return m ? +m[0] + speedBonuses(c).reduce((s, b) => s + b.feet, 0) : null; }
 /** Other speeds as text, e.g. "Fly 40 ft." ("Fly" = walking speed, "Burrow 20" = fixed). */
 function extraSpeeds(c) {
   const walk = walkSpeed(c), by = new Map();
   activeEffects(c).flatMap(([, e]) => e.extraSpeeds || []).map(s => String(s).trim()).filter(Boolean).forEach(s => {
-    const m = /^(.*?)\s*(\d+)?\s*(?:ft\.?)?$/.exec(s), name = m[1], ft = m[2] ? +m[2] : walk, k = name.toLowerCase();
+    const m = /^(.*?)(?:\s+(\d+)(?:\s*ft\.?)?)?$/.exec(s), name = m[1], ft = m[2] ? +m[2] : walk, k = name.toLowerCase();
     if (!by.has(k) || (ft != null && ft > by.get(k).ft)) by.set(k, { name, ft });
   });
   return [...by.values()].map(x => x.ft != null ? `${x.name} ${x.ft} ft.` : x.name);
@@ -113,7 +113,7 @@ function unarmedStrike(c) {
   const all = activeEffects(c).filter(([, e]) => String(e.unarmedDamage || '').trim());
   if (!all.length) return null;
   const act = all.filter(([, e]) => !e.unarmedNeedsNoArmor || unarmoredNoShield(c)).map(([f, e]) => ({ f, e, die: scaled(e.unarmedDamage, c.level) })).filter(x => x.die).sort((x, y) => dieSize(y.die) - dieSize(x.die));
-  if (!act.length) return { name: 'Unarmed Strike', damage: '1', damageType: 'bludgeoning', proficient: true, options: 'Martial Arts needs no armor and no shield' };
+  if (!act.length) return { name: 'Unarmed Strike', damage: '1', damageType: 'bludgeoning', proficient: true, options: [...new Set(all.map(([f]) => f.name))].join(', ') + ': needs no armor and no shield' };
   return { name: 'Unarmed Strike', damage: act[0].die, damageType: act[0].e.unarmedDamageType || 'bludgeoning', finesse: act.some(x => x.e.unarmedDex), proficient: true, options: [...new Set(act.map(x => x.f.name))].join(', ') };
 }
 const attackList = c => { const u = unarmedStrike(c); return u ? c.weapons.concat([u]) : c.weapons; };
@@ -177,21 +177,29 @@ const deepCopy = v => v == null ? v : JSON.parse(JSON.stringify(v));
 const toFeature = (f, source, level, chosen) => ({ name: f.name, level: level ?? f.level, source, description: f.description, usesMax: f.usesMax || 0, usesSpent: 0, usesFrom: f.usesFrom || '', recharge: f.recharge || '',
   effects: deepCopy(f.effects) || null, options: deepCopy(f.options) || [], chosen: chosen || '' });
 const choiceKey = (owner, t) => `${owner.id}/${t.name}`;
-/** The content feature a character's feature came from (by source name and feature name). */
-function findFeatureDef(source, name) {
+/** The content feature a character's feature came from, through the character's own entry ids (mirror of
+    ContentService.FindFeatureDef): user entries win over built-in ones, disabled sources included. */
+function findFeatureDef(c, f) {
   const eq = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
-  const pick = (kind, feats) => { for (const e of lib(kind, true).concat(S.user[kind] || [])) if (eq(e.name, source)) { const f = feats(e).find(x => eq(x.name, name)); if (f) return f; } return null; };
-  return pick('lineages', e => e.traits || []) || pick('heritages', e => e.traits || []) || pick('backgrounds', e => e.traits || [])
-    || pick('classes', e => (e.levels || []).flatMap(l => l.features || [])) || pick('subclasses', e => e.features || []);
+  const byId = (kind, id) => (S.user[kind] || []).find(e => e.id === id) || (SEED[kind] || []).find(e => e.id === id);
+  const first = (arr, lvl) => arr.slice().sort((x, y) => (x.level !== lvl) - (y.level !== lvl));
+  let e, feats = [];
+  if (eq(f.source, c.lineageName) && (e = byId('lineages', c.lineageId))) feats = e.traits || [];
+  else if (eq(f.source, c.heritageName) && (e = byId('heritages', c.heritageId))) feats = e.traits || [];
+  else if (eq(f.source, c.backgroundName) && (e = byId('backgrounds', c.backgroundId))) feats = e.traits || [];
+  else if (eq(f.source, c.className) && (e = byId('classes', c.classId))) feats = first(e.levels || [], f.level).flatMap(l => l.features || []);
+  else if (eq(f.source, c.subclassName) && (e = byId('subclasses', c.subclassId))) feats = first(e.features || [], f.level);
+  return feats.find(x => eq(x.name, f.name)) || null;
 }
 /** Brings features' effects and options up to date with the content (TVCS-108/109/110); keeps text, uses and picks. */
 function refreshFeatureRules(c) {
   let changed = false;
   (c.features || []).forEach(f => {
-    const d = findFeatureDef(f.source, f.name); if (!d) return;
+    const d = findFeatureDef(c, f); if (!d) return;
     if (JSON.stringify(f.effects || null) !== JSON.stringify(d.effects || null)) { f.effects = deepCopy(d.effects) || null; changed = true; }
     if (JSON.stringify(f.options || []) !== JSON.stringify(d.options || [])) { f.options = deepCopy(d.options) || []; changed = true; }
     if (f.chosen == null) f.chosen = '';
+    if (f.chosen && !f.options.some(o => o.name === f.chosen)) { f.chosen = ''; changed = true; }
   });
   return changed;
 }
@@ -571,8 +579,8 @@ const profToggle = (f, v, label) => `<label class="flex items-center gap-2 curso
 
 function speedBox(c) {
   const b = speedBonuses(c), x = extraSpeeds(c), total = walkSpeed(c);
-  if (total == null || (!b.length && !x.length)) return inp('c.speed', c.speed, 'text-center num text-lg', 'aria-label="Speed"');
-  return `<div class="text-center num text-lg leading-tight" title="${esc(b.map(v => sg(v.feet) + ' ft. ' + v.source).join(', '))}">${total} ft.</div>${x.map(s => `<div class="text-center text-xs">${esc(s)}</div>`).join('')}
+  if (!b.length && !x.length) return inp('c.speed', c.speed, 'text-center num text-lg', 'aria-label="Speed"');
+  return `${total != null ? `<div class="text-center num text-lg leading-tight">${total} ft.</div>` : ''}${b.length ? `<div class="text-center text-xs muted">${esc(b.map(v => sg(v.feet) + ' ' + v.source).join(', '))}</div>` : ''}${x.map(s => `<div class="text-center text-xs">${esc(s)}</div>`).join('')}
     <div class="lbl text-center mt-1" aria-hidden="true">Base</div>${inp('c.speed', c.speed, 'text-center num text-sm', 'aria-label="Base speed"')}`;
 }
 function mainTab(c) {
@@ -1132,7 +1140,7 @@ function bindChange(el) {
 function cur() { return C(); }
 const A = {
   go(r) { if (r === 'list') { S.route = 'list'; } else S.route = r; S.notice = ''; },
-  open(id) { S.charId = id; S.route = 'sheet'; S.tab = 'main'; S.notice = ''; S.castMsg = ''; const c = C(); if (c && refreshFeatureRules(c)) save(); },
+  open(id) { S.charId = id; S.route = 'sheet'; S.tab = 'main'; S.notice = ''; S.castMsg = ''; const c = C(); if (c && refreshFeatureRules(c)) persist(); },
   startCreate() { S.wiz = newWizard(); S.route = 'create'; },
   dupChar(id) { const c = clone(S.chars.find(x => x.id === id)); c.id = uid(); c.name += ' (copy)'; c.updated = new Date().toISOString(); S.chars.push(c); persist(); },
   delChar(id) { const c = S.chars.find(x => x.id === id); S.modal = { confirm: `Delete ${c.name}? This can't be undone.`, yes: 'Delete', danger: true, then() { S.chars = S.chars.filter(x => x.id !== id); persist(); } }; },
@@ -1377,6 +1385,8 @@ d20('Perception check', skB(C(), 'Perception'));
     if (content === undefined && store.get('vs.contentInIdb')) { S.contentLocked = true; S.storageWarn = "Your content library couldn't be opened this time, so changes to it won't be saved. Reload the page to try again."; }
   }
   S.user = Object.assign(emptyLib(), content || {});
+  // Characters pick up rules (effects and options) their content gained since they were made (TVCS-108/109/110).
+  if (S.chars.map(refreshFeatureRules).some(Boolean)) persist();
   render();
 })();
 })();

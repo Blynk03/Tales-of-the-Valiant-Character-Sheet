@@ -116,19 +116,23 @@ public class ContentService
     public ItemDef? Item(string id) => Merge(Core.Items, User.Items, hideSamples: false).FirstOrDefault(i => i.Id == id);
     public MagicItemDef? MagicItem(string id) => Merge(Core.MagicItems, User.MagicItems, hideSamples: false).FirstOrDefault(i => i.Id == id);
 
-    /// <summary>The content definition a character's feature came from: the lineage, heritage, background, class or subclass
-    /// named <paramref name="source"/> with a feature named <paramref name="name"/>. Disabled sources are included.</summary>
-    public FeatureDef? FindFeatureDef(string source, string name)
+    /// <summary>The content definition a character's feature came from, found through the character's own lineage, heritage,
+    /// background, class or subclass id (so two entries with the same name can't be mixed up), then by feature name,
+    /// preferring the listing at the feature's level. Null for custom features and talents.</summary>
+    public FeatureDef? FindFeatureDef(Character c, Feature f)
     {
-        bool Is(ContentEntry e) => string.Equals(e.Name, source, StringComparison.OrdinalIgnoreCase);
-        bool Named(FeatureDef f) => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase);
-        IEnumerable<T> All<T>(List<T> core, List<T> user) where T : ContentEntry =>
-            user.Concat(core.Where(c => !user.Any(u => u.Id == c.Id)));
-        return All(Core.Lineages, User.Lineages).Where(Is).SelectMany(l => l.Traits).FirstOrDefault(Named)
-            ?? All(Core.Heritages, User.Heritages).Where(Is).SelectMany(h => h.Traits).FirstOrDefault(Named)
-            ?? All(Core.Backgrounds, User.Backgrounds).Where(Is).SelectMany(b => b.Traits).FirstOrDefault(Named)
-            ?? All(Core.Classes, User.Classes).Where(Is).SelectMany(k => k.Levels).SelectMany(l => l.Features).FirstOrDefault(Named)
-            ?? All(Core.Subclasses, User.Subclasses).Where(Is).SelectMany(s => s.Features).FirstOrDefault(Named);
+        T? ById<T>(List<T> core, List<T> user, string id) where T : ContentEntry =>
+            user.FirstOrDefault(u => u.Id == id) ?? core.FirstOrDefault(x => x.Id == id);
+        bool Named(FeatureDef d) => string.Equals(d.Name, f.Name, StringComparison.OrdinalIgnoreCase);
+        bool From(string name) => string.Equals(f.Source, name, StringComparison.OrdinalIgnoreCase);
+        IEnumerable<FeatureDef> feats =
+            From(c.LineageName) && ById(Core.Lineages, User.Lineages, c.LineageId) is { } l ? l.Traits
+            : From(c.HeritageName) && ById(Core.Heritages, User.Heritages, c.HeritageId) is { } h ? h.Traits
+            : From(c.BackgroundName) && ById(Core.Backgrounds, User.Backgrounds, c.BackgroundId) is { } b ? b.Traits
+            : From(c.ClassName) && ById(Core.Classes, User.Classes, c.ClassId) is { } k ? k.Levels.OrderBy(x => x.Level != f.Level).SelectMany(x => x.Features)
+            : From(c.SubclassName) && ById(Core.Subclasses, User.Subclasses, c.SubclassId) is { } s ? s.Features.OrderBy(x => x.Level != f.Level)
+            : Enumerable.Empty<FeatureDef>();
+        return feats.FirstOrDefault(Named);
     }
 
     /// <summary>Homebrew entries never push the built-in samples aside; imported book content does.</summary>

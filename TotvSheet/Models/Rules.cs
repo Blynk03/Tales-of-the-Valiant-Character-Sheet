@@ -158,7 +158,7 @@ public static class CharacterCalc
         c.ActiveEffects()
             .Where(x => !x.Effects.SpeedBonusUnarmored || c.IsUnarmoredNoShield())
             .Where(x => !x.Effects.SpeedBonusNoHeavyArmor || c.EquippedArmor()?.Category != ArmorCategory.Heavy)
-            .Select(x => (Feet: int.TryParse(Scaled(x.Effects.SpeedBonus, c.Level), out var n) ? n : 0, Source: x.Feature.Name))
+            .Select(x => (Feet: System.Text.RegularExpressions.Regex.Match(Scaled(x.Effects.SpeedBonus, c.Level), @"-?\d+") is { Success: true } m ? int.Parse(m.Value) : 0, Source: x.Feature.Name))
             .Where(x => x.Feet != 0);
 
     /// <summary>Other speeds from features and picked options, as text: "Fly 40 ft." ("Fly" = walking speed, "Burrow 20" = fixed).</summary>
@@ -166,7 +166,7 @@ public static class CharacterCalc
     {
         var walk = c.WalkSpeed();
         return c.ActiveEffects().SelectMany(x => x.Effects.ExtraSpeeds).Where(s => !string.IsNullOrWhiteSpace(s))
-            .Select(s => System.Text.RegularExpressions.Regex.Match(s.Trim(), @"^(.*?)\s*(\d+)?\s*(?:ft\.?)?$"))
+            .Select(s => System.Text.RegularExpressions.Regex.Match(s.Trim(), @"^(.*?)(?:\s+(\d+)(?:\s*ft\.?)?)?$"))
             .Select(m => (Name: m.Groups[1].Value, Feet: m.Groups[2].Success ? int.Parse(m.Groups[2].Value) : walk))
             .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
             .Select(g => g.Max(x => x.Feet) is int ft ? $"{g.Key} {ft} ft." : g.Key);
@@ -185,7 +185,7 @@ public static class CharacterCalc
         var dex = active.Any(x => x.Effects.UnarmedDex);
         if (active.Count == 0)
             return new Weapon { Name = "Unarmed Strike", Damage = "1", DamageType = "bludgeoning", Proficient = true,
-                                Options = "Martial Arts needs no armor and no shield" };
+                                Options = $"{string.Join(", ", all.Select(x => x.Feature.Name).Distinct())}: needs no armor and no shield" };
         var best = active[0];
         return new Weapon
         {
