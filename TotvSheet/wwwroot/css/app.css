@@ -206,3 +206,6 @@ input[type=number].field::-webkit-inner-spin-button { opacity: .4; }
 .site-foot { margin-top: 2.5rem; padding-top: .75rem; border-top: 1px solid var(--ink-faint); font-size: .9rem; color: var(--ink-soft); text-align: center; }
 .site-foot a { color: var(--ink); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 .site-foot-ver { margin-left: .5rem; font-size: .8rem; }
+
+/* TVCS-108: a "choose one" feature still waiting for a pick */
+.needs-pick { border-color: var(--warn, #b8862b); box-shadow: 0 0 0 2px color-mix(in srgb, var(--warn, #b8862b) 35%, transparent); }

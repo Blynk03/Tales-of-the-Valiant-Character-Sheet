@@ -12,7 +12,7 @@
         var under = Nullable.GetUnderlyingType(type);
         var value = p.GetValue(Target);
         var hint = p.GetCustomAttribute<HintAttribute>()?.Text;
-        var wide = IsList(type) || p.GetCustomAttribute<MultilineAttribute>() is not null;
+        var wide = IsList(type) || p.GetCustomAttribute<MultilineAttribute>() is not null || (type.IsClass && type != typeof(string));
 
         <div class="@(wide ? "sm:col-span-2" : "") min-w-0">
             <label class="lbl block mb-0.5">@Label(p.Name)</label>
@@ -91,6 +91,24 @@
                     }
                     <button type="button" class="btn btn-sm self-start" @onclick="() => AddItem(list, et)">+ Add @Label(et.Name.Replace("Def", ""))</button>
                 </div>
+            }
+            else if (type.IsClass && type.GetConstructor(Type.EmptyTypes) is not null)
+            {
+                @* An optional nested object, e.g. a feature's Effects (TVCS-108). *@
+                if (value is null)
+                {
+                    <button type="button" class="btn btn-sm" @onclick="() => Set(p, Activator.CreateInstance(type)!)">+ Add @Label(p.Name).ToLowerInvariant()</button>
+                }
+                else
+                {
+                    <details class="rounded-lg" style="border:1px solid var(--line)">
+                        <summary class="cursor-pointer px-2 py-1 flex items-center gap-2">
+                            <span class="font-semibold">@Label(p.Name)</span>
+                            <button type="button" class="icon-btn ml-auto" title="Remove" @onclick="() => Set(p, null)" @onclick:preventDefault="true">✕</button>
+                        </summary>
+                        <div class="p-2 pt-1"><ObjectEditor Target="value" OnChange="OnChange" Depth="Depth + 1" /></div>
+                    </details>
+                }
             }
             else
             {

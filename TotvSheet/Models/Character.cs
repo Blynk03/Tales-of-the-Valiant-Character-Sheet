@@ -123,6 +123,13 @@ public class Feature
     public string UsesFrom { get; set; } = "";
     /// <summary>"Short Rest", "Long Rest" or blank.</summary>
     public string Recharge { get; set; } = "";
+    /// <summary>Rules this feature applies (copied from content; refreshed when the content changes).</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public FeatureEffects? Effects { get; set; }
+    /// <summary>The choices of a "choose one" feature (copied from content).</summary>
+    public List<FeatureOptionDef> Options { get; set; } = new();
+    /// <summary>The option the player picked, by name; blank until picked.</summary>
+    public string Chosen { get; set; } = "";
 }
 
 public class Talent

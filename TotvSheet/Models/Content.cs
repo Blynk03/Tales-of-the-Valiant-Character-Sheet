@@ -38,6 +38,51 @@ public class FeatureDef
     public string Recharge { get; set; } = "";
     [Hint("Optional: PB for proficiency bonus, or STR/DEX/CON/INT/WIS/CHA for that modifier, with an optional +N (e.g. PB+1). Minimum 1. Overrides Uses Max and updates as the character changes.")]
     public string UsesFrom { get; set; } = "";
+    [Hint("Optional rules the sheet applies for this feature: unarmored AC, speed, unarmed strike.")]
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public FeatureEffects? Effects { get; set; }
+    [Hint("For a \"choose one\" feature (e.g. Natural Adaptation): the options. The player picks one at creation or on the sheet.")]
+    public List<FeatureOptionDef> Options { get; set; } = new();
+}
+
+/// <summary>One choice of a "choose one" feature, e.g. Avian for Beastkin's Natural Adaptation (TVCS-108).</summary>
+public class FeatureOptionDef
+{
+    public string Name { get; set; } = "";
+    [Multiline]
+    public string Description { get; set; } = "";
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public FeatureEffects? Effects { get; set; }
+}
+
+/// <summary>
+/// Rules a feature (or a chosen option) applies to the sheet's calculations (TVCS-108/109/110). All optional.
+/// Level-scaled values use "value; level:value", e.g. "1d4; 5:1d6; 11:1d8; 17:1d10".
+/// </summary>
+public class FeatureEffects
+{
+    [Hint("Unarmored AC base, e.g. 10 for 10 + DEX + WIS. 0 = none. Used when no armor is worn, if it beats 10 + DEX.")]
+    public int UnarmoredAcBase { get; set; }
+    [Hint("Ability modifiers added to the unarmored AC base.")]
+    public List<Ability> UnarmoredAcAbilities { get; set; } = new();
+    [Hint("Tick if it still works with a shield (Barbarian); leave unticked if a shield turns it off (Monk).")]
+    public bool UnarmoredAcWithShield { get; set; }
+    [Hint("Extra walking speed in feet, by level, e.g. \"10; 6:15; 10:20; 14:25; 18:30\".")]
+    public string SpeedBonus { get; set; } = "";
+    [Hint("Tick if the speed bonus only applies without armor or a shield (Monk).")]
+    public bool SpeedBonusUnarmored { get; set; }
+    [Hint("Tick if the speed bonus doesn't apply in heavy armor (Barbarian's Fast Movement).")]
+    public bool SpeedBonusNoHeavyArmor { get; set; }
+    [Hint("Other speeds: a name alone is equal to your walking speed (Fly, Climb, Swim); a name and number is fixed (Burrow 20).")]
+    public List<string> ExtraSpeeds { get; set; } = new();
+    [Hint("Unarmed strike damage, by level, e.g. \"1d4; 5:1d6; 11:1d8; 17:1d10\". Adds an Unarmed Strike row to Attacks.")]
+    public string UnarmedDamage { get; set; } = "";
+    [Hint("Damage type of that unarmed strike, e.g. bludgeoning.")]
+    public string UnarmedDamageType { get; set; } = "";
+    [Hint("Tick if the unarmed strike can use DEX instead of STR.")]
+    public bool UnarmedDex { get; set; }
+    [Hint("Tick if the unarmed damage only applies without armor or a shield (Monk's Martial Arts).")]
+    public bool UnarmedNeedsNoArmor { get; set; }
 }
 
 /// <summary>Sets the maximum uses of a feature by name at a given level, e.g. Rage uses 3.</summary>

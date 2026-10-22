@@ -103,12 +103,113 @@ public static class CharacterCalc
     public static Armor? EquippedShield(this Character c) =>
         c.Armor.FirstOrDefault(a => a.Equipped && a.IsShield);
 
+    // ---------- Feature effects (TVCS-108/109/110) ----------
+
+    /// <summary>Every effect in play: each feature's own, plus the effects of the option picked for it.</summary>
+    public static IEnumerable<(Feature Feature, FeatureEffects Effects)> ActiveEffects(this Character c)
+    {
+        foreach (var f in c.Features)
+        {
+            if (f.Effects is { } e) yield return (f, e);
+            if (f.Options.FirstOrDefault(o => o.Name == f.Chosen)?.Effects is { } oe) yield return (f, oe);
+        }
+    }
+
+    /// <summary>True when no armor is worn and no shield is equipped (Monk features).</summary>
+    public static bool IsUnarmoredNoShield(this Character c) => c.EquippedArmor() is null && c.EquippedShield() is null;
+
+    /// <summary>The best unarmored AC formula (without a shield's bonus), or null if 10 + DEX is best or none applies.</summary>
+    public static (int Ac, string Formula, string Source)? BestUnarmored(this Character c, bool withShield)
+    {
+        (int, string, string)? best = null;
+        foreach (var (f, e) in c.ActiveEffects())
+        {
+            if (e.UnarmoredAcBase <= 0 || (withShield && !e.UnarmoredAcWithShield)) continue;
+            var ac = e.UnarmoredAcBase + e.UnarmoredAcAbilities.Sum(a => c.Mod(a));
+            var formula = string.Join(" + ", new[] { e.UnarmoredAcBase.ToString() }.Concat(e.UnarmoredAcAbilities.Select(a => a.ToString())));
+            var source = string.IsNullOrEmpty(f.Chosen) || f.Effects == e ? f.Name : $"{f.Name}: {f.Chosen}";
+            if (ac > (best?.Item1 ?? 10 + c.Mod(Ability.DEX))) best = (ac, formula, source);
+        }
+        return best;
+    }
+
+    /// <summary>A level-scaled value: "1d4; 5:1d6; 11:1d8" → the entry for the highest level reached.</summary>
+    public static string Scaled(string? spec, int level)
+    {
+        string result = "";
+        foreach (var part in (spec ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(part, @"^(\d+)\s*:\s*(.+)$");
+            if (!m.Success) { if (result.Length == 0) result = part; continue; }
+            if (level >= int.Parse(m.Groups[1].Value)) result = m.Groups[2].Value.Trim();
+        }
+        return result;
+    }
+
+    /// <summary>Walking speed in feet: the number in the Speed field plus bonuses from features, or null if the field has no number.</summary>
+    public static int? WalkSpeed(this Character c)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(c.Speed ?? "", @"\d+");
+        if (!m.Success) return null;
+        return int.Parse(m.Value) + c.SpeedBonuses().Sum(b => b.Feet);
+    }
+
+    public static IEnumerable<(int Feet, string Source)> SpeedBonuses(this Character c) =>
+        c.ActiveEffects()
+            .Where(x => !x.Effects.SpeedBonusUnarmored || c.IsUnarmoredNoShield())
+            .Where(x => !x.Effects.SpeedBonusNoHeavyArmor || c.EquippedArmor()?.Category != ArmorCategory.Heavy)
+            .Select(x => (Feet: int.TryParse(Scaled(x.Effects.SpeedBonus, c.Level), out var n) ? n : 0, Source: x.Feature.Name))
+            .Where(x => x.Feet != 0);
+
+    /// <summary>Other speeds from features and picked options, as text: "Fly 40 ft." ("Fly" = walking speed, "Burrow 20" = fixed).</summary>
+    public static IEnumerable<string> ExtraSpeeds(this Character c)
+    {
+        var walk = c.WalkSpeed();
+        return c.ActiveEffects().SelectMany(x => x.Effects.ExtraSpeeds).Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => System.Text.RegularExpressions.Regex.Match(s.Trim(), @"^(.*?)\s*(\d+)?\s*(?:ft\.?)?$"))
+            .Select(m => (Name: m.Groups[1].Value, Feet: m.Groups[2].Success ? int.Parse(m.Groups[2].Value) : walk))
+            .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.Max(x => x.Feet) is int ft ? $"{g.Key} {ft} ft." : g.Key);
+    }
+
+    /// <summary>The Unarmed Strike attack row, if any feature improves unarmed strikes; null otherwise.
+    /// Without an active improvement (e.g. a monk in armor) it falls back to 1 + STR bludgeoning.</summary>
+    public static Weapon? UnarmedStrike(this Character c)
+    {
+        var all = c.ActiveEffects().Where(x => !string.IsNullOrWhiteSpace(x.Effects.UnarmedDamage)).ToList();
+        if (all.Count == 0) return null;
+        var active = all.Where(x => !x.Effects.UnarmedNeedsNoArmor || c.IsUnarmoredNoShield())
+            .Select(x => (x.Feature, x.Effects, Die: Scaled(x.Effects.UnarmedDamage, c.Level)))
+            .Where(x => x.Die.Length > 0)
+            .OrderByDescending(x => DieSize(x.Die)).ToList();
+        var dex = active.Any(x => x.Effects.UnarmedDex);
+        if (active.Count == 0)
+            return new Weapon { Name = "Unarmed Strike", Damage = "1", DamageType = "bludgeoning", Proficient = true,
+                                Options = "Martial Arts needs no armor and no shield" };
+        var best = active[0];
+        return new Weapon
+        {
+            Name = "Unarmed Strike",
+            Damage = best.Die,
+            DamageType = string.IsNullOrWhiteSpace(best.Effects.UnarmedDamageType) ? "bludgeoning" : best.Effects.UnarmedDamageType,
+            Finesse = dex,
+            Proficient = true,
+            Options = string.Join(", ", active.Select(x => x.Feature.Name).Distinct()),
+        };
+    }
+
+    private static int DieSize(string dice)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(dice, @"(\d*)d(\d+)");
+        return m.Success ? (m.Groups[1].Value.Length > 0 ? int.Parse(m.Groups[1].Value) : 1) * int.Parse(m.Groups[2].Value) : 0;
+    }
+
     public static int ArmorClass(this Character c, bool withShield)
     {
         var dex = c.Mod(Ability.DEX);
         var armor = c.EquippedArmor();
         int ac = armor is null
-            ? 10 + dex
+            ? c.BestUnarmored(withShield)?.Ac ?? 10 + dex
             : armor.BaseAC + armor.MagicBonus + (armor.Category switch
             {
                 ArmorCategory.Heavy => 0,

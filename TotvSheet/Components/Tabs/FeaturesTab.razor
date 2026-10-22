@@ -32,6 +32,24 @@
                         <button type="button" class="icon-btn" title="Remove feature" @onclick="() => Remove(feature)">✕</button>
                     </div>
                     <textarea class="area text-sm mt-1.5" rows="2" style="min-height:3rem" aria-label="Description" @bind="feature.Description" @bind:after="Save"></textarea>
+                    @if (feature.Options.Count > 0)
+                    {
+                        @* "Choose one" features (TVCS-108): the pick can be made or changed here; its rules apply to the sheet. *@
+                        var pick = feature.Options.FirstOrDefault(o => o.Name == feature.Chosen);
+                        <label class="lbl block mt-1.5">Your choice
+                            <select class="select text-sm @(pick is null ? "needs-pick" : "")" aria-label="@($"{feature.Name} choice")" @bind="feature.Chosen" @bind:after="Save">
+                                <option value="">Choose one…</option>
+                                @foreach (var o in feature.Options)
+                                {
+                                    <option value="@o.Name">@o.Name</option>
+                                }
+                            </select>
+                        </label>
+                        @if (pick is not null && !string.IsNullOrWhiteSpace(pick.Description))
+                        {
+                            <p class="text-sm mt-1">@pick.Description</p>
+                        }
+                    }
                     @if (C.UsesMaxOf(feature) > 0)
                     {
                         <div class="flex items-center gap-2 mt-1">

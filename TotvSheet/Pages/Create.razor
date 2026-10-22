@@ -52,6 +52,10 @@
                         </button>
                     }
                 </div>
+                if (ch.Lineage is { } linChosen)
+                {
+                    <TraitOptionPicker Owner="linChosen" Traits="linChosen.Traits" Choices="ch.TraitChoices" Changed="@(() => { })" />
+                }
                 break;
 
             case 2:
@@ -71,6 +75,7 @@
                 </div>
                 if (ch.Heritage is { } herChosen)
                 {
+                    <TraitOptionPicker Owner="herChosen" Traits="herChosen.Traits" Choices="ch.TraitChoices" Changed="@(() => { })" />
                     if (herChosen.SkillProficiencies.Count > 0)
                     {
                         <p class="mt-4 text-sm"><span class="lbl">Granted skills:</span> @string.Join(", ", herChosen.SkillProficiencies)</p>
@@ -429,7 +434,9 @@
     private string? StepProblem() => step switch
     {
         1 when ch.Lineage is null => "Choose a lineage.",
+        1 when TraitOptionPicker.Missing(ch.Lineage, ch.Lineage?.Traits, ch.TraitChoices) is { } lt => $"Choose your {lt.Name}.",
         2 when ch.Heritage is null => "Choose a heritage.",
+        2 when TraitOptionPicker.Missing(ch.Heritage, ch.Heritage?.Traits, ch.TraitChoices) is { } ht => $"Choose your {ht.Name}.",
         2 when ch.HeritageSkills.Count < HeritageSkillsNeeded() => $"Choose {HeritageSkillsNeeded() - ch.HeritageSkills.Count} more heritage skill(s).",
         2 when ch.HeritageLanguages.Count(l => !string.IsNullOrWhiteSpace(l)) < (ch.Heritage?.LanguageChoices ?? 0) => "Fill in your extra languages.",
         3 when ch.Background is null => "Choose a background.",

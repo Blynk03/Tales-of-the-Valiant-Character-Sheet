@@ -79,6 +79,9 @@ try {
   if (created) {
     await page.waitForURL(/character\//, { timeout: 15000 });
     check('The new character opens on its sheet', (await page.content()).includes('Smoke Tester'));
+    // The sample Beastkin's "choose one" trait was picked in the wizard (first option: Climber), and its
+    // climbing speed shows on the Main tab (TVCS-108).
+    check('A picked lineage option applies to the sheet', (await page.locator('body').innerText()).includes('Climb 30 ft.'), `actions [${actions.join(',')}]`);
     await page.goto(base);
     await page.getByRole('heading', { name: 'Your characters' }).waitFor({ timeout: 30000 });
     check('Character list shows the saved character', (await page.content()).includes('Smoke Tester'));

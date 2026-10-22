@@ -70,9 +70,56 @@ const passive = (c, s) => 10 + skB(c, s);
 const initB = c => M(c, 'DEX') + (c.initiativeBonus || 0);
 const wornArmor = c => c.armor.find(a => a.equipped && !a.isShield);
 const wornShield = c => c.armor.find(a => a.equipped && a.isShield);
+// Feature effects (TVCS-108/109/110), mirror of CharacterCalc: each feature's own effects plus its picked option's.
+function activeEffects(c) {
+  const out = [];
+  (c.features || []).forEach(f => {
+    if (f.effects) out.push([f, f.effects]);
+    const o = (f.options || []).find(o => o.name === f.chosen);
+    if (o && o.effects) out.push([f, o.effects]);
+  });
+  return out;
+}
+const unarmoredNoShield = c => !wornArmor(c) && !wornShield(c);
+function bestUnarmored(c, withShield) {
+  let best = null;
+  activeEffects(c).forEach(([f, e]) => {
+    if (!(e.unarmoredAcBase > 0) || (withShield && !e.unarmoredAcWithShield)) return;
+    const abil = e.unarmoredAcAbilities || [], v = e.unarmoredAcBase + abil.reduce((s, a) => s + M(c, a), 0);
+    if (v > (best ? best.ac : 10 + M(c, 'DEX'))) best = { ac: v, formula: [String(e.unarmoredAcBase)].concat(abil).join(' + '), source: f.chosen && f.effects !== e ? `${f.name}: ${f.chosen}` : f.name };
+  });
+  return best;
+}
+/** "1d4; 5:1d6; 11:1d8" → the entry for the highest level reached. */
+function scaled(spec, level) {
+  let r = '';
+  String(spec || '').split(';').map(x => x.trim()).filter(Boolean).forEach(p => { const m = /^(\d+)\s*:\s*(.+)$/.exec(p); if (!m) { if (!r) r = p; } else if (level >= +m[1]) r = m[2].trim(); });
+  return r;
+}
+const speedBonuses = c => activeEffects(c).filter(([, e]) => (!e.speedBonusUnarmored || unarmoredNoShield(c)) && (!e.speedBonusNoHeavyArmor || (wornArmor(c) || {}).category !== 'Heavy')).map(([f, e]) => ({ feet: parseInt(scaled(e.speedBonus, c.level), 10) || 0, source: f.name })).filter(b => b.feet);
+function walkSpeed(c) { const m = /\d+/.exec(c.speed || ''); return m ? +m[0] + speedBonuses(c).reduce((s, b) => s + b.feet, 0) : null; }
+/** Other speeds as text, e.g. "Fly 40 ft." ("Fly" = walking speed, "Burrow 20" = fixed). */
+function extraSpeeds(c) {
+  const walk = walkSpeed(c), by = new Map();
+  activeEffects(c).flatMap(([, e]) => e.extraSpeeds || []).map(s => String(s).trim()).filter(Boolean).forEach(s => {
+    const m = /^(.*?)\s*(\d+)?\s*(?:ft\.?)?$/.exec(s), name = m[1], ft = m[2] ? +m[2] : walk, k = name.toLowerCase();
+    if (!by.has(k) || (ft != null && ft > by.get(k).ft)) by.set(k, { name, ft });
+  });
+  return [...by.values()].map(x => x.ft != null ? `${x.name} ${x.ft} ft.` : x.name);
+}
+const dieSize = d => { const m = /(\d*)d(\d+)/.exec(d); return m ? (+m[1] || 1) * +m[2] : 0; };
+/** The Unarmed Strike attack row when a feature improves unarmed strikes; 1 + STR when that feature needs no armor and armor is worn. */
+function unarmedStrike(c) {
+  const all = activeEffects(c).filter(([, e]) => String(e.unarmedDamage || '').trim());
+  if (!all.length) return null;
+  const act = all.filter(([, e]) => !e.unarmedNeedsNoArmor || unarmoredNoShield(c)).map(([f, e]) => ({ f, e, die: scaled(e.unarmedDamage, c.level) })).filter(x => x.die).sort((x, y) => dieSize(y.die) - dieSize(x.die));
+  if (!act.length) return { name: 'Unarmed Strike', damage: '1', damageType: 'bludgeoning', proficient: true, options: 'Martial Arts needs no armor and no shield' };
+  return { name: 'Unarmed Strike', damage: act[0].die, damageType: act[0].e.unarmedDamageType || 'bludgeoning', finesse: act.some(x => x.e.unarmedDex), proficient: true, options: [...new Set(act.map(x => x.f.name))].join(', ') };
+}
+const attackList = c => { const u = unarmedStrike(c); return u ? c.weapons.concat([u]) : c.weapons; };
 function ac(c, withShield) {
-  const dex = M(c, 'DEX'), a = wornArmor(c);
-  let v = !a ? 10 + dex : a.baseAC + (a.magicBonus || 0) + (a.category === 'Heavy' ? 0 : a.category === 'Medium' ? Math.min(dex, 2) : dex);
+  const dex = M(c, 'DEX'), a = wornArmor(c), un = !a && bestUnarmored(c, withShield);
+  let v = !a ? (un ? un.ac : 10 + dex) : a.baseAC + (a.magicBonus || 0) + (a.category === 'Heavy' ? 0 : a.category === 'Medium' ? Math.min(dex, 2) : dex);
   if (withShield) { const s = wornShield(c) || c.armor.find(x => x.isShield); v += s ? s.baseAC + (s.magicBonus || 0) : 2; }
   return v;
 }
@@ -126,7 +173,28 @@ function newChar() {
     portraitUrl: '', age: '', height: '', weight: '', eyes: '', skin: '', hair: '', appearanceNotes: '', personality: '', backstory: '', homeland: '', motivation: '', allies: '', otherNotes: '',
     spellcasterClass: '', spellAbility: null, slotsTotal: [0,0,0,0,0,0,0,0,0], slotsExpended: [0,0,0,0,0,0,0,0,0], spells: [], rituals: [] };
 }
-const toFeature = (f, source, level) => ({ name: f.name, level: level ?? f.level, source, description: f.description, usesMax: f.usesMax || 0, usesSpent: 0, usesFrom: f.usesFrom || '', recharge: f.recharge || '' });
+const deepCopy = v => v == null ? v : JSON.parse(JSON.stringify(v));
+const toFeature = (f, source, level, chosen) => ({ name: f.name, level: level ?? f.level, source, description: f.description, usesMax: f.usesMax || 0, usesSpent: 0, usesFrom: f.usesFrom || '', recharge: f.recharge || '',
+  effects: deepCopy(f.effects) || null, options: deepCopy(f.options) || [], chosen: chosen || '' });
+const choiceKey = (owner, t) => `${owner.id}/${t.name}`;
+/** The content feature a character's feature came from (by source name and feature name). */
+function findFeatureDef(source, name) {
+  const eq = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
+  const pick = (kind, feats) => { for (const e of lib(kind, true).concat(S.user[kind] || [])) if (eq(e.name, source)) { const f = feats(e).find(x => eq(x.name, name)); if (f) return f; } return null; };
+  return pick('lineages', e => e.traits || []) || pick('heritages', e => e.traits || []) || pick('backgrounds', e => e.traits || [])
+    || pick('classes', e => (e.levels || []).flatMap(l => l.features || [])) || pick('subclasses', e => e.features || []);
+}
+/** Brings features' effects and options up to date with the content (TVCS-108/109/110); keeps text, uses and picks. */
+function refreshFeatureRules(c) {
+  let changed = false;
+  (c.features || []).forEach(f => {
+    const d = findFeatureDef(f.source, f.name); if (!d) return;
+    if (JSON.stringify(f.effects || null) !== JSON.stringify(d.effects || null)) { f.effects = deepCopy(d.effects) || null; changed = true; }
+    if (JSON.stringify(f.options || []) !== JSON.stringify(d.options || [])) { f.options = deepCopy(d.options) || []; changed = true; }
+    if (f.chosen == null) f.chosen = '';
+  });
+  return changed;
+}
 /** Sets a feature's max uses by name; spent uses stay spent, so remaining uses change by the same amount. */
 function applyResources(c, resources, source, level) {
   (resources || []).filter(r => r.name).forEach(r => {
@@ -207,12 +275,12 @@ function buildCharacter(w) {
   c.name = (w.name || '').trim() || 'Unnamed Hero'; c.playerName = w.playerName || '';
   ABIL.forEach((a, i) => c.scores[i] = finalScore(w, a));
   const lin = find('lineages', w.lineage), her = find('heritages', w.heritage), bg = find('backgrounds', w.background), cls = find('classes', w.cls);
-  if (lin) { c.lineageId = lin.id; c.lineageName = lin.name; c.speed = lin.speed + ' ft.'; other.push('Size: ' + lin.size); lin.traits.forEach(t => c.features.push(toFeature(t, lin.name))); }
+  if (lin) { c.lineageId = lin.id; c.lineageName = lin.name; c.speed = lin.speed + ' ft.'; other.push('Size: ' + lin.size); lin.traits.forEach(t => c.features.push(toFeature(t, lin.name, undefined, (w.traitChoices || {})[choiceKey(lin, t)]))); }
   if (her) {
     c.heritageId = her.id; c.heritageName = her.name;
     c.languages = (her.languages || '').split(',').map(x => x.trim()).filter(Boolean).concat((w.herLangs || []).map(x => (x || '').trim()).filter(Boolean)).join(', ');
     (her.skillProficiencies || []).concat(w.herSkills || []).forEach(s => c.skills[s] = 'Proficient');
-    her.traits.forEach(t => c.features.push(toFeature(t, her.name)));
+    her.traits.forEach(t => c.features.push(toFeature(t, her.name, undefined, (w.traitChoices || {})[choiceKey(her, t)])));
   }
   if (bg) {
     c.backgroundId = bg.id; c.backgroundName = bg.name;
@@ -501,11 +569,17 @@ function abilityBlock(c, a) {
 }
 const profToggle = (f, v, label) => `<label class="flex items-center gap-2 cursor-pointer select-none"><button class="pip ${v ? 'on' : ''}" data-act="toggle" data-a="${f}" aria-pressed="${v}"></button><span>${label}</span></label>`;
 
+function speedBox(c) {
+  const b = speedBonuses(c), x = extraSpeeds(c), total = walkSpeed(c);
+  if (total == null || (!b.length && !x.length)) return inp('c.speed', c.speed, 'text-center num text-lg', 'aria-label="Speed"');
+  return `<div class="text-center num text-lg leading-tight" title="${esc(b.map(v => sg(v.feet) + ' ft. ' + v.source).join(', '))}">${total} ft.</div>${x.map(s => `<div class="text-center text-xs">${esc(s)}</div>`).join('')}
+    <label class="lbl block text-center mt-1">Base ${inp('c.speed', c.speed, 'text-center num text-sm', 'aria-label="Base speed"')}</label>`;
+}
 function mainTab(c) {
-  const armor = wornArmor(c), shield = wornShield(c);
+  const armor = wornArmor(c), shield = wornShield(c), una = !armor && bestUnarmored(c, false);
   const armorNote = a => !a ? '' : `${a.category}, ${a.category === 'Heavy' ? 'no DEX' : a.category === 'Medium' ? '+ DEX (max 2)' : '+ DEX'}${a.magicBonus ? ', ' + sg(a.magicBonus) + ' magic' : ''}${a.properties ? ' · ' + esc(a.properties) : ''}`;
-  const attacks = c.weapons.length ? `<div class="scroll-x"><table class="tbl"><thead><tr><th>Name</th><th>Bonus</th><th>Damage / Type</th><th>Range / Properties</th><th>Weapon Options</th></tr></thead><tbody>
-    ${c.weapons.map((w, i) => `<tr><td class="font-semibold">${esc(w.name)}</td><td><button class="roll num" data-act="attack" data-a="${i}" title="Roll attack">${sg(atkB(c, w))}</button></td>
+  const attacks = attackList(c).length ? `<div class="scroll-x"><table class="tbl"><thead><tr><th>Name</th><th>Bonus</th><th>Damage / Type</th><th>Range / Properties</th><th>Weapon Options</th></tr></thead><tbody>
+    ${attackList(c).map((w, i) => `<tr><td class="font-semibold">${esc(w.name)}</td><td><button class="roll num" data-act="attack" data-a="${i}" title="Roll attack">${sg(atkB(c, w))}</button></td>
     <td class="whitespace-nowrap"><button class="roll num" data-act="damage" data-a="${i}" title="Roll damage">${esc(dmgExpr(c, w))}</button> <span class="muted">${esc(w.damageType)}</span></td>
     <td class="text-sm">${[w.range, w.properties].filter(Boolean).map(esc).join(' · ')}</td><td class="text-sm muted">${esc(w.options)}</td></tr>`).join('')}</tbody></table></div>`
     : `<p class="muted text-sm text-center py-2">No weapons yet. Add them on the Equipment &amp; Features tab.</p>`;
@@ -523,12 +597,12 @@ function mainTab(c) {
       ${box('Passive Invest.', `<div class="text-center num text-2xl">${passive(c, 'Investigation')}</div>`)}
       ${box('Passive Percep.', `<div class="text-center num text-2xl">${passive(c, 'Perception')}</div>`)}
       ${box('Initiative', `<div class="text-center"><button class="roll num text-2xl" data-act="rollInit" title="Roll initiative">${sg(initB(c))}</button></div>`)}
-      ${box('Speed(s)', inp('c.speed', c.speed, 'text-center num text-lg', 'aria-label="Speed"'))}
+      ${box('Speed(s)', speedBox(c))}
     </div>
     ${box('Attacks', attacks)}
     ${box('Armor', `<div class="flex items-center gap-3"><div class="shield" title="Armor class with shield"><span class="num text-2xl">${ac(c, true)}</span><span class="lbl text-center leading-tight">AC<br>with shield</span></div>
       <div class="flex-1 min-w-0 scroll-x"><table class="tbl"><thead><tr><th>Name</th><th>Base AC</th><th>Properties</th></tr></thead><tbody>
-      <tr><td class="font-semibold">${esc(armor ? armor.name : 'Unarmored')}</td><td class="num">${armor ? armor.baseAC : '10 + DEX'}</td><td class="text-sm">${armorNote(armor)}</td></tr>
+      <tr><td class="font-semibold">${esc(armor ? armor.name : 'Unarmored')}</td><td class="num">${armor ? armor.baseAC : una ? esc(una.formula) : '10 + DEX'}</td><td class="text-sm">${una ? esc(una.source) + (bestUnarmored(c, true) ? '' : ' (not with a shield)') : armorNote(armor)}</td></tr>
       ${shield ? `<tr><td class="font-semibold">${esc(shield.name)}</td><td class="num">+${shield.baseAC + (shield.magicBonus || 0)}</td><td class="text-sm">${esc(shield.properties)}</td></tr>` : ''}</tbody></table></div>
       <div class="shield" title="Armor class without shield"><span class="num text-2xl">${ac(c, false)}</span><span class="lbl text-center leading-tight">AC<br>no shield</span></div></div>`)}
     <div class="grid sm:grid-cols-3 gap-3">
@@ -565,6 +639,7 @@ function featuresTab(c) {
     <div class="flex gap-2 items-center mt-0.5"><span class="lbl">Level</span>${num(`c.features.${i}.level`, f.level, 'w-10 text-center', 'aria-label="Level"')}<span class="chip truncate">${esc(f.source)}</span></div></div>
     <button class="icon-btn" data-act="rm" data-a="features.${i}" title="Remove feature">✕</button></div>
     ${area(`c.features.${i}.description`, f.description, 2, 'style="min-height:3rem" aria-label="Description"')}
+    ${(f.options || []).length ? (() => { const pk = f.options.find(o => o.name === f.chosen); return `<label class="lbl block mt-1.5">Your choice <select class="select text-sm ${pk ? '' : 'needs-pick'}" data-f="c.features.${i}.chosen" data-t="s" aria-label="${esc(f.name)} choice"><option value="">Choose one…</option>${f.options.map(o => `<option value="${esc(o.name)}" ${o.name === f.chosen ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}</select></label>${pk && pk.description ? `<p class="text-sm mt-1">${esc(pk.description)}</p>` : ''}`; })() : ''}
     ${usesMax(c, f) > 0 ? `<div class="flex items-center gap-2 mt-1"><span class="lbl">Used</span>${pips('setUses:' + i, usesMax(c, f), f.usesSpent, '', false, 'Use')}<span class="muted text-xs ml-auto">${esc(f.recharge)}</span></div>` : ''}</div>`).join('');
   const weapons = c.weapons.map((w, i) => `<tr><td>${inp(`c.weapons.${i}.name`, w.name, 'font-semibold', 'aria-label="Name"')}</td><td>${inp(`c.weapons.${i}.damage`, w.damage, 'num w-16', 'aria-label="Damage dice"')}</td>
     <td>${inp(`c.weapons.${i}.damageType`, w.damageType, 'w-24', 'aria-label="Damage type"')}</td><td>${inp(`c.weapons.${i}.range`, w.range, 'w-20', 'aria-label="Range"')}</td>
@@ -754,7 +829,7 @@ function tray(c) {
 
 // ---------- creation wizard ----------
 const STEPS = ['Name', 'Lineage', 'Heritage', 'Background', 'Class', 'Abilities', 'Equipment', 'Talent', 'Review'];
-function newWizard() { return { step: 0, name: '', playerName: '', lineage: '', heritage: '', background: '', cls: '', skills: [], method: 'standard', pool: STD.slice(), assign: [0, 1, 2, 3, 4, 5], base: STD.slice(), plus2: null, plus1: null, items: [], gold: false, talent: '', rolls: [], bgSkills: [], bgTalent: '', herSkills: [], herLangs: [] }; }
+function newWizard() { return { step: 0, name: '', playerName: '', lineage: '', heritage: '', background: '', cls: '', skills: [], method: 'standard', pool: STD.slice(), assign: [0, 1, 2, 3, 4, 5], base: STD.slice(), plus2: null, plus1: null, items: [], gold: false, talent: '', rolls: [], bgSkills: [], bgTalent: '', herSkills: [], herLangs: [], traitChoices: {} }; }
 /** Skills granted before the class step: heritage (fixed + picked) and, optionally, the background's. */
 function ownedSkills(w, includeBg) {
   const her = find('heritages', w.heritage), bg = find('backgrounds', w.background);
@@ -779,7 +854,9 @@ function skillPicker(act, options, need, picked, owned, note) {
 }
 function stepProblem(w, s) {
   if (s === 1 && !w.lineage) return 'Choose a lineage.';
+  if (s === 1 && missingTrait(find('lineages', w.lineage), w)) return `Choose your ${missingTrait(find('lineages', w.lineage), w).name}.`;
   if (s === 2 && !w.heritage) return 'Choose a heritage.';
+  if (s === 2 && missingTrait(find('heritages', w.heritage), w)) return `Choose your ${missingTrait(find('heritages', w.heritage), w).name}.`;
   if (s === 2 && w.herSkills.length < herSkillsNeeded(w)) return `Choose ${herSkillsNeeded(w) - w.herSkills.length} more heritage skill(s).`;
   if (s === 2 && w.herLangs.filter(x => (x || '').trim()).length < ((find('heritages', w.heritage) || {}).languageChoices || 0)) return 'Fill in your extra languages.';
   if (s === 3 && !w.background) return 'Choose a background.';
@@ -798,12 +875,21 @@ function maxReach(w) { let m = 0; for (let s = 0; s < STEPS.length - 1; s++) { i
 const traitList = ts => ts && ts.length ? `<ul class="mt-1.5 text-sm">${ts.map(t => `<li><b>${esc(t.name)}.</b> <span class="muted">${esc(t.description)}</span></li>`).join('')}</ul>` : '';
 const choice = (sel, act, a, inner) => `<button class="choice ${sel ? 'selected' : ''}" data-act="${act}" data-a="${esc(a)}">${inner}</button>`;
 function itemSummary(i) { if (!i) return ''; return i.type === 'Weapon' ? `${i.damage} ${i.damageType}` : i.type === 'Armor' ? `AC ${i.baseAC} · ${i.armorCategory}` : i.type === 'Shield' ? `+${i.baseAC} AC` : (i.cost || ''); }
+/** "Choose one" traits of the picked lineage or heritage (TVCS-108): one radio group each. */
+function traitPicker(owner, w) {
+  if (!owner) return '';
+  return (owner.traits || []).filter(t => (t.options || []).length).map(t => { const key = choiceKey(owner, t), picked = (w.traitChoices || {})[key];
+    return `<h3 class="box-title text-left mt-4">Choose your ${esc(t.name)}</h3><div class="grid sm:grid-cols-2 gap-2" role="radiogroup" aria-label="${esc(t.name)}">${t.options.map(o =>
+      `<button class="choice ${picked === o.name ? 'selected' : ''}" role="radio" aria-checked="${picked === o.name}" data-act="wTrait" data-a="${esc(key + '\u0001' + o.name)}"><b>${esc(o.name)}</b><div class="text-sm muted">${esc(o.description)}</div></button>`).join('')}</div>`; }).join('');
+}
+const missingTrait = (owner, w) => owner && (owner.traits || []).find(t => (t.options || []).length && !(w.traitChoices || {})[choiceKey(owner, t)]);
 function createView() {
   const w = S.wiz, s = w.step; let inner = '';
   if (s === 0) inner = `<h2 class="box-title text-left">Who are you?</h2><div class="grid sm:grid-cols-2 gap-4"><div><label class="lbl" for="wn">Character name</label><input id="wn" class="field text-xl display" data-f="w.name" data-t="s" value="${esc(w.name)}" autocomplete="off"></div><div><label class="lbl" for="wp">Player name</label><input id="wp" class="field text-xl" data-f="w.playerName" data-t="s" value="${esc(w.playerName)}"></div></div>`;
-  else if (s === 1) inner = `<h2 class="box-title text-left">Choose a lineage</h2><p class="muted text-sm mb-3">Your lineage is your ancestry: size, speed and inborn traits.</p><div class="grid sm:grid-cols-2 gap-2">${lib('lineages').map(l => choice(w.lineage === l.id, 'wLineage', l.id, `<div class="flex items-center gap-2"><b>${esc(l.name)}</b><span class="chip ml-auto">${esc(l.source)}</span></div><div class="text-sm muted">${esc(l.size)} · ${l.speed} ft.</div><div class="text-sm mt-1">${esc(l.description)}</div>${traitList(l.traits)}`)).join('')}</div>`;
+  else if (s === 1) inner = `<h2 class="box-title text-left">Choose a lineage</h2><p class="muted text-sm mb-3">Your lineage is your ancestry: size, speed and inborn traits.</p><div class="grid sm:grid-cols-2 gap-2">${lib('lineages').map(l => choice(w.lineage === l.id, 'wLineage', l.id, `<div class="flex items-center gap-2"><b>${esc(l.name)}</b><span class="chip ml-auto">${esc(l.source)}</span></div><div class="text-sm muted">${esc(l.size)} · ${l.speed} ft.</div><div class="text-sm mt-1">${esc(l.description)}</div>${traitList(l.traits)}`)).join('')}</div>${traitPicker(find('lineages', w.lineage), w)}`;
   else if (s === 2) { inner = `<h2 class="box-title text-left">Choose a heritage</h2><p class="muted text-sm mb-3">Your heritage is the culture you were raised in: languages and learned traits.</p><div class="grid sm:grid-cols-2 gap-2">${lib('heritages').map(h => choice(w.heritage === h.id, 'wHeritage', h.id, `<div class="flex items-center gap-2"><b>${esc(h.name)}</b><span class="chip ml-auto">${esc(h.source)}</span></div><div class="text-sm muted">Languages: ${esc(h.languages)}${h.languageChoices ? ` + ${h.languageChoices} of your choice` : ''}</div><div class="text-sm mt-1">${esc(h.description)}</div>${traitList(h.traits)}`)).join('')}</div>`;
     const h = find('heritages', w.heritage);
+    inner += traitPicker(h, w);
     if (h && (h.skillProficiencies || []).length) inner += `<p class="mt-4 text-sm"><span class="lbl">Granted skills:</span> ${h.skillProficiencies.map(esc).join(', ')}</p>`;
     if (h && h.skillChoices && (h.skillOptions || []).length) inner += `<h3 class="box-title text-left mt-5">${esc(h.name)} skills: choose ${herSkillsNeeded(w)}</h3>` + skillPicker('wHerSkill', h.skillOptions, herSkillsNeeded(w), w.herSkills, new Set(h.skillProficiencies || []), 'Already granted by your heritage');
     if (h && h.languageChoices) inner += `<h3 class="box-title text-left mt-5">Extra languages: choose ${h.languageChoices}</h3><div class="grid sm:grid-cols-2 gap-2">${Array.from({ length: h.languageChoices }, (_, i) => `<input class="field" data-f="w.herLangs.${i}" data-t="s" aria-label="Language ${i + 1}" placeholder="Language ${i + 1}" autocomplete="off" value="${esc(w.herLangs[i] || '')}">`).join('')}</div><p class="muted text-xs mt-1">See the heritage's description and traits for typical choices.</p>`;
@@ -1046,7 +1132,7 @@ function bindChange(el) {
 function cur() { return C(); }
 const A = {
   go(r) { if (r === 'list') { S.route = 'list'; } else S.route = r; S.notice = ''; },
-  open(id) { S.charId = id; S.route = 'sheet'; S.tab = 'main'; S.notice = ''; S.castMsg = ''; },
+  open(id) { S.charId = id; S.route = 'sheet'; S.tab = 'main'; S.notice = ''; S.castMsg = ''; const c = C(); if (c && refreshFeatureRules(c)) save(); },
   startCreate() { S.wiz = newWizard(); S.route = 'create'; },
   dupChar(id) { const c = clone(S.chars.find(x => x.id === id)); c.id = uid(); c.name += ' (copy)'; c.updated = new Date().toISOString(); S.chars.push(c); persist(); },
   delChar(id) { const c = S.chars.find(x => x.id === id); S.modal = { confirm: `Delete ${c.name}? This can't be undone.`, yes: 'Delete', danger: true, then() { S.chars = S.chars.filter(x => x.id !== id); persist(); } }; },
@@ -1063,8 +1149,8 @@ const A = {
   setDS(n) { const c = cur(); c.deathSuccesses = c.deathSuccesses === +n ? +n - 1 : +n; save(); },
   setDF(n) { const c = cur(); c.deathFailures = c.deathFailures === +n ? +n - 1 : +n; save(); },
   setEx(n) { const c = cur(); c.exhaustion = c.exhaustion === +n ? +n - 1 : +n; save(); },
-  attack(i) { const c = cur(), w = c.weapons[+i]; d20(`${w.name} attack`, atkB(c, w), dmgExpr(c, w), `${w.name} damage (${w.damageType})`, 'attack'); },
-  damage(i) { const c = cur(), w = c.weapons[+i]; rollExpr(`${w.name} damage (${w.damageType})`, dmgExpr(c, w)); },
+  attack(i) { const c = cur(), w = attackList(c)[+i]; d20(`${w.name} attack`, atkB(c, w), dmgExpr(c, w), `${w.name} damage (${w.damageType})`, 'attack'); },
+  damage(i) { const c = cur(), w = attackList(c)[+i]; rollExpr(`${w.name} damage (${w.damageType})`, dmgExpr(c, w)); },
   hp(kind) { const c = cur(), n = S.hpAmt || 0; if (kind === 'dmg') takeDamage(c, n); else if (kind === 'heal') heal(c, n); else c.tempHp = Math.max(c.tempHp, n); S.hpAmt = 0; save(); },
   hitDie() { const c = cur(); const r = rollExpr('Hit die', `1d${c.hitDie}${sg(M(c, 'CON'))}`); c.hitDiceUsed++; heal(c, Math.max(0, total(r))); save(); },
   deathSave() { const c = cur(), r = d20('Death save', 0, null, null, 'save'), n = r.dice[0]; if (n === 20) { c.currentHp = 1; c.deathSuccesses = 0; c.deathFailures = 0; } else if (n === 1) c.deathFailures = Math.min(3, c.deathFailures + 2); else if (n >= 10) c.deathSuccesses = Math.min(3, c.deathSuccesses + 1); else c.deathFailures = Math.min(3, c.deathFailures + 1); save(); },
@@ -1145,6 +1231,7 @@ const A = {
   wBackground(id) { const w = S.wiz; if (w.background === id) return; w.background = id; w.bgSkills = []; w.bgTalent = ''; pruneSkills(w); },
   wBgSkill(sk) { const w = S.wiz, i = w.bgSkills.indexOf(sk); if (i >= 0) w.bgSkills.splice(i, 1); else if (w.bgSkills.length < bgSkillsNeeded(w)) w.bgSkills.push(sk); pruneSkills(w); },
   wBgTalent(id) { S.wiz.bgTalent = id; },
+  wTrait(v) { const [k, n] = String(v).split('\u0001'); (S.wiz.traitChoices = S.wiz.traitChoices || {})[k] = n; },
   wClass(id) { const w = S.wiz; if (w.cls === id) return; w.cls = id; w.skills = []; w.items = find('classes', id).startingEquipment.slice(); },
   wSkill(s) { const w = S.wiz, cls = find('classes', w.cls), i = w.skills.indexOf(s); if (i >= 0) w.skills.splice(i, 1); else if (w.skills.length < cls.skillChoices) w.skills.push(s); },
   wMethod(m) { const w = S.wiz; w.method = m; w.plus2 = null; w.plus1 = null; w.rolls = []; w.assign = [null, null, null, null, null, null]; if (m === 'standard') { w.pool = STD.slice(); w.assign = [0, 1, 2, 3, 4, 5]; } if (m === 'roll') w.pool = []; if (m === 'pointbuy') w.base = [8, 8, 8, 8, 8, 8]; if (m === 'manual') w.base = [10, 10, 10, 10, 10, 10]; if (m === 'standard' || m === 'roll') w.base = w.assign.map(a => a != null && a < w.pool.length ? w.pool[a] : 8); },

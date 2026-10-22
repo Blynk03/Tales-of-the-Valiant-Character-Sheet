@@ -24,6 +24,8 @@ public class CreationChoices
     public HashSet<string> EquipmentIds { get; set; } = new();
     public bool TakeGoldInstead { get; set; }
     public TalentDef? Talent { get; set; }
+    /// <summary>Options picked for "choose one" traits, keyed by <see cref="CharacterBuilder.ChoiceKey"/> (TVCS-108).</summary>
+    public Dictionary<string, string> TraitChoices { get; set; } = new();
 
     public int FinalScore(Ability a)
     {
@@ -79,7 +81,7 @@ public static class CharacterBuilder
             c.LineageName = lin.Name;
             c.Speed = $"{lin.Speed} ft.";
             other.Add($"Size: {lin.Size}");
-            foreach (var t in lin.Traits) c.Features.Add(ToFeature(t, lin.Name));
+            foreach (var t in lin.Traits) c.Features.Add(ToFeature(t, lin.Name, chosen: ch.TraitChoices.GetValueOrDefault(ChoiceKey(lin, t))));
         }
 
         if (ch.Heritage is { } her)
@@ -89,7 +91,7 @@ public static class CharacterBuilder
             c.Languages = string.Join(", ", SplitList(her.Languages)
                 .Concat(ch.HeritageLanguages.Where(l => !string.IsNullOrWhiteSpace(l)).Select(l => l.Trim())));
             foreach (var s in her.SkillProficiencies.Concat(ch.HeritageSkills)) c.Skills[s] = ProfLevel.Proficient;
-            foreach (var t in her.Traits) c.Features.Add(ToFeature(t, her.Name));
+            foreach (var t in her.Traits) c.Features.Add(ToFeature(t, her.Name, chosen: ch.TraitChoices.GetValueOrDefault(ChoiceKey(her, t))));
         }
 
         if (ch.Background is { } bg)
@@ -265,7 +267,7 @@ public static class CharacterBuilder
 
     // ------------------------------------------------------------------ helpers
 
-    public static Feature ToFeature(FeatureDef f, string source, int? level = null) => new()
+    public static Feature ToFeature(FeatureDef f, string source, int? level = null, string? chosen = null) => new()
     {
         Name = f.Name,
         Level = level ?? f.Level,
@@ -274,7 +276,35 @@ public static class CharacterBuilder
         UsesMax = f.UsesMax,
         UsesFrom = f.UsesFrom,
         Recharge = f.Recharge,
+        // Copies, so editing the content later never changes a character by accident (RefreshFeatureRules does it on purpose).
+        Effects = Clone(f.Effects),
+        Options = Clone(f.Options) ?? new(),
+        Chosen = chosen ?? "",
     };
+
+    private static T? Clone<T>(T? value) where T : class =>
+        value is null ? null : Json.Deserialize<T>(Json.Serialize(value));
+
+    /// <summary>Key for a trait's pick in <see cref="CreationChoices.TraitChoices"/>.</summary>
+    public static string ChoiceKey(ContentEntry owner, FeatureDef trait) => $"{owner.Id}/{trait.Name}";
+
+    /// <summary>
+    /// Brings each feature's rules (effects and options) up to date with the content library, matching by source and name,
+    /// so characters made before a content file gained these rules pick them up (TVCS-108/109/110). Text, uses and the
+    /// player's pick are left alone. Returns true if anything changed.
+    /// </summary>
+    public static bool RefreshFeatureRules(Character c, ContentService content)
+    {
+        var changed = false;
+        foreach (var f in c.Features)
+        {
+            var def = content.FindFeatureDef(f.Source, f.Name);
+            if (def is null) continue;
+            if (Json.Serialize(f.Effects) != Json.Serialize(def.Effects)) { f.Effects = Clone(def.Effects); changed = true; }
+            if (Json.Serialize(f.Options) != Json.Serialize(def.Options)) { f.Options = Clone(def.Options) ?? new(); changed = true; }
+        }
+        return changed;
+    }
 
     /// <summary>Raises (or lowers) a feature's max uses. Uses already spent stay spent,
     /// so the remaining uses change by the same amount.</summary>

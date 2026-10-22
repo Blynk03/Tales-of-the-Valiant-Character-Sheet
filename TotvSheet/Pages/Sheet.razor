@@ -112,6 +112,9 @@ else
         await Content.EnsureLoadedAsync();
         await Characters.EnsureLoadedAsync();
         C = Characters.Get(Id);
+        // Characters made before their content had rules for unarmored AC, speed, unarmed strikes or "choose one"
+        // options pick them up here (TVCS-108/109/110).
+        if (C is not null && CharacterBuilder.RefreshFeatureRules(C, Content)) await Characters.SaveAsync(C);
         loaded = true;
     }
 

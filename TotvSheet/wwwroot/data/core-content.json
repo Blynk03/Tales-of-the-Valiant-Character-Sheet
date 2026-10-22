@@ -151,10 +151,69 @@
     {
      "name": "Animal Instincts",
      "level": 1,
-     "description": "Choose an animal aspect that grants a movement or sense trait (sample text).",
+     "description": "Choose one animal aspect below (sample text).",
      "usesMax": 0,
      "recharge": "",
-     "usesFrom": ""
+     "usesFrom": "",
+     "options": [
+      {
+       "name": "Climber (sample)",
+       "description": "A climbing speed equal to your walking speed (sample text).",
+       "effects": {
+        "unarmoredAcBase": 0,
+        "unarmoredAcAbilities": [],
+        "unarmoredAcWithShield": false,
+        "speedBonus": "",
+        "speedBonusUnarmored": false,
+        "speedBonusNoHeavyArmor": false,
+        "extraSpeeds": [
+         "Climb"
+        ],
+        "unarmedDamage": "",
+        "unarmedDamageType": "",
+        "unarmedDex": false,
+        "unarmedNeedsNoArmor": false
+       }
+      },
+      {
+       "name": "Swimmer (sample)",
+       "description": "A swimming speed equal to your walking speed (sample text).",
+       "effects": {
+        "unarmoredAcBase": 0,
+        "unarmoredAcAbilities": [],
+        "unarmoredAcWithShield": false,
+        "speedBonus": "",
+        "speedBonusUnarmored": false,
+        "speedBonusNoHeavyArmor": false,
+        "extraSpeeds": [
+         "Swim"
+        ],
+        "unarmedDamage": "",
+        "unarmedDamageType": "",
+        "unarmedDex": false,
+        "unarmedNeedsNoArmor": false
+       }
+      },
+      {
+       "name": "Tough Hide (sample)",
+       "description": "Without armor, your AC is 13 + DEX (sample text).",
+       "effects": {
+        "unarmoredAcBase": 13,
+        "unarmoredAcAbilities": [
+         "DEX"
+        ],
+        "unarmoredAcWithShield": true,
+        "speedBonus": "",
+        "speedBonusUnarmored": false,
+        "speedBonusNoHeavyArmor": false,
+        "extraSpeeds": [],
+        "unarmedDamage": "",
+        "unarmedDamageType": "",
+        "unarmedDex": false,
+        "unarmedNeedsNoArmor": false
+       }
+      }
+     ]
     }
    ]
   },

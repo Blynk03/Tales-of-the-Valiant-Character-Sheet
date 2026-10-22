@@ -40,12 +40,29 @@
                 </div>
             </Box>
             <Box Title="Speed(s)">
-                <input class="field text-center num text-lg" aria-label="Speed" @bind="C.Speed" @bind:after="Save" />
+                @{ var bonuses = C.SpeedBonuses().ToList(); var extra = C.ExtraSpeeds().ToList(); var walk = C.WalkSpeed(); }
+                @if (walk is int total && (bonuses.Count > 0 || extra.Count > 0))
+                {
+                    @* Features change the speed (TVCS-108/109): show the result; the field below stays the base speed. *@
+                    <div class="text-center num text-lg leading-tight" title="@string.Join(", ", bonuses.Select(b => $"{Rules.Signed(b.Feet)} ft. {b.Source}"))">@total ft.</div>
+                    @foreach (var s in extra)
+                    {
+                        <div class="text-center text-xs">@s</div>
+                    }
+                    <label class="lbl block text-center mt-1">Base
+                        <input class="field text-center num text-sm" aria-label="Base speed" @bind="C.Speed" @bind:after="Save" />
+                    </label>
+                }
+                else
+                {
+                    <input class="field text-center num text-lg" aria-label="Speed" @bind="C.Speed" @bind:after="Save" />
+                }
             </Box>
         </div>
 
         <Box Title="Attacks">
-            @if (C.Weapons.Count == 0)
+            @{ var unarmed = C.UnarmedStrike(); var attacks = (unarmed is null ? C.Weapons : C.Weapons.Append(unarmed)).ToList(); }
+            @if (attacks.Count == 0)
             {
                 <p class="muted text-sm text-center py-2">No weapons yet. Add them on the Equipment &amp; Features tab.</p>
             }
@@ -55,7 +72,7 @@
                     <table class="tbl">
                         <thead><tr><th>Name</th><th>Bonus</th><th>Damage / Type</th><th>Range / Properties</th><th>Weapon Options</th></tr></thead>
                         <tbody>
-                            @foreach (var w in C.Weapons)
+                            @foreach (var w in attacks)
                             {
                                 var weapon = w;
                                 <tr>
@@ -88,8 +105,9 @@
                         <tbody>
                             <tr>
                                 <td class="font-semibold">@(armor?.Name ?? "Unarmored")</td>
-                                <td class="num">@(armor is null ? "10 + DEX" : armor.BaseAC.ToString())</td>
-                                <td class="text-sm">@ArmorNote(armor)</td>
+                                @{ var una = armor is null ? C.BestUnarmored(false) : null; }
+                                <td class="num">@(armor is not null ? armor.BaseAC.ToString() : una is { } u ? u.Formula : "10 + DEX")</td>
+                                <td class="text-sm">@(una is { } u2 ? u2.Source + (C.BestUnarmored(true) is null ? " (not with a shield)" : "") : ArmorNote(armor))</td>
                             </tr>
                             @if (shield is not null)
                             {

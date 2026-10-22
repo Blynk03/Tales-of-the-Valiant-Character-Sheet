@@ -1,0 +1,38 @@
+@* "Choose one" traits of a lineage or heritage, e.g. Beastkin's Natural Adaptation (TVCS-108). One radio group per trait. *@
+@foreach (var t in Traits.Where(t => t.Options.Count > 0))
+{
+    var trait = t;
+    var key = CharacterBuilder.ChoiceKey(Owner, trait);
+    var picked = Choices.GetValueOrDefault(key);
+    <div class="mt-4">
+        <h3 class="box-title text-left">Choose your @trait.Name</h3>
+        <div class="grid sm:grid-cols-2 gap-2" role="radiogroup" aria-label="@trait.Name">
+            @foreach (var o in trait.Options)
+            {
+                var opt = o;
+                <button type="button" role="radio" aria-checked="@(picked == opt.Name ? "true" : "false")"
+                        class="choice @(picked == opt.Name ? "selected" : "")" @onclick="() => Pick(key, opt.Name)">
+                    <div class="font-semibold">@opt.Name</div>
+                    <div class="text-sm muted">@opt.Description</div>
+                </button>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public ContentEntry Owner { get; set; } = default!;
+    [Parameter] public List<FeatureDef> Traits { get; set; } = new();
+    [Parameter, EditorRequired] public Dictionary<string, string> Choices { get; set; } = default!;
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private Task Pick(string key, string name)
+    {
+        Choices[key] = name;
+        return Changed.InvokeAsync();
+    }
+
+    /// <summary>The first "choose one" trait still without a pick, for the wizard's "what's missing" message.</summary>
+    public static FeatureDef? Missing(ContentEntry? owner, List<FeatureDef>? traits, Dictionary<string, string> choices) =>
+        owner is null ? null : (traits ?? new()).FirstOrDefault(t => t.Options.Count > 0 && !choices.ContainsKey(CharacterBuilder.ChoiceKey(owner, t)));
+}
