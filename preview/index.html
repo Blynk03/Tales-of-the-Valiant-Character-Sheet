@@ -3223,13 +3223,16 @@ function combineExpansions(list) {
 function withExpansions(base, exps) {
   const copy = JSON.parse(JSON.stringify(base)), eq = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
   copy.traits = copy.traits || [];
+  const notes = [];   // [trait, source, names]: the trait text says once per book what was added
   exps.forEach(x => (x.traits || []).forEach(t => {
     const have = copy.traits.find(m => eq(m.name, t.name));
     if (!have) { copy.traits.push(JSON.parse(JSON.stringify(t))); return; }
     have.options = have.options || []; const added = [];
     (t.options || []).filter(o => !have.options.some(h => eq(h.name, o.name))).forEach(o => { const oc = JSON.parse(JSON.stringify(o)); if (!oc.source) oc.source = x.source; have.options.push(oc); added.push(oc.name); });
-    if (added.length) have.description += ` More options from ${x.source}: ${added.join(', ')}.`;
+    if (!added.length) return;
+    const n = notes.find(n => n[0] === have && n[1] === x.source); if (n) n[2].push(...added); else notes.push([have, x.source, added]);
   }));
+  notes.forEach(([t, src, names]) => { t.description += ` More options from ${src}: ${names.join(', ')}.`; });
   return copy;
 }
 /** All entries of a kind by id, ignoring sample hiding, disabled sources and expansion folding (for characters' own ids). */
@@ -3581,7 +3584,7 @@ function render() {
 // "Report a problem" (TVCS-106): opens the project's GitHub issue form with the version, page and device filled in.
 // Set REPORT_URL to '' to hide the link; {version}, {page} and {device} placeholders are filled in if present.
 const REPORT_URL = 'https://github.com/Blynk03/Tales-of-the-Valiant-Character-Sheet/issues/new?template=problem-report.yml';
-const PREVIEW_VERSION = 'preview v19';
+const PREVIEW_VERSION = 'preview v20';
 function deviceInfo() {
   const ua = navigator.userAgent;
   const m = (re) => { const r = ua.match(re); return r ? r[1] : null; };

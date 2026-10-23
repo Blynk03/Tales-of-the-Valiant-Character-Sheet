@@ -130,6 +130,8 @@ public class ContentService
     {
         var copy = Json.Deserialize<T>(Json.Serialize(baseEntry))!;
         var mine = traits(copy);
+        // Added option names per trait and book, so the trait text says once per book what was added.
+        var notes = new List<(FeatureDef Trait, string Source, List<string> Names)>();
         foreach (var x in expansions)
             foreach (var t in traits(x))
             {
@@ -143,8 +145,11 @@ public class ContentService
                     have.Options.Add(oc);
                     added.Add(oc.Name);
                 }
-                if (added.Count > 0) have.Description += $" More options from {x.Source}: {string.Join(", ", added)}.";
+                if (added.Count == 0) continue;
+                if (notes.FirstOrDefault(n => n.Trait == have && n.Source == x.Source) is { Names: not null } note) note.Names.AddRange(added);
+                else notes.Add((have, x.Source, added));
             }
+        foreach (var (trait, source, names) in notes) trait.Description += $" More options from {source}: {string.Join(", ", names)}.";
         return copy;
     }
     public IEnumerable<BackgroundDef> Backgrounds => Merge(Core.Backgrounds, User.Backgrounds);
