@@ -234,6 +234,47 @@
      "usesFrom": ""
     }
    ]
+  },
+  {
+   "id": "beastkin-expanded-sample",
+   "name": "Beastkin (Expanded sample)",
+   "source": "Core (sample)",
+   "description": "Sample expansion: adds an option to the sample Beastkin (sample text).",
+   "size": "Medium",
+   "speed": 30,
+   "extends": "beastkin",
+   "traits": [
+    {
+     "name": "Animal Instincts",
+     "level": 1,
+     "description": "Sample expansion options (sample text).",
+     "usesMax": 0,
+     "recharge": "",
+     "usesFrom": "",
+     "options": [
+      {
+       "name": "Glider (sample)",
+       "source": "",
+       "description": "A flying speed equal to your walking speed (sample text).",
+       "effects": {
+        "unarmoredAcBase": 0,
+        "unarmoredAcAbilities": [],
+        "unarmoredAcWithShield": false,
+        "speedBonus": "",
+        "speedBonusUnarmored": false,
+        "speedBonusNoHeavyArmor": false,
+        "extraSpeeds": [
+         "Fly"
+        ],
+        "unarmedDamage": "",
+        "unarmedDamageType": "",
+        "unarmedDex": false,
+        "unarmedNeedsNoArmor": false
+       }
+      }
+     ]
+    }
+   ]
   }
  ],
  "heritages": [

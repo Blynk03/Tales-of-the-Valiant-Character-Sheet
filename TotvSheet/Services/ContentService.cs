@@ -47,6 +47,7 @@ public class ContentService
     public HashSet<string> DisabledSources { get; private set; } = new();
 
     public event Action? Changed;
+    private void Invalidate() { _lineages = null; _heritages = null; }
 
     public async Task EnsureLoadedAsync()
     {
@@ -77,6 +78,7 @@ public class ContentService
         }
         DisabledSources = await _storage.GetAsync<HashSet<string>>(DisabledKey) ?? new();
         _loaded = true;
+        Invalidate();
     }
 
     /// <summary>Saves the library and sources. Returns false if the browser refused (the layout shows a warning).</summary>
@@ -85,7 +87,7 @@ public class ContentService
         var ok = !_locked && await _storage.SetLargeAsync(UserKey, User);
         if (_locked) _storage.ReportFailure();
         ok &= await _storage.SetAsync(DisabledKey, DisabledSources);
-        Changed?.Invoke();
+        Invalidate(); Changed?.Invoke();
         return ok;
     }
 
@@ -93,13 +95,58 @@ public class ContentService
     public async Task SaveSourcesAsync()
     {
         await _storage.SetAsync(DisabledKey, DisabledSources);
-        Changed?.Invoke();
+        Invalidate(); Changed?.Invoke();
     }
 
     // ---------- Merged, enabled views used by creation and level up ----------
 
-    public IEnumerable<LineageDef> Lineages => Merge(Core.Lineages, User.Lineages);
-    public IEnumerable<HeritageDef> Heritages => Merge(Core.Heritages, User.Heritages);
+    public IEnumerable<LineageDef> Lineages => _lineages ??= Combine(Merge(Core.Lineages, User.Lineages).ToList(), l => l.Extends, l => l.Traits);
+    public IEnumerable<HeritageDef> Heritages => _heritages ??= Combine(Merge(Core.Heritages, User.Heritages).ToList(), h => h.Extends, h => h.Traits);
+    private List<LineageDef>? _lineages;
+    private List<HeritageDef>? _heritages;
+
+    /// <summary>
+    /// Folds expansions into the entry they extend (TVCS-112): e.g. Syderean (Expanded) from Player's Guide 2 adds its
+    /// Aberrant and Spellborn options to the Player's Guide Syderean's Natural Adaptation, and isn't listed separately.
+    /// Traits and options the base already has (by name) are kept from the base; new options are labelled with their book.
+    /// An expansion whose base isn't available (not imported or disabled) is listed on its own.
+    /// </summary>
+    private static List<T> Combine<T>(List<T> list, Func<T, string> extends, Func<T, List<FeatureDef>> traits) where T : ContentEntry
+    {
+        var ids = list.Select(e => e.Id).ToHashSet();
+        var expansions = list.Where(e => extends(e) is { Length: > 0 } b && b != e.Id && ids.Contains(b)).ToList();
+        if (expansions.Count == 0) return list;
+        var result = new List<T>();
+        foreach (var e in list.Except(expansions))
+        {
+            var mine = expansions.Where(x => extends(x) == e.Id).OrderBy(x => x.Source).ToList();
+            result.Add(mine.Count == 0 ? e : WithExpansions(e, mine, traits));
+        }
+        return result;
+    }
+
+    /// <summary>A copy of <paramref name="baseEntry"/> with the traits and options of <paramref name="expansions"/> added.</summary>
+    public static T WithExpansions<T>(T baseEntry, IEnumerable<T> expansions, Func<T, List<FeatureDef>> traits) where T : ContentEntry
+    {
+        var copy = Json.Deserialize<T>(Json.Serialize(baseEntry))!;
+        var mine = traits(copy);
+        foreach (var x in expansions)
+            foreach (var t in traits(x))
+            {
+                var have = mine.FirstOrDefault(m => string.Equals(m.Name, t.Name, StringComparison.OrdinalIgnoreCase));
+                if (have is null) { mine.Add(Json.Deserialize<FeatureDef>(Json.Serialize(t))!); continue; }
+                var added = new List<string>();
+                foreach (var o in t.Options.Where(o => !have.Options.Any(h => string.Equals(h.Name, o.Name, StringComparison.OrdinalIgnoreCase))))
+                {
+                    var oc = Json.Deserialize<FeatureOptionDef>(Json.Serialize(o))!;
+                    if (string.IsNullOrWhiteSpace(oc.Source)) oc.Source = x.Source;
+                    have.Options.Add(oc);
+                    added.Add(oc.Name);
+                }
+                if (added.Count > 0) have.Description += $" More options from {x.Source}: {string.Join(", ", added)}.";
+            }
+        return copy;
+    }
     public IEnumerable<BackgroundDef> Backgrounds => Merge(Core.Backgrounds, User.Backgrounds);
     public IEnumerable<ClassDef> Classes => Merge(Core.Classes, User.Classes);
     public IEnumerable<SubclassDef> Subclasses => Merge(Core.Subclasses, User.Subclasses);
@@ -116,6 +163,25 @@ public class ContentService
     public ItemDef? Item(string id) => Merge(Core.Items, User.Items, hideSamples: false).FirstOrDefault(i => i.Id == id);
     public MagicItemDef? MagicItem(string id) => Merge(Core.MagicItems, User.MagicItems, hideSamples: false).FirstOrDefault(i => i.Id == id);
 
+    /// <summary>A lineage by id with any expansions folded in (disabled sources included, so existing characters keep working).</summary>
+    public LineageDef? LineageWithExpansions(string id)
+    {
+        var all = User.Lineages.Concat(Core.Lineages.Where(c => !User.Lineages.Any(u => u.Id == c.Id))).ToList();
+        var e = all.FirstOrDefault(l => l.Id == id);
+        if (e is null) return null;
+        var ext = all.Where(l => l.Extends == id && l.Id != id && !DisabledSources.Contains(l.Source)).OrderBy(l => l.Source).ToList();
+        return ext.Count == 0 ? e : WithExpansions(e, ext, l => l.Traits);
+    }
+
+    public HeritageDef? HeritageWithExpansions(string id)
+    {
+        var all = User.Heritages.Concat(Core.Heritages.Where(c => !User.Heritages.Any(u => u.Id == c.Id))).ToList();
+        var e = all.FirstOrDefault(h => h.Id == id);
+        if (e is null) return null;
+        var ext = all.Where(h => h.Extends == id && h.Id != id && !DisabledSources.Contains(h.Source)).OrderBy(h => h.Source).ToList();
+        return ext.Count == 0 ? e : WithExpansions(e, ext, h => h.Traits);
+    }
+
     /// <summary>The content definition a character's feature came from, found through the character's own lineage, heritage,
     /// background, class or subclass id (so two entries with the same name can't be mixed up), then by feature name,
     /// preferring the listing at the feature's level. Null for custom features and talents.</summary>
@@ -126,8 +192,8 @@ public class ContentService
         bool Named(FeatureDef d) => string.Equals(d.Name, f.Name, StringComparison.OrdinalIgnoreCase);
         bool From(string name) => string.Equals(f.Source, name, StringComparison.OrdinalIgnoreCase);
         IEnumerable<FeatureDef> feats =
-            From(c.LineageName) && ById(Core.Lineages, User.Lineages, c.LineageId) is { } l ? l.Traits
-            : From(c.HeritageName) && ById(Core.Heritages, User.Heritages, c.HeritageId) is { } h ? h.Traits
+            From(c.LineageName) && LineageWithExpansions(c.LineageId) is { } l ? l.Traits
+            : From(c.HeritageName) && HeritageWithExpansions(c.HeritageId) is { } h ? h.Traits
             : From(c.BackgroundName) && ById(Core.Backgrounds, User.Backgrounds, c.BackgroundId) is { } b ? b.Traits
             : From(c.ClassName) && ById(Core.Classes, User.Classes, c.ClassId) is { } k ? k.Levels.OrderBy(x => x.Level != f.Level).SelectMany(x => x.Features)
             : From(c.SubclassName) && ById(Core.Subclasses, User.Subclasses, c.SubclassId) is { } s ? s.Features.OrderBy(x => x.Level != f.Level)

@@ -12,7 +12,8 @@
                 var opt = o;
                 <button type="button" role="radio" aria-checked="@(picked == opt.Name ? "true" : "false")"
                         class="choice @(picked == opt.Name ? "selected" : "")" @onclick="() => Pick(key, opt.Name)">
-                    <div class="font-semibold">@opt.Name</div>
+                    <div class="flex items-center gap-2"><span class="font-semibold">@opt.Name</span>
+                        @if (!string.IsNullOrWhiteSpace(opt.Source)) { <span class="chip ml-auto">@opt.Source</span> }</div>
                     <div class="text-sm muted">@opt.Description</div>
                 </button>
             }

@@ -145,10 +145,40 @@ const emptyLib = () => ({ lineages: [], heritages: [], backgrounds: [], classes:
 function lib(kind, keepSamples) {
   const user = S.user[kind] || [], ids = new Set(user.map(u => u.id));
   const hasBook = !keepSamples && user.some(u => !S.disabled.includes(u.source) && String(u.source).toLowerCase() !== HOMEBREW.toLowerCase());
-  return (hasBook ? [] : SEED[kind].filter(x => !ids.has(x.id))).concat(user).filter(e => !S.disabled.includes(e.source)).sort((a, b) => a.name.localeCompare(b.name));
+  const list = (hasBook ? [] : SEED[kind].filter(x => !ids.has(x.id))).concat(user).filter(e => !S.disabled.includes(e.source)).sort((a, b) => a.name.localeCompare(b.name));
+  return kind === 'lineages' || kind === 'heritages' ? combineExpansions(list) : list;
 }
-// Lookups by id keep samples, so characters built from a retired sample still work.
-const find = (kind, id) => lib(kind, true).find(x => x.id === id);
+/** Folds expansions into the entry they extend (TVCS-112, mirror of ContentService.Combine): e.g. Syderean (Expanded) adds
+    its Aberrant and Spellborn options to the Player's Guide Syderean. An expansion whose base isn't available stays listed. */
+function combineExpansions(list) {
+  const ids = new Set(list.map(e => e.id)), exps = list.filter(e => e.extends && e.extends !== e.id && ids.has(e.extends));
+  if (!exps.length) return list;
+  return list.filter(e => !exps.includes(e)).map(e => { const mine = exps.filter(x => x.extends === e.id).sort((a, b) => String(a.source).localeCompare(String(b.source))); return mine.length ? withExpansions(e, mine) : e; });
+}
+function withExpansions(base, exps) {
+  const copy = JSON.parse(JSON.stringify(base)), eq = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+  copy.traits = copy.traits || [];
+  exps.forEach(x => (x.traits || []).forEach(t => {
+    const have = copy.traits.find(m => eq(m.name, t.name));
+    if (!have) { copy.traits.push(JSON.parse(JSON.stringify(t))); return; }
+    have.options = have.options || []; const added = [];
+    (t.options || []).filter(o => !have.options.some(h => eq(h.name, o.name))).forEach(o => { const oc = JSON.parse(JSON.stringify(o)); if (!oc.source) oc.source = x.source; have.options.push(oc); added.push(oc.name); });
+    if (added.length) have.description += ` More options from ${x.source}: ${added.join(', ')}.`;
+  }));
+  return copy;
+}
+/** All entries of a kind by id, ignoring sample hiding, disabled sources and expansion folding (for characters' own ids). */
+const rawById = (kind, id) => (S.user[kind] || []).find(e => e.id === id) || (SEED[kind] || []).find(e => e.id === id);
+/** A lineage or heritage by id with its expansions folded in (disabled expansion sources left out). */
+function withExpansionsById(kind, id) {
+  const e = rawById(kind, id); if (!e) return null;
+  const uids = new Set((S.user[kind] || []).map(u => u.id));
+  const all = (S.user[kind] || []).concat((SEED[kind] || []).filter(x => !uids.has(x.id)));
+  const exps = all.filter(x => x.extends === id && x.id !== id && !S.disabled.includes(x.source)).sort((a, b) => String(a.source).localeCompare(String(b.source)));
+  return exps.length ? withExpansions(e, exps) : e;
+}
+// Lookups by id keep samples, so characters built from a retired sample still work; an expansion's own id still resolves.
+const find = (kind, id) => lib(kind, true).find(x => x.id === id) || rawById(kind, id);
 function allEntries(kind) {
   const user = S.user[kind] || [], uids = new Set(user.map(u => u.id)), cids = new Set(SEED[kind].map(c => c.id));
   return SEED[kind].filter(c => !uids.has(c.id)).map(e => ({ e, user: false, over: false }))
@@ -184,8 +214,8 @@ function findFeatureDef(c, f) {
   const byId = (kind, id) => (S.user[kind] || []).find(e => e.id === id) || (SEED[kind] || []).find(e => e.id === id);
   const first = (arr, lvl) => arr.slice().sort((x, y) => (x.level !== lvl) - (y.level !== lvl));
   let e, feats = [];
-  if (eq(f.source, c.lineageName) && (e = byId('lineages', c.lineageId))) feats = e.traits || [];
-  else if (eq(f.source, c.heritageName) && (e = byId('heritages', c.heritageId))) feats = e.traits || [];
+  if (eq(f.source, c.lineageName) && (e = withExpansionsById('lineages', c.lineageId))) feats = e.traits || [];
+  else if (eq(f.source, c.heritageName) && (e = withExpansionsById('heritages', c.heritageId))) feats = e.traits || [];
   else if (eq(f.source, c.backgroundName) && (e = byId('backgrounds', c.backgroundId))) feats = e.traits || [];
   else if (eq(f.source, c.className) && (e = byId('classes', c.classId))) feats = first(e.levels || [], f.level).flatMap(l => l.features || []);
   else if (eq(f.source, c.subclassName) && (e = byId('subclasses', c.subclassId))) feats = first(e.features || [], f.level);
@@ -486,7 +516,7 @@ function render() {
 // "Report a problem" (TVCS-106): opens the project's GitHub issue form with the version, page and device filled in.
 // Set REPORT_URL to '' to hide the link; {version}, {page} and {device} placeholders are filled in if present.
 const REPORT_URL = 'https://github.com/Blynk03/Tales-of-the-Valiant-Character-Sheet/issues/new?template=problem-report.yml';
-const PREVIEW_VERSION = 'preview v18';
+const PREVIEW_VERSION = 'preview v19';
 function deviceInfo() {
   const ua = navigator.userAgent;
   const m = (re) => { const r = ua.match(re); return r ? r[1] : null; };
@@ -669,7 +699,7 @@ function featuresTab(c) {
     <div class="flex gap-2 items-center mt-0.5"><span class="lbl">Level</span>${num(`c.features.${i}.level`, f.level, 'w-10 text-center', 'aria-label="Level"')}<span class="chip truncate">${esc(f.source)}</span></div></div>
     <button class="icon-btn" data-act="rm" data-a="features.${i}" title="Remove feature">✕</button></div>
     ${area(`c.features.${i}.description`, f.description, 2, 'style="min-height:3rem" aria-label="Description"')}
-    ${(f.options || []).length ? (() => { const pk = f.options.find(o => o.name === f.chosen); return `<label class="lbl block mt-1.5">Your choice <select class="select text-sm ${pk ? '' : 'needs-pick'}" data-f="c.features.${i}.chosen" data-t="s" aria-label="${esc(f.name)} choice"><option value="">Choose one…</option>${f.options.map(o => `<option value="${esc(o.name)}" ${o.name === f.chosen ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}</select></label>${pk && pk.description ? `<p class="text-sm mt-1">${esc(pk.description)}</p>` : ''}`; })() : ''}
+    ${(f.options || []).length ? (() => { const pk = f.options.find(o => o.name === f.chosen); return `<label class="lbl block mt-1.5">Your choice <select class="select text-sm ${pk ? '' : 'needs-pick'}" data-f="c.features.${i}.chosen" data-t="s" aria-label="${esc(f.name)} choice"><option value="">Choose one…</option>${f.options.map(o => `<option value="${esc(o.name)}" ${o.name === f.chosen ? 'selected' : ''}>${esc(o.name)}${o.source ? ' (' + esc(o.source) + ')' : ''}</option>`).join('')}</select></label>${pk && pk.description ? `<p class="text-sm mt-1">${esc(pk.description)}</p>` : ''}`; })() : ''}
     ${usesMax(c, f) > 0 ? `<div class="flex items-center gap-2 mt-1"><span class="lbl">Used</span>${pips('setUses:' + i, usesMax(c, f), f.usesSpent, '', false, 'Use')}<span class="muted text-xs ml-auto">${esc(f.recharge)}</span></div>` : ''}</div>`).join('');
   const weapons = c.weapons.map((w, i) => `<tr><td>${inp(`c.weapons.${i}.name`, w.name, 'font-semibold', 'aria-label="Name"')}</td><td>${inp(`c.weapons.${i}.damage`, w.damage, 'num w-16', 'aria-label="Damage dice"')}</td>
     <td>${inp(`c.weapons.${i}.damageType`, w.damageType, 'w-24', 'aria-label="Damage type"')}</td><td>${inp(`c.weapons.${i}.range`, w.range, 'w-20', 'aria-label="Range"')}</td>
@@ -910,7 +940,7 @@ function traitPicker(owner, w) {
   if (!owner) return '';
   return (owner.traits || []).filter(t => (t.options || []).length).map(t => { const key = choiceKey(owner, t), picked = (w.traitChoices || {})[key];
     return `<h3 class="box-title text-left mt-4">Choose your ${esc(t.name)}</h3><div class="grid sm:grid-cols-2 gap-2" role="radiogroup" aria-label="${esc(t.name)}">${t.options.map(o =>
-      `<button class="choice ${picked === o.name ? 'selected' : ''}" role="radio" aria-checked="${picked === o.name}" data-act="wTrait" data-a="${esc(key + '\u0001' + o.name)}"><b>${esc(o.name)}</b><div class="text-sm muted">${esc(o.description)}</div></button>`).join('')}</div>`; }).join('');
+      `<button class="choice ${picked === o.name ? 'selected' : ''}" role="radio" aria-checked="${picked === o.name}" data-act="wTrait" data-a="${esc(key + '\u0001' + o.name)}"><div class="flex items-center gap-2"><b>${esc(o.name)}</b>${o.source ? `<span class="chip ml-auto">${esc(o.source)}</span>` : ''}</div><div class="text-sm muted">${esc(o.description)}</div></button>`).join('')}</div>`; }).join('');
 }
 const missingTrait = (owner, w) => owner && (owner.traits || []).find(t => (t.options || []).length && !(w.traitChoices || {})[choiceKey(owner, t)]);
 function createView() {
@@ -1034,8 +1064,8 @@ const TEMPLATES = { traits: () => ({ name: '', level: 1, description: '', usesMa
   resources: () => ({ name: '', usesMax: 1, recharge: '' }), spellSlots: (list) => ({ level: list.length ? list[list.length - 1].level + 1 : 1, slots: [] }) };
 const ADD_LABEL = { levels: 'level', traits: 'trait', features: 'feature', resources: 'resource', spellSlots: 'slot row' };
 const BLANK = {
-  lineages: () => ({ id: '', name: 'New lineage', source: 'Homebrew', description: '', size: 'Medium', speed: 30, traits: [] }),
-  heritages: () => ({ id: '', name: 'New heritage', source: 'Homebrew', description: '', languages: 'Common', languageChoices: 0, skillProficiencies: [], skillOptions: [], skillChoices: 0, traits: [] }),
+  lineages: () => ({ id: '', name: 'New lineage', source: 'Homebrew', description: '', size: 'Medium', speed: 30, extends: '', traits: [] }),
+  heritages: () => ({ id: '', name: 'New heritage', source: 'Homebrew', description: '', languages: 'Common', languageChoices: 0, skillProficiencies: [], skillOptions: [], skillChoices: 0, extends: '', traits: [] }),
   backgrounds: () => ({ id: '', name: 'New background', source: 'Homebrew', description: '', skillProficiencies: [], skillOptions: [], skillChoices: 0, toolProficiencies: '', equipment: '', talentId: '', talentOptions: [], traits: [] }),
   classes: () => ({ id: '', name: 'New class', source: 'Homebrew', description: '', hitDie: 8, savingThrows: [], armorProficiencies: [], weaponProficiencies: [], otherProficiencies: '', skillOptions: [], skillChoices: 2, spellcastingAbility: null, subclassLevel: 3, talentCategories: [], startingEquipment: [], startingGold: 0, levels: Array.from({ length: 20 }, (_, i) => ({ level: i + 1, features: [], grantsTalent: false, grantsAbilityIncrease: false, spellSlots: [], resources: [] })) }),
   subclasses: () => ({ id: '', name: 'New subclass', source: 'Homebrew', description: '', classId: '', features: [], talentCategories: [], spellcastingAbility: null, spellSlots: [] }),
@@ -1044,7 +1074,7 @@ const BLANK = {
   items: () => ({ id: '', name: 'New item', source: 'Homebrew', description: '', type: 'Gear', weaponCategory: '', damage: '', damageType: '', range: '', properties: '', weaponOptions: '', finesse: false, ranged: false, baseAC: 0, armorCategory: 'None', cost: '', weight: '' }),
   magicItems: () => ({ id: '', name: 'New magic item', source: 'Homebrew', description: '', itemType: 'Wondrous Item', rarity: 'Uncommon', requiresAttunement: false, attunement: '', price: '' })
 };
-const HINTS = { itemType: 'e.g. Wondrous Item, Weapon (longsword), Armor (plate), Armor (shield), Ring, Potion.', rarity: 'Common, Uncommon, Rare, Very Rare, Legendary, Fabled, Artifact or Varies.', attunement: "Who can attune, if limited, e.g. 'by a spellcaster'. Blank if anyone can.", id: 'Unique key. Reusing a built-in id overrides that entry.', source: "Book or homebrew label, e.g. 'Player's Guide', 'Homebrew'.", skillProficiencies: 'Skills always granted, exactly as on the sheet.', skillOptions: 'Skills the player can choose from.', skillChoices: 'How many of the skill options to choose.', talentId: 'Talent id always granted at level 1 (optional).', talentOptions: 'Talent ids the player chooses one from (optional).', languageChoices: 'How many extra languages the player picks.', talentCategories: 'Talent lists for Improvement levels (subclass: lists it adds).', resources: 'Feature uses that change at this level, e.g. Rage 3.', usesFrom: 'Optional: PB, or STR/DEX/CON/INT/WIS/CHA for that modifier, with an optional +N (e.g. PB+1). Min 1.', repeatable: 'Tick if the talent can be taken more than once.', slots: 'Total slots for circles 1-9, e.g. 3, 2.', armorProficiencies: 'Any of: Light, Medium, Heavy, Shields.', weaponProficiencies: 'Simple, Martial, and/or specific weapons (e.g. Rapier, Scimitar). Named weapons can also go in Other Proficiencies.', startingEquipment: 'Item ids from the Items list.', spellSlots: 'Total slots for circles 1-9, e.g. 4, 3, 2.', usesMax: '0 if it has no limited uses.', recharge: 'Short Rest, Long Rest or blank.', classId: 'Id of the parent class.', circle: '0 for cantrips.', subclassLevel: 'Level at which the subclass is chosen.' };
+const HINTS = { extends: 'Optional: the id of an entry this one expands (e.g. syderean). Its new traits and choose-one options are added to that entry, which is then listed once.', itemType: 'e.g. Wondrous Item, Weapon (longsword), Armor (plate), Armor (shield), Ring, Potion.', rarity: 'Common, Uncommon, Rare, Very Rare, Legendary, Fabled, Artifact or Varies.', attunement: "Who can attune, if limited, e.g. 'by a spellcaster'. Blank if anyone can.", id: 'Unique key. Reusing a built-in id overrides that entry.', source: "Book or homebrew label, e.g. 'Player's Guide', 'Homebrew'.", skillProficiencies: 'Skills always granted, exactly as on the sheet.', skillOptions: 'Skills the player can choose from.', skillChoices: 'How many of the skill options to choose.', talentId: 'Talent id always granted at level 1 (optional).', talentOptions: 'Talent ids the player chooses one from (optional).', languageChoices: 'How many extra languages the player picks.', talentCategories: 'Talent lists for Improvement levels (subclass: lists it adds).', resources: 'Feature uses that change at this level, e.g. Rage 3.', usesFrom: 'Optional: PB, or STR/DEX/CON/INT/WIS/CHA for that modifier, with an optional +N (e.g. PB+1). Min 1.', repeatable: 'Tick if the talent can be taken more than once.', slots: 'Total slots for circles 1-9, e.g. 3, 2.', armorProficiencies: 'Any of: Light, Medium, Heavy, Shields.', weaponProficiencies: 'Simple, Martial, and/or specific weapons (e.g. Rapier, Scimitar). Named weapons can also go in Other Proficiencies.', startingEquipment: 'Item ids from the Items list.', spellSlots: 'Total slots for circles 1-9, e.g. 4, 3, 2.', usesMax: '0 if it has no limited uses.', recharge: 'Short Rest, Long Rest or blank.', classId: 'Id of the parent class.', circle: '0 for cantrips.', subclassLevel: 'Level at which the subclass is chosen.' };
 /** Fills fields added in later versions so they show up in the editor. */
 function withDefaults(kind, e) {
   const d = Object.assign(BLANK[kind](), e);

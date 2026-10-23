@@ -41,7 +41,7 @@
                                 <option value="">Choose one…</option>
                                 @foreach (var o in feature.Options)
                                 {
-                                    <option value="@o.Name">@o.Name</option>
+                                    <option value="@o.Name">@o.Name@(string.IsNullOrWhiteSpace(o.Source) ? "" : $" ({o.Source})")</option>
                                 }
                             </select>
                         </label>

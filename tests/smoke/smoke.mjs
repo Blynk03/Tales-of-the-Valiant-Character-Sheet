@@ -82,6 +82,11 @@ try {
     // The sample Beastkin's "choose one" trait was picked in the wizard (first option: Climber), and its
     // climbing speed shows on the Main tab (TVCS-108).
     check('A picked lineage option applies to the sheet', (await page.locator('body').innerText()).includes('Climb 30 ft.'), `actions [${actions.join(',')}]`);
+    // The sample expansion is folded into the sample Beastkin (TVCS-112): its option is offered on the Features tab.
+    await page.getByRole('tab', { name: /Equipment/ }).click();
+    const opts = await page.locator('select[aria-label="Animal Instincts choice"] option').allInnerTexts().catch(() => []);
+    check('An expansion adds its options to the lineage it extends', opts.some(o => o.startsWith('Glider (sample)')), `options: ${opts.join(' | ')}`);
+    await page.getByRole('tab', { name: /Main/ }).click();
     await page.goto(base);
     await page.getByRole('heading', { name: 'Your characters' }).waitFor({ timeout: 30000 });
     check('Character list shows the saved character', (await page.content()).includes('Smoke Tester'));

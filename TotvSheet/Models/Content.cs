@@ -49,6 +49,8 @@ public class FeatureDef
 public class FeatureOptionDef
 {
     public string Name { get; set; } = "";
+    [Hint("Set automatically when an expansion adds this option, e.g. Player's Guide 2.")]
+    public string Source { get; set; } = "";
     [Multiline]
     public string Description { get; set; } = "";
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
@@ -105,6 +107,8 @@ public class LevelSlotsDef
 
 public class LineageDef : ContentEntry
 {
+    [Hint("Optional: the id of an entry this one expands (e.g. syderean). Its new traits and \"choose one\" options are added to that entry, and this one is hidden from lists while that entry is available.")]
+    public string Extends { get; set; } = "";
     public string Size { get; set; } = "Medium";
     public int Speed { get; set; } = 30;
     public List<FeatureDef> Traits { get; set; } = new();
@@ -112,6 +116,8 @@ public class LineageDef : ContentEntry
 
 public class HeritageDef : ContentEntry
 {
+    [Hint("Optional: the id of an entry this one expands (e.g. syderean). Its new traits and \"choose one\" options are added to that entry, and this one is hidden from lists while that entry is available.")]
+    public string Extends { get; set; } = "";
     [Hint("Fixed languages, comma separated.")]
     public string Languages { get; set; } = "Common";
     [Hint("How many extra languages the player picks.")]
