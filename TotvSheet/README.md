@@ -38,6 +38,7 @@ dotnet publish -c Release
 | Character creation wizard (name → lineage → heritage with skill and language choices → background with skill and talent choices → class & skills → abilities: ToV standard array, 32-point buy or rolled with +2/+1 → equipment → talent → review) | `Pages/Create.razor` |
 | Level up dialog (HP average/roll, subclass pick, Improvement: +2, +1/+1 or +1 and a talent from the class list, new features, scaling feature uses and spell slots, including subclass spellcasting) | `Components/LevelUpDialog.razor` |
 | Content library / settings (add, edit, customize, copy, delete, enable/disable sources, import/export, JSON editor) | `Pages/Settings.razor`, `Components/Editors/ObjectEditor.razor` |
+| Character threads (optional goals with benefits by rank; add from the library, tick benefits, mark completed or abandoned) | `Components/ThreadsBox.razor` |
 | Magic item library (a `magicItems` content kind; picker on the Holdings tab with rarity, type and name filters; adds rarity, type, attunement restriction and summary, and can also add a magic weapon or armor row with its bonus) | `Components/Tabs/HoldingsTab.razor`, `Models/MagicItemFilter.cs` |
 | Roll tray (advantage/disadvantage; Luck per the Player's Guide: gain on a missed attack or failed save once per turn, reset to d4 at 5, spend +1 or 3 to reroll, never on a natural 1; attack → damage/crit, re-roll from history) | `Components/RollTray.razor` |
 | Dice picker (pick d4–d100, modifier, typed rolls like `2d8+1d6+3`) | `Models/DicePool.cs`, `Components/RollTray.razor` |
