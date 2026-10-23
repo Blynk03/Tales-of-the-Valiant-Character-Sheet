@@ -45,6 +45,23 @@ public class FeatureDef
     public List<FeatureOptionDef> Options { get; set; } = new();
 }
 
+/// <summary>A character thread (TVCS-114): an optional goal agreed with the GM whose milestones grant benefits by rank
+/// (Northlands Worldbook, Campaign Builder: Castles &amp; Crowns).</summary>
+public class ThreadDef : ContentEntry
+{
+    [Hint("Benefits by rank: Least (levels 1-4), Lesser (5-10), Greater (11-16), Superior (17-20).")]
+    public List<ThreadMilestoneDef> Milestones { get; set; } = new();
+}
+
+public class ThreadMilestoneDef
+{
+    [Hint("Least, Lesser, Greater or Superior.")]
+    public string Rank { get; set; } = "Least";
+    public string Name { get; set; } = "";
+    [Multiline]
+    public string Description { get; set; } = "";
+}
+
 /// <summary>One choice of a "choose one" feature, e.g. Avian for Beastkin's Natural Adaptation (TVCS-108).</summary>
 public class FeatureOptionDef
 {
@@ -265,4 +282,5 @@ public class ContentLibrary
     public List<SpellDef> Spells { get; set; } = new();
     public List<ItemDef> Items { get; set; } = new();
     public List<MagicItemDef> MagicItems { get; set; } = new();
+    public List<ThreadDef> CharacterThreads { get; set; } = new();
 }

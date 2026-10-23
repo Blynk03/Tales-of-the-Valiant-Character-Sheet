@@ -3059,6 +3059,26 @@ input[type=number].field::-webkit-inner-spin-button { opacity: .4; }
    "cost": "5 gp",
    "weight": "3 lb."
   }
+ ],
+ "characterThreads": [
+  {
+   "id": "sample-thread",
+   "name": "Sample Thread",
+   "source": "Core (sample)",
+   "description": "A sample goal to show how threads work (sample text).",
+   "milestones": [
+    {
+     "rank": "Least",
+     "name": "First Step (sample)",
+     "description": "A small benefit for your first milestone (sample text)."
+    },
+    {
+     "rank": "Lesser",
+     "name": "Growing Reputation (sample)",
+     "description": "A bigger benefit (sample text)."
+    }
+   ]
+  }
  ]
 };
 </script>
@@ -3080,7 +3100,7 @@ const PB_COST = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9, 16: 11, 
 const ROLL_PLUS2_MAX = 16, ROLL_PLUS1_MAX = 17; // rolled scores: +2 to a score <= 16, +1 to another <= 17
 const MAX_LUCK = 5, LUCK_REROLL = 3;
 const HOMEBREW = 'Homebrew';
-const KINDS = [['lineages','Lineages','Lineage'],['heritages','Heritages','Heritage'],['backgrounds','Backgrounds','Background'],['classes','Classes','Class'],['subclasses','Subclasses','Subclass'],['talents','Talents','Talent'],['spells','Spells','Spell'],['items','Items','Item'],['magicItems','Magic Items','Magic Item']];
+const KINDS = [['lineages','Lineages','Lineage'],['heritages','Heritages','Heritage'],['backgrounds','Backgrounds','Background'],['classes','Classes','Class'],['subclasses','Subclasses','Subclass'],['talents','Talents','Talent'],['spells','Spells','Spell'],['items','Items','Item'],['magicItems','Magic Items','Magic Item'],['characterThreads','Character Threads','Character Thread']];
 const DEFAULT_ACTIONS = 'Attack, Cast a Spell, Dash, Disengage, Dodge, Help, Hide, Ready, Search, Use an Object';
 
 // ---------- helpers ----------
@@ -3204,7 +3224,7 @@ function usesMax(c, f) {
 }
 
 // ---------- content ----------
-const emptyLib = () => ({ lineages: [], heritages: [], backgrounds: [], classes: [], subclasses: [], talents: [], spells: [], items: [], magicItems: [] });
+const emptyLib = () => ({ lineages: [], heritages: [], backgrounds: [], classes: [], subclasses: [], talents: [], spells: [], items: [], magicItems: [], characterThreads: [] });
 /** Built-in entries are samples: once enabled book content (a user entry whose source isn't
     Homebrew) exists for a kind, the samples of that kind are hidden from lists. */
 function lib(kind, keepSamples) {
@@ -3268,7 +3288,7 @@ function newChar() {
     talents: [], features: [], actionsRef: DEFAULT_ACTIONS, bonusActionsRef: 'Offhand attack (light weapon), class features', reactionsRef: 'Opportunity Attack, readied action',
     weapons: [], armor: [], gear: [], coins: { pp: 0, gp: 0, sp: 0, cp: 0 }, treasure: '',
     magicItems: [], attunementSlots: 3, mounts: [], vehicles: [], baseName: '', facilities: '', personnel: '', baseNotes: '',
-    portraitUrl: '', age: '', height: '', weight: '', eyes: '', skin: '', hair: '', appearanceNotes: '', personality: '', backstory: '', homeland: '', motivation: '', allies: '', otherNotes: '',
+    portraitUrl: '', age: '', height: '', weight: '', eyes: '', skin: '', hair: '', appearanceNotes: '', personality: '', backstory: '', homeland: '', motivation: '', allies: '', otherNotes: '', threads: [],
     spellcasterClass: '', spellAbility: null, slotsTotal: [0,0,0,0,0,0,0,0,0], slotsExpended: [0,0,0,0,0,0,0,0,0], spells: [], rituals: [] };
 }
 const deepCopy = v => v == null ? v : JSON.parse(JSON.stringify(v));
@@ -3584,7 +3604,7 @@ function render() {
 // "Report a problem" (TVCS-106): opens the project's GitHub issue form with the version, page and device filled in.
 // Set REPORT_URL to '' to hide the link; {version}, {page} and {device} placeholders are filled in if present.
 const REPORT_URL = 'https://github.com/Blynk03/Tales-of-the-Valiant-Character-Sheet/issues/new?template=problem-report.yml';
-const PREVIEW_VERSION = 'preview v20';
+const PREVIEW_VERSION = 'preview v21';
 function deviceInfo() {
   const ua = navigator.userAgent;
   const m = (re) => { const r = ua.match(re); return r ? r[1] : null; };
@@ -3854,8 +3874,34 @@ function characterTab(c) {
     ${box('Personality', area('c.personality', c.personality, 6))}${box('Allies &amp; Organizations', area('c.allies', c.allies, 6))}
   </div><div class="flex flex-col gap-3">
     ${box('Backstory', area('c.backstory', c.backstory, 12) + `<div class="grid sm:grid-cols-2 gap-2 mt-2"><div><div class="lbl">Homeland</div>${area('c.homeland', c.homeland, 3)}</div><div><div class="lbl">Adventuring motivation</div>${area('c.motivation', c.motivation, 3)}</div></div>`)}
+    ${threadsBox(c)}
     ${box('Other Notes', area('c.otherNotes', c.otherNotes, 10))}
   </div></div>`;
+}
+/** Character threads (TVCS-114, mirror of Components/ThreadsBox.razor). */
+const THREAD_RANKS = [['Least', '1–4'], ['Lesser', '5–10'], ['Greater', '11–16'], ['Superior', '17–20']];
+const toThread = d => ({ threadId: d.id, name: d.name, source: d.source, description: d.description, goal: '', status: 'Active',
+  benefits: (d.milestones || []).map(m => ({ rank: m.rank, name: m.name, description: m.description, gained: false })) });
+function threadsBox(c) {
+  const ts = c.threads || (c.threads = []), lib_ = lib('characterThreads');
+  const groups = [...new Set(lib_.map(x => x.source))].sort().map(src => `<optgroup label="${esc(src)}">${lib_.filter(x => x.source === src).map(x => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}</optgroup>`).join('');
+  const one = (t, i) => {
+    const lost = t.status === 'Abandoned';
+    const ranks = THREAD_RANKS.map(([r, lv]) => { const bs = t.benefits.map((b, j) => [b, j]).filter(([b]) => b.rank === r); if (!bs.length) return '';
+      return `<div class="lbl mt-2">${r} <span class="muted">(levels ${lv})</span></div>` + bs.map(([b, j]) => `<label class="flex items-start gap-2 text-sm mt-1 ${lost && b.gained ? 'line-through muted' : ''}">${chk(`c.threads.${i}.benefits.${j}.gained`, b.gained, b.name)}<span><b>${esc(b.name)}.</b> ${esc(b.description)}</span></label>`).join(''); }).join('');
+    return `<div class="rounded-lg p-2 mb-2" style="border:1px solid var(--line)"><div class="flex flex-wrap items-center gap-2"><span class="display font-bold">${esc(t.name)}</span>${t.source ? `<span class="chip">${esc(t.source)}</span>` : ''}
+      <select class="select text-sm ml-auto" style="width:auto" data-f="c.threads.${i}.status" data-t="s" aria-label="${esc(t.name)} status">${['Active', 'Completed', 'Abandoned'].map(s => `<option ${t.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
+      <button class="icon-btn" data-act="rm" data-a="threads.${i}" title="Remove thread">✕</button></div>
+      ${t.description ? `<details class="text-sm mt-1"><summary class="muted">About this thread</summary><p class="mt-1">${esc(t.description)}</p></details>` : ''}
+      <label class="lbl block mt-2">Your goal ${area(`c.threads.${i}.goal`, t.goal, 2, 'placeholder="Agree a specific, achievable goal with your GM"')}</label>
+      ${lost ? '<p class="text-sm mt-1" style="color:var(--danger)">Abandoned before its goal: its benefits are lost.</p>' : ''}
+      ${ranks || '<p class="muted text-sm mt-1">No benefits listed. Add notes about your milestones to the goal.</p>'}</div>`;
+  };
+  return box('Character Threads', `${ts.length ? '' : '<p class="muted text-sm">A thread is an optional goal you agree with your GM. Reaching its milestones grants benefits by rank: Least (levels 1–4), Lesser (5–10), Greater (11–16) and Superior (17–20).</p>'}
+    ${ts.filter(t => t.status === 'Active').length > 1 ? '<p class="text-sm mb-2" style="color:var(--danger)" role="status">The rules allow one active thread at a time. Mark the others completed or abandoned.</p>' : ''}
+    ${ts.map(one).join('')}
+    <div class="flex flex-wrap items-center gap-1.5 mt-1"><select class="select text-sm" style="max-width:20rem" data-pick="thread" aria-label="Thread to add"><option value="">Add a thread…</option>${groups}</select><button class="btn btn-sm" data-act="addThread">Add</button><button class="btn btn-sm" data-act="addCustomThread">+ Custom thread</button></div>
+    ${lib_.length ? '' : '<p class="muted text-xs mt-1">Import a book with character threads (Northlands Worldbook, Campaign Builder: Castles &amp; Crowns) to pick one here.</p>'}`);
 }
 
 function slotFor(c, s) { if (s.circle === 0) return 0; for (let k = s.circle; k <= 9; k++) if (c.slotsExpended[k - 1] < c.slotsTotal[k - 1]) return k; return null; }
@@ -4129,8 +4175,8 @@ const ENUMS = { category: ['Magic', 'Martial', 'Technical'], type: ['Weapon', 'A
 const ENUM_LISTS = { savingThrows: ABIL, talentCategories: ['Magic', 'Martial', 'Technical'] };
 const TEMPLATES = { traits: () => ({ name: '', level: 1, description: '', usesMax: 0, usesFrom: '', recharge: '' }), features: () => ({ name: '', level: 1, description: '', usesMax: 0, usesFrom: '', recharge: '' }),
   levels: (list) => ({ level: list.length + 1, features: [], grantsTalent: false, grantsAbilityIncrease: false, spellSlots: [], resources: [] }),
-  resources: () => ({ name: '', usesMax: 1, recharge: '' }), spellSlots: (list) => ({ level: list.length ? list[list.length - 1].level + 1 : 1, slots: [] }) };
-const ADD_LABEL = { levels: 'level', traits: 'trait', features: 'feature', resources: 'resource', spellSlots: 'slot row' };
+  resources: () => ({ name: '', usesMax: 1, recharge: '' }), milestones: () => ({ rank: 'Least', name: '', description: '' }), spellSlots: (list) => ({ level: list.length ? list[list.length - 1].level + 1 : 1, slots: [] }) };
+const ADD_LABEL = { milestones: 'benefit', levels: 'level', traits: 'trait', features: 'feature', resources: 'resource', spellSlots: 'slot row' };
 const BLANK = {
   lineages: () => ({ id: '', name: 'New lineage', source: 'Homebrew', description: '', size: 'Medium', speed: 30, extends: '', traits: [] }),
   heritages: () => ({ id: '', name: 'New heritage', source: 'Homebrew', description: '', languages: 'Common', languageChoices: 0, skillProficiencies: [], skillOptions: [], skillChoices: 0, extends: '', traits: [] }),
@@ -4140,9 +4186,10 @@ const BLANK = {
   talents: () => ({ id: '', name: 'New talent', source: 'Homebrew', description: '', category: 'Martial', prerequisite: '', repeatable: false }),
   spells: () => ({ id: '', name: 'New spell', source: 'Homebrew', description: '', circle: 1, school: '', tradition: '', castingTime: '1 action', range: '', components: '', duration: 'Instantaneous', concentration: false, ritual: false }),
   items: () => ({ id: '', name: 'New item', source: 'Homebrew', description: '', type: 'Gear', weaponCategory: '', damage: '', damageType: '', range: '', properties: '', weaponOptions: '', finesse: false, ranged: false, baseAC: 0, armorCategory: 'None', cost: '', weight: '' }),
+  characterThreads: () => ({ id: '', name: 'New thread', source: 'Homebrew', description: '', milestones: [] }),
   magicItems: () => ({ id: '', name: 'New magic item', source: 'Homebrew', description: '', itemType: 'Wondrous Item', rarity: 'Uncommon', requiresAttunement: false, attunement: '', price: '' })
 };
-const HINTS = { extends: 'Optional: the id of an entry this one expands (e.g. syderean). Its new traits and choose-one options are added to that entry, which is then listed once.', itemType: 'e.g. Wondrous Item, Weapon (longsword), Armor (plate), Armor (shield), Ring, Potion.', rarity: 'Common, Uncommon, Rare, Very Rare, Legendary, Fabled, Artifact or Varies.', attunement: "Who can attune, if limited, e.g. 'by a spellcaster'. Blank if anyone can.", id: 'Unique key. Reusing a built-in id overrides that entry.', source: "Book or homebrew label, e.g. 'Player's Guide', 'Homebrew'.", skillProficiencies: 'Skills always granted, exactly as on the sheet.', skillOptions: 'Skills the player can choose from.', skillChoices: 'How many of the skill options to choose.', talentId: 'Talent id always granted at level 1 (optional).', talentOptions: 'Talent ids the player chooses one from (optional).', languageChoices: 'How many extra languages the player picks.', talentCategories: 'Talent lists for Improvement levels (subclass: lists it adds).', resources: 'Feature uses that change at this level, e.g. Rage 3.', usesFrom: 'Optional: PB, or STR/DEX/CON/INT/WIS/CHA for that modifier, with an optional +N (e.g. PB+1). Min 1.', repeatable: 'Tick if the talent can be taken more than once.', slots: 'Total slots for circles 1-9, e.g. 3, 2.', armorProficiencies: 'Any of: Light, Medium, Heavy, Shields.', weaponProficiencies: 'Simple, Martial, and/or specific weapons (e.g. Rapier, Scimitar). Named weapons can also go in Other Proficiencies.', startingEquipment: 'Item ids from the Items list.', spellSlots: 'Total slots for circles 1-9, e.g. 4, 3, 2.', usesMax: '0 if it has no limited uses.', recharge: 'Short Rest, Long Rest or blank.', classId: 'Id of the parent class.', circle: '0 for cantrips.', subclassLevel: 'Level at which the subclass is chosen.' };
+const HINTS = { milestones: 'Benefits by rank: Least (levels 1-4), Lesser (5-10), Greater (11-16), Superior (17-20).', rank: 'Least, Lesser, Greater or Superior.', extends: 'Optional: the id of an entry this one expands (e.g. syderean). Its new traits and choose-one options are added to that entry, which is then listed once.', itemType: 'e.g. Wondrous Item, Weapon (longsword), Armor (plate), Armor (shield), Ring, Potion.', rarity: 'Common, Uncommon, Rare, Very Rare, Legendary, Fabled, Artifact or Varies.', attunement: "Who can attune, if limited, e.g. 'by a spellcaster'. Blank if anyone can.", id: 'Unique key. Reusing a built-in id overrides that entry.', source: "Book or homebrew label, e.g. 'Player's Guide', 'Homebrew'.", skillProficiencies: 'Skills always granted, exactly as on the sheet.', skillOptions: 'Skills the player can choose from.', skillChoices: 'How many of the skill options to choose.', talentId: 'Talent id always granted at level 1 (optional).', talentOptions: 'Talent ids the player chooses one from (optional).', languageChoices: 'How many extra languages the player picks.', talentCategories: 'Talent lists for Improvement levels (subclass: lists it adds).', resources: 'Feature uses that change at this level, e.g. Rage 3.', usesFrom: 'Optional: PB, or STR/DEX/CON/INT/WIS/CHA for that modifier, with an optional +N (e.g. PB+1). Min 1.', repeatable: 'Tick if the talent can be taken more than once.', slots: 'Total slots for circles 1-9, e.g. 3, 2.', armorProficiencies: 'Any of: Light, Medium, Heavy, Shields.', weaponProficiencies: 'Simple, Martial, and/or specific weapons (e.g. Rapier, Scimitar). Named weapons can also go in Other Proficiencies.', startingEquipment: 'Item ids from the Items list.', spellSlots: 'Total slots for circles 1-9, e.g. 4, 3, 2.', usesMax: '0 if it has no limited uses.', recharge: 'Short Rest, Long Rest or blank.', classId: 'Id of the parent class.', circle: '0 for cantrips.', subclassLevel: 'Level at which the subclass is chosen.' };
 /** Fills fields added in later versions so they show up in the editor. */
 function withDefaults(kind, e) {
   const d = Object.assign(BLANK[kind](), e);
@@ -4282,6 +4329,9 @@ const A = {
   hp(kind) { const c = cur(), n = S.hpAmt || 0; if (kind === 'dmg') takeDamage(c, n); else if (kind === 'heal') heal(c, n); else c.tempHp = Math.max(c.tempHp, n); S.hpAmt = 0; save(); },
   hitDie() { const c = cur(); const r = rollExpr('Hit die', `1d${c.hitDie}${sg(M(c, 'CON'))}`); c.hitDiceUsed++; heal(c, Math.max(0, total(r))); save(); },
   deathSave() { const c = cur(), r = d20('Death save', 0, null, null, 'save'), n = r.dice[0]; if (n === 20) { c.currentHp = 1; c.deathSuccesses = 0; c.deathFailures = 0; } else if (n === 1) c.deathFailures = Math.min(3, c.deathFailures + 2); else if (n >= 10) c.deathSuccesses = Math.min(3, c.deathSuccesses + 1); else c.deathFailures = Math.min(3, c.deathFailures + 1); save(); },
+  addThread() { const d = find('characterThreads', S.pick.thread); if (d) { const c = cur(); (c.threads = c.threads || []).push(toThread(d)); save(); } S.pick.thread = ''; },
+  addCustomThread() { const c = cur(); (c.threads = c.threads || []).push({ threadId: '', name: 'Custom thread', source: 'Homebrew', description: '', goal: '', status: 'Active',
+    benefits: THREAD_RANKS.map(([r]) => ({ rank: r, name: r + ' benefit', description: 'Agree this with your GM.', gained: false })) }); save(); },
   addTalent() { const t = find('talents', S.pick.talent); if (t) { addTalent(cur(), t); save(); } S.pick.talent = ''; },
   rm(p) { const [list, i] = p.split('.'); cur()[list].splice(+i, 1); save(); },
   mode(m) { S.dice.mode = m; },

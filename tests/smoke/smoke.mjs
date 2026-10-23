@@ -87,6 +87,16 @@ try {
     const opts = await page.locator('select[aria-label="Animal Instincts choice"] option').allInnerTexts().catch(() => []);
     check('An expansion adds its options to the lineage it extends', opts.some(o => o.startsWith('Glider (sample)')), `options: ${opts.join(' | ')}`);
     await page.getByRole('tab', { name: /Main/ }).click();
+    // Character threads (TVCS-114): add the sample thread, tick a benefit, and it is still ticked after a reload.
+    const sheetUrl = page.url();
+    await page.getByRole('tab', { name: 'Character', exact: true }).click();
+    await page.locator('select[aria-label="Thread to add"]').selectOption({ label: 'Sample Thread' });
+    await page.getByRole('button', { name: 'Add', exact: true }).click();
+    await page.getByLabel('Your goal').fill('Smoke goal'); await page.getByLabel('Your goal').press('Tab');
+    await page.locator('label', { hasText: 'First Step (sample)' }).locator('input[type=checkbox]').check();
+    await page.goto(sheetUrl); await page.getByRole('tab', { name: 'Character', exact: true }).click();
+    const ticked = await page.locator('label', { hasText: 'First Step (sample)' }).locator('input[type=checkbox]').isChecked().catch(() => false);
+    check('A character thread can be added and its benefits saved', ticked && (await page.getByLabel('Your goal').inputValue().catch(() => '')) === 'Smoke goal');
     await page.goto(base);
     await page.getByRole('heading', { name: 'Your characters' }).waitFor({ timeout: 30000 });
     check('Character list shows the saved character', (await page.content()).includes('Smoke Tester'));

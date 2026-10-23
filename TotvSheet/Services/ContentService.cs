@@ -40,6 +40,7 @@ public class ContentService
         new("spells", "Spells", typeof(SpellDef), l => l.Spells),
         new("items", "Items", typeof(ItemDef), l => l.Items),
         new("magicItems", "Magic Items", typeof(MagicItemDef), l => l.MagicItems),
+        new("characterThreads", "Character Threads", typeof(ThreadDef), l => l.CharacterThreads),
     };
 
     public ContentLibrary Core { get; private set; } = new();
@@ -159,6 +160,7 @@ public class ContentService
     public IEnumerable<SpellDef> Spells => Merge(Core.Spells, User.Spells);
     public IEnumerable<ItemDef> Items => Merge(Core.Items, User.Items);
     public IEnumerable<MagicItemDef> MagicItems => Merge(Core.MagicItems, User.MagicItems);
+    public IEnumerable<ThreadDef> Threads => Merge(Core.CharacterThreads, User.CharacterThreads);
 
     // Lookups by id ignore sample hiding, so characters built from a retired sample entry keep working.
     public ClassDef? Class(string id) => Merge(Core.Classes, User.Classes, hideSamples: false).FirstOrDefault(c => c.Id == id);

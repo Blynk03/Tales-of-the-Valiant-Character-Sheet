@@ -40,6 +40,7 @@
                 <div><div class="lbl">Adventuring motivation</div><textarea class="area" rows="3" @bind="C.Motivation" @bind:after="Save"></textarea></div>
             </div>
         </Box>
+        <ThreadsBox C="C" Changed="Changed" />
         <Box Title="Other Notes"><textarea class="area" rows="10" @bind="C.OtherNotes" @bind:after="Save"></textarea></Box>
     </div>
 </div>

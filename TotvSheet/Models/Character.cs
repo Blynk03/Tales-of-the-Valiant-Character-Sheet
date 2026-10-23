@@ -102,6 +102,8 @@ public class Character
     public string Motivation { get; set; } = "";
     public string Allies { get; set; } = "";
     public string OtherNotes { get; set; } = "";
+    /// <summary>Character threads taken (TVCS-114). The rules allow one active thread at a time.</summary>
+    public List<CharacterThread> Threads { get; set; } = new();
 
     // ---- Spells (page 5) ----
     public string SpellcasterClass { get; set; } = "";
@@ -132,6 +134,28 @@ public class Feature
     public List<FeatureOptionDef> Options { get; set; } = new();
     /// <summary>The option the player picked, by name; blank until picked.</summary>
     public string Chosen { get; set; } = "";
+}
+
+/// <summary>A thread the character has taken: copied from content, with the player's goal and the benefits gained.</summary>
+public class CharacterThread
+{
+    public string ThreadId { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Source { get; set; } = "";
+    public string Description { get; set; } = "";
+    /// <summary>The player's goal, agreed with the GM.</summary>
+    public string Goal { get; set; } = "";
+    /// <summary>Active, Completed (benefits kept) or Abandoned (benefits lost).</summary>
+    public string Status { get; set; } = "Active";
+    public List<ThreadBenefit> Benefits { get; set; } = new();
+}
+
+public class ThreadBenefit
+{
+    public string Rank { get; set; } = "Least";
+    public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
+    public bool Gained { get; set; }
 }
 
 public class Talent

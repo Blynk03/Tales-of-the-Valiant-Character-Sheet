@@ -1,0 +1,114 @@
+@inject ContentService Content
+
+@* Character threads (TVCS-114): optional goals agreed with the GM; each milestone reached grants benefits of its rank. *@
+<Box Title="Character Threads">
+    @if (C.Threads.Count == 0)
+    {
+        <p class="muted text-sm">A thread is an optional goal you agree with your GM. Reaching its milestones grants benefits by rank:
+            Least (levels 1–4), Lesser (5–10), Greater (11–16) and Superior (17–20).</p>
+    }
+    @if (C.Threads.Count(t => t.Status == "Active") > 1)
+    {
+        <p class="text-sm mb-2" style="color:var(--danger)" role="status">The rules allow one active thread at a time. Mark the others completed or abandoned.</p>
+    }
+
+    @foreach (var t in C.Threads)
+    {
+        var thread = t;
+        var lost = thread.Status == "Abandoned";
+        <div class="rounded-lg p-2 mb-2" style="border:1px solid var(--line)">
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="display font-bold">@thread.Name</span>
+                @if (!string.IsNullOrWhiteSpace(thread.Source)) { <span class="chip">@thread.Source</span> }
+                <select class="select text-sm ml-auto" style="width:auto" aria-label="@($"{thread.Name} status")" @bind="thread.Status" @bind:after="Save">
+                    <option value="Active">Active</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Abandoned">Abandoned</option>
+                </select>
+                <button type="button" class="icon-btn" title="Remove thread" @onclick="() => Remove(thread)">✕</button>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(thread.Description))
+            {
+                <details class="text-sm mt-1"><summary class="muted cursor-pointer">About this thread</summary><p class="mt-1">@thread.Description</p></details>
+            }
+            <label class="lbl block mt-2">Your goal
+                <textarea class="area text-sm" rows="2" placeholder="Agree a specific, achievable goal with your GM" @bind="thread.Goal" @bind:after="Save"></textarea>
+            </label>
+            @if (lost)
+            {
+                <p class="text-sm mt-1" style="color:var(--danger)">Abandoned before its goal: its benefits are lost.</p>
+            }
+            @foreach (var rank in Ranks)
+            {
+                var benefits = thread.Benefits.Where(b => b.Rank == rank.Name).ToList();
+                if (benefits.Count == 0) continue;
+                <div class="lbl mt-2">@rank.Name <span class="muted">(levels @rank.Levels)</span></div>
+                @foreach (var b in benefits)
+                {
+                    var benefit = b;
+                    <label class="flex items-start gap-2 text-sm mt-1 @(lost && benefit.Gained ? "line-through muted" : "")">
+                        <input type="checkbox" class="mt-1" @bind="benefit.Gained" @bind:after="Save" />
+                        <span><span class="font-semibold">@benefit.Name.</span> @benefit.Description</span>
+                    </label>
+                }
+            }
+            @if (thread.Benefits.Count == 0)
+            {
+                <p class="muted text-sm mt-1">No benefits listed. Add notes about your milestones to the goal.</p>
+            }
+        </div>
+    }
+
+    <div class="flex flex-wrap items-center gap-2 mt-1">
+        <select class="select text-sm flex-1 min-w-0" aria-label="Thread to add" @bind="toAdd">
+            <option value="">Add a thread…</option>
+            @foreach (var g in Content.Threads.GroupBy(x => x.Source).OrderBy(g => g.Key))
+            {
+                <optgroup label="@g.Key">
+                    @foreach (var d in g) { <option value="@d.Id">@d.Name</option> }
+                </optgroup>
+            }
+        </select>
+        <button type="button" class="btn btn-sm" disabled="@string.IsNullOrEmpty(toAdd)" @onclick="Add">Add</button>
+        <button type="button" class="btn btn-sm" @onclick="AddCustom">+ Custom thread</button>
+    </div>
+    @if (!Content.Threads.Any())
+    {
+        <p class="muted text-xs mt-1">Import a book with character threads (Northlands Worldbook, Campaign Builder: Castles &amp; Crowns) to pick one here.</p>
+    }
+</Box>
+
+@code {
+    [Parameter, EditorRequired] public Character C { get; set; } = default!;
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private string toAdd = "";
+    private static readonly (string Name, string Levels)[] Ranks =
+        { ("Least", "1–4"), ("Lesser", "5–10"), ("Greater", "11–16"), ("Superior", "17–20") };
+
+    private Task Save() => Changed.InvokeAsync();
+
+    private async Task Add()
+    {
+        if (Content.Threads.FirstOrDefault(x => x.Id == toAdd) is not { } d) return;
+        C.Threads.Add(CharacterBuilder.ToThread(d));
+        toAdd = "";
+        await Save();
+    }
+
+    private async Task AddCustom()
+    {
+        C.Threads.Add(new CharacterThread
+        {
+            Name = "Custom thread", Source = "Homebrew",
+            Benefits = Ranks.Select(r => new ThreadBenefit { Rank = r.Name, Name = $"{r.Name} benefit", Description = "Agree this with your GM." }).ToList(),
+        });
+        await Save();
+    }
+
+    private async Task Remove(CharacterThread t)
+    {
+        C.Threads.Remove(t);
+        await Save();
+    }
+}

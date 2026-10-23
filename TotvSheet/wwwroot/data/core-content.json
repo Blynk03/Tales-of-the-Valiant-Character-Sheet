@@ -2815,5 +2815,25 @@
    "cost": "5 gp",
    "weight": "3 lb."
   }
+ ],
+ "characterThreads": [
+  {
+   "id": "sample-thread",
+   "name": "Sample Thread",
+   "source": "Core (sample)",
+   "description": "A sample goal to show how threads work (sample text).",
+   "milestones": [
+    {
+     "rank": "Least",
+     "name": "First Step (sample)",
+     "description": "A small benefit for your first milestone (sample text)."
+    },
+    {
+     "rank": "Lesser",
+     "name": "Growing Reputation (sample)",
+     "description": "A bigger benefit (sample text)."
+    }
+   ]
+  }
  ]
 }

@@ -289,6 +289,13 @@ public static class CharacterBuilder
     private static T? Clone<T>(T? value) where T : class =>
         value is null ? null : Json.Deserialize<T>(Json.Serialize(value));
 
+    /// <summary>A thread for a character, with its benefits copied from content (TVCS-114).</summary>
+    public static CharacterThread ToThread(ThreadDef d) => new()
+    {
+        ThreadId = d.Id, Name = d.Name, Source = d.Source, Description = d.Description,
+        Benefits = d.Milestones.Select(m => new ThreadBenefit { Rank = m.Rank, Name = m.Name, Description = m.Description }).ToList(),
+    };
+
     /// <summary>Key for a trait's pick in <see cref="CreationChoices.TraitChoices"/>.</summary>
     public static string ChoiceKey(ContentEntry owner, FeatureDef trait) => $"{owner.Id}/{trait.Name}";
 
