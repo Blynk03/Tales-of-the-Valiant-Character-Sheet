@@ -15,7 +15,7 @@ const PB_COST = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9, 16: 11, 
 const ROLL_PLUS2_MAX = 16, ROLL_PLUS1_MAX = 17; // rolled scores: +2 to a score <= 16, +1 to another <= 17
 const MAX_LUCK = 5, LUCK_REROLL = 3;
 const HOMEBREW = 'Homebrew';
-const KINDS = [['lineages','Lineages','Lineage'],['heritages','Heritages','Heritage'],['backgrounds','Backgrounds','Background'],['classes','Classes','Class'],['subclasses','Subclasses','Subclass'],['talents','Talents','Talent'],['spells','Spells','Spell'],['items','Items','Item'],['magicItems','Magic Items','Magic Item'],['characterThreads','Character Threads','Character Thread']];
+const KINDS = [['lineages','Lineages','Lineage'],['heritages','Heritages','Heritage'],['backgrounds','Backgrounds','Background'],['classes','Classes','Class'],['subclasses','Subclasses','Subclass'],['talents','Talents','Talent'],['spells','Spells','Spell'],['items','Items','Item'],['magicItems','Magic Items','Magic Item'],['characterThreads','Character Threads','Character Thread'],['classOptions','Class Options','Class Option']];
 const DEFAULT_ACTIONS = 'Attack, Cast a Spell, Dash, Disengage, Dodge, Help, Hide, Ready, Search, Use an Object';
 
 // ---------- helpers ----------
@@ -77,6 +77,7 @@ function activeEffects(c) {
     if (f.effects) out.push([f, f.effects]);
     const o = (f.options || []).find(o => o.name === f.chosen);
     if (o && o.effects) out.push([f, o.effects]);
+    (f.picks || []).forEach(p => { if (p.effects) out.push([f, p.effects]); }); // picked class options (TVCS-117)
   });
   return out;
 }
@@ -86,7 +87,7 @@ function bestUnarmored(c, withShield) {
   activeEffects(c).forEach(([f, e]) => {
     if (!(e.unarmoredAcBase > 0) || (withShield && !e.unarmoredAcWithShield)) return;
     const abil = e.unarmoredAcAbilities || [], v = e.unarmoredAcBase + abil.reduce((s, a) => s + M(c, a), 0);
-    if (v > (best ? best.ac : 10 + M(c, 'DEX'))) best = { ac: v, formula: [String(e.unarmoredAcBase)].concat(abil).join(' + '), source: f.chosen && f.effects !== e ? `${f.name}: ${f.chosen}` : f.name };
+    if (v > (best ? best.ac : 10 + M(c, 'DEX'))) best = { ac: v, formula: [String(e.unarmoredAcBase)].concat(abil).join(' + '), source: ((f.picks || []).find(p => p.effects === e) || {}).name || (f.chosen && f.effects !== e ? `${f.name}: ${f.chosen}` : f.name) };
   });
   return best;
 }
@@ -139,7 +140,7 @@ function usesMax(c, f) {
 }
 
 // ---------- content ----------
-const emptyLib = () => ({ lineages: [], heritages: [], backgrounds: [], classes: [], subclasses: [], talents: [], spells: [], items: [], magicItems: [], characterThreads: [] });
+const emptyLib = () => ({ lineages: [], heritages: [], backgrounds: [], classes: [], subclasses: [], talents: [], spells: [], items: [], magicItems: [], characterThreads: [], classOptions: [] });
 /** Built-in entries are samples: once enabled book content (a user entry whose source isn't
     Homebrew) exists for a kind, the samples of that kind are hidden from lists. */
 function lib(kind, keepSamples) {
@@ -218,7 +219,7 @@ function newChar() {
 }
 const deepCopy = v => v == null ? v : JSON.parse(JSON.stringify(v));
 const toFeature = (f, source, level, chosen) => ({ name: f.name, level: level ?? f.level, source, description: f.description, usesMax: f.usesMax || 0, usesSpent: 0, usesFrom: f.usesFrom || '', recharge: f.recharge || '',
-  effects: deepCopy(f.effects) || null, options: deepCopy(f.options) || [], chosen: chosen || '' });
+  effects: deepCopy(f.effects) || null, options: deepCopy(f.options) || [], chosen: chosen || '', pickKind: f.pickKind || '', pickCount: f.pickCount || '', picks: [] });
 const choiceKey = (owner, t) => `${owner.id}/${t.name}`;
 /** The content feature a character's feature came from, through the character's own entry ids (mirror of
     ContentService.FindFeatureDef): user entries win over built-in ones, disabled sources included. */
@@ -243,8 +244,72 @@ function refreshFeatureRules(c) {
     if (JSON.stringify(f.options || []) !== JSON.stringify(d.options || [])) { f.options = deepCopy(d.options) || []; changed = true; }
     if (f.chosen == null) f.chosen = '';
     if (f.chosen && !f.options.some(o => o.name === f.chosen)) { f.chosen = ''; changed = true; }
+    if ((f.pickKind || '') !== (d.pickKind || '')) { f.pickKind = d.pickKind || ''; changed = true; }
+    if ((f.pickCount || '') !== (d.pickCount || '')) { f.pickCount = d.pickCount || ''; changed = true; }
   });
+  (c.features || []).filter(f => f.pickKind).forEach(f => (f.picks = f.picks || []).forEach(p => {
+    const o = classOption(f.pickKind, p.name);
+    if (o && JSON.stringify(p.effects || null) !== JSON.stringify(o.effects || null)) { p.effects = deepCopy(o.effects) || null; changed = true; }
+  }));
   return changed;
+}
+// ---------- Class options (TVCS-117, mirror of ClassOptionRules): e.g. a warlock's Eldritch Invocations ----------
+const ieq = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
+const icontains = (a, b) => String(a || '').toLowerCase().includes(String(b || '').toLowerCase());
+/** The enabled options a feature picks from: its kind, for the character's class or any class. */
+const optionsFor = (c, f) => !f.pickKind ? [] : lib('classOptions').filter(o => ieq(o.kind, f.pickKind) && (!o.classId || o.classId === c.classId))
+  .sort((a, b) => (a.level || 0) - (b.level || 0) || a.name.localeCompare(b.name));
+/** By kind and name, disabled books included (for refreshing a pick's rules). */
+const classOption = (kind, name) => (S.user.classOptions || []).concat(SEED.classOptions || []).find(o => ieq(o.kind, kind) && ieq(o.name, name));
+/** How many the feature allows at a level: "2; 5:3" → 3 at 5th. */
+const pickCountAt = (f, level) => { const m = /\d+/.exec(scaled(f.pickCount, level)); return m ? +m[0] : 0; };
+/** True when the character has name: a feature, a choose-one pick, a picked option, or a pick's note naming it. */
+function hasThing(c, name, isPact) {
+  const word = isPact ? name.slice('Pact of the '.length).trim() : name;
+  return (c.features || []).some(f => ieq(f.name, name) || ieq(f.chosen, name)
+    || (f.picks || []).some(p => ieq(p.name, name) || icontains(p.note, name) || (isPact && word && icontains(p.note, word))));
+}
+/** Prerequisites not met, as short reasons; empty when it can be picked. */
+function unmetPrereqs(c, o, pool) {
+  const why = []; let level = o.level || 0;
+  String(o.prerequisite || '').split(/[,;]|\band\b/).forEach(raw => {
+    const p = raw.trim().replace(/\.$/, '').trim(); if (!p || /^none$/i.test(p)) return;
+    const lm = /^(\d+)(?:st|nd|rd|th)[\s-]+level\b/i.exec(p); if (lm) { level = Math.max(level, +lm[1]); return; }
+    const pm = /^(.+?)\s+(patron|subclass)$/i.exec(p);
+    if (pm) { if (!icontains(c.subclassName, pm[1].trim())) why.push(`Needs the ${pm[1].trim()} ${pm[2].toLowerCase()}`); return; }
+    const name = p.replace(/\s+(?:invocation|option)$/i, '').trim(), isPact = /^pact of the /i.test(name);
+    if ((isPact || pool.some(x => ieq(x.name, name))) && !hasThing(c, name, isPact)) why.push(`Needs ${name}`);
+  });
+  if (c.level < level) why.unshift(`Needs level ${level}`);
+  return why;
+}
+const plural = k => !k ? 'Options' : /s$/i.test(k) ? k : k + 's';
+function featurePicks(c, f, i) {
+  const max = pickCountAt(f, c.level), pool = optionsFor(c, f), picks = f.picks || [], full = max > 0 && picks.length >= max;
+  const st = (S.fp = S.fp || {})[i] || {}, label = plural(f.pickKind).toLowerCase();
+  const pickRows = picks.map((p, j) => { const def = pool.find(o => ieq(o.name, p.name)), un = def ? unmetPrereqs(c, def, pool) : [];
+    return `<div class="rounded-lg p-2 mt-1.5" style="border:1px solid var(--line)"><div class="flex items-center gap-2"><span class="font-semibold text-sm">${esc(p.name)}</span>${p.source ? `<span class="chip">${esc(p.source)}</span>` : ''}
+      <button class="icon-btn ml-auto" data-act="fpRm" data-a="${i}.${j}" title="Remove ${esc(p.name)}" aria-label="Remove ${esc(p.name)}">✕</button></div>
+      ${p.description ? `<p class="text-sm muted">${esc(p.description)}</p>` : ''}${un.length ? `<p class="text-xs mt-0.5" style="color:var(--danger)">Prerequisite not met: ${esc(un.join('; '))}.</p>` : ''}
+      ${inp(`c.features.${i}.picks.${j}.note`, p.note || '', 'text-sm mt-1', `placeholder="Note, e.g. the spell, skills or boon you chose" aria-label="Note for ${esc(p.name)}"`)}</div>`; }).join('');
+  let list = '';
+  if (st.open) {
+    const q = (st.q || '').toLowerCase(), shown = pool.filter(o => !q || o.name.toLowerCase().includes(q) || String(o.description || '').toLowerCase().includes(q));
+    const rows = shown.map(o => { const un = unmetPrereqs(c, o, pool), taken = !o.repeatable && picks.some(p => ieq(p.name, o.name));
+      if (!st.all && (un.length || taken)) return '';
+      return `<div class="rounded-lg p-2" style="border:1px solid var(--line);${un.length || taken ? 'opacity:.7' : ''}"><div class="flex items-center gap-2"><span class="font-semibold text-sm">${esc(o.name)}</span>${o.source ? `<span class="chip">${esc(o.source)}</span>` : ''}
+        <button class="btn btn-sm ml-auto" data-act="fpAdd" data-a="${i}\u0001${esc(o.id)}" aria-label="Add ${esc(o.name)}" ${full || taken || un.length ? 'disabled' : ''}>Add</button></div>
+        ${o.prerequisite && !/^none$/i.test(o.prerequisite) ? `<div class="text-xs muted">Prerequisite: ${esc(o.prerequisite)}</div>` : ''}<p class="text-sm muted">${esc(o.description)}</p>
+        ${taken ? '<p class="text-xs">Already chosen.</p>' : un.length ? `<p class="text-xs" style="color:var(--danger)">${esc(un.join('; '))}.</p>` : ''}</div>`; }).join('');
+    list = `<div class="mt-2">${!pool.length ? `<p class="muted text-sm">No ${esc(label)} in your content yet. Import the book that lists them (for warlocks, the Player's Guide file) or add them as Class Options on the Content page.</p>`
+      : `${full ? `<p class="text-sm mb-2" role="status">You have all ${max}. To swap one (allowed when you gain a level), remove it above, then choose another.</p>` : ''}
+        <div class="flex flex-wrap items-center gap-2 mb-2"><input type="search" class="field text-sm flex-1 min-w-0" data-fpq="${i}" value="${esc(st.q || '')}" placeholder="Search" aria-label="Search ${esc(label)}">
+        <label class="text-sm flex items-center gap-1"><input type="checkbox" data-fpall="${i}" ${st.all ? 'checked' : ''}> Show ones I can't take yet</label></div>
+        <div class="grid sm:grid-cols-2 gap-1.5">${rows}</div>${!shown.length ? '<p class="muted text-sm">No matches.</p>' : !rows ? `<p class="muted text-sm">Nothing else you can take right now. Tick "Show ones I can't take yet" to see the rest.</p>` : ''}`}</div>`;
+  }
+  return `<div class="mt-1.5"><div class="flex flex-wrap items-center gap-2"><span class="lbl">Your ${esc(label)}</span>${max > 0 ? `<span class="chip ${picks.length < max ? 'needs-pick' : ''}" role="status">${picks.length} of ${max} chosen</span>` : ''}</div>
+    ${max > 0 && picks.length > max ? `<p class="text-sm mt-1" style="color:var(--danger)" role="status">That's more than your level allows (${max}). Remove ${picks.length - max}.</p>` : ''}
+    ${pickRows}<button class="btn btn-sm mt-2" data-act="fpOpen" data-a="${i}" aria-expanded="${!!st.open}">${st.open ? 'Done choosing' : '+ Choose ' + esc(label)}</button>${list}</div>`;
 }
 /** Sets a feature's max uses by name; spent uses stay spent, so remaining uses change by the same amount. */
 function applyResources(c, resources, source, level) {
@@ -374,7 +439,7 @@ function buildCharacter(w) {
     w.skills.forEach(s => c.skills[s] = 'Proficient');
     if (cls.spellcastingAbility) { c.spellAbility = cls.spellcastingAbility; c.spellcasterClass = cls.name; }
     const l1 = cls.levels.find(l => l.level === 1);
-    if (l1) { l1.features.forEach(f => c.features.push(toFeature(f, cls.name, 1))); applySlots(c, l1.spellSlots); applyResources(c, l1.resources, cls.name, 1); }
+    if (l1) { l1.features.forEach(f => c.features.push(toFeature(f, cls.name, 1, (w.traitChoices || {})[choiceKey(cls, f)]))); applySlots(c, l1.spellSlots); applyResources(c, l1.resources, cls.name, 1); }
     c.maxHp = Math.max(1, cls.hitDie + M(c, 'CON')); c.currentHp = c.maxHp;
     if (w.gold) c.coins.gp += cls.startingGold; else w.items.forEach(id => { const i = find('items', id); if (i) addItem(c, i); });
   }
@@ -529,7 +594,7 @@ function render() {
 // "Report a problem" (TVCS-106): opens the project's GitHub issue form with the version, page and device filled in.
 // Set REPORT_URL to '' to hide the link; {version}, {page} and {device} placeholders are filled in if present.
 const REPORT_URL = 'https://github.com/Blynk03/Tales-of-the-Valiant-Character-Sheet/issues/new?template=problem-report.yml';
-const PREVIEW_VERSION = 'preview v22';
+const PREVIEW_VERSION = 'preview v23';
 function deviceInfo() {
   const ua = navigator.userAgent;
   const m = (re) => { const r = ua.match(re); return r ? r[1] : null; };
@@ -707,12 +772,13 @@ function mainTab(c) {
 
 function featuresTab(c) {
   const order = c.features.map((f, i) => [f, i]).sort((x, y) => S.sort === 'source' ? (x[0].source.localeCompare(y[0].source) || x[0].level - y[0].level) : (x[0].level - y[0].level || x[0].source.localeCompare(y[0].source)));
-  const feats = order.map(([f, i]) => `<div class="rounded-lg p-2" style="border:1px solid var(--line)"><div class="flex items-start gap-2"><div class="min-w-0 flex-1">
+  const feats = order.map(([f, i]) => `<div class="rounded-lg p-2" style="border:1px solid var(--line);${f.pickKind ? 'grid-column:1/-1' : ''}"><div class="flex items-start gap-2"><div class="min-w-0 flex-1">
     ${inp(`c.features.${i}.name`, f.name, 'font-semibold', 'aria-label="Feature name"')}
     <div class="flex gap-2 items-center mt-0.5"><span class="lbl">Level</span>${num(`c.features.${i}.level`, f.level, 'w-10 text-center', 'aria-label="Level"')}<span class="chip truncate">${esc(f.source)}</span></div></div>
     <button class="icon-btn" data-act="rm" data-a="features.${i}" title="Remove feature">✕</button></div>
     ${area(`c.features.${i}.description`, f.description, 2, 'style="min-height:3rem" aria-label="Description"')}
     ${(f.options || []).length ? (() => { const pk = f.options.find(o => o.name === f.chosen); return `<label class="lbl block mt-1.5">Your choice <select class="select text-sm ${pk ? '' : 'needs-pick'}" data-f="c.features.${i}.chosen" data-t="s" aria-label="${esc(f.name)} choice"><option value="">Choose one…</option>${f.options.map(o => `<option value="${esc(o.name)}" ${o.name === f.chosen ? 'selected' : ''}>${esc(o.name)}${o.source ? ' (' + esc(o.source) + ')' : ''}</option>`).join('')}</select></label>${pk && pk.description ? `<p class="text-sm mt-1">${esc(pk.description)}</p>` : ''}`; })() : ''}
+    ${f.pickKind ? featurePicks(c, f, i) : ''}
     ${usesMax(c, f) > 0 ? `<div class="flex items-center gap-2 mt-1"><span class="lbl">Used</span>${pips('setUses:' + i, usesMax(c, f), f.usesSpent, '', false, 'Use')}<span class="muted text-xs ml-auto">${esc(f.recharge)}</span></div>` : ''}</div>`).join('');
   const weapons = c.weapons.map((w, i) => `<tr><td>${inp(`c.weapons.${i}.name`, w.name, 'font-semibold', 'aria-label="Name"')}</td><td>${inp(`c.weapons.${i}.damage`, w.damage, 'num w-16', 'aria-label="Damage dice"')}</td>
     <td>${inp(`c.weapons.${i}.damageType`, w.damageType, 'w-24', 'aria-label="Damage type"')}</td><td>${inp(`c.weapons.${i}.range`, w.range, 'w-20', 'aria-label="Range"')}</td>
@@ -967,6 +1033,7 @@ function stepProblem(w, s) {
   if (s === 3 && needsBgTalent(w)) return 'Choose a background talent.';
   if (s === 4 && !w.cls) return 'Choose a class.';
   if (s === 4 && w.skills.length < skillsNeeded(w)) return `Choose ${skillsNeeded(w) - w.skills.length} more skill(s).`;
+  if (s === 4 && missingTrait(classL1(find('classes', w.cls)), w)) return `Choose your ${missingTrait(classL1(find('classes', w.cls)), w).name}.`;
   if (s === 5 && w.method === 'roll' && !w.pool.length) return 'Roll your scores.';
   if (s === 5 && (w.method === 'standard' || w.method === 'roll') && w.assign.some(a => a == null)) return 'Assign a value to every ability.';
   if (s === 5 && w.method === 'pointbuy' && pointsLeft(w) < 0) return "You've spent too many points.";
@@ -985,6 +1052,8 @@ function traitPicker(owner, w) {
     return `<h3 class="box-title text-left mt-4">Choose your ${esc(t.name)}</h3><div class="grid sm:grid-cols-2 gap-2" role="radiogroup" aria-label="${esc(t.name)}">${t.options.map(o =>
       `<button class="choice ${picked === o.name ? 'selected' : ''}" role="radio" aria-checked="${picked === o.name}" data-act="wTrait" data-a="${esc(key + '\u0001' + o.name)}"><div class="flex items-center gap-2"><b>${esc(o.name)}</b>${o.source ? `<span class="chip ml-auto">${esc(o.source)}</span>` : ''}</div><div class="text-sm muted">${esc(o.description)}</div></button>`).join('')}</div>`; }).join('');
 }
+/** A class as a trait owner: its 1st-level features, under the class's id. */
+const classL1 = cls => cls && { id: cls.id, traits: ((cls.levels || []).find(l => l.level === 1) || {}).features || [] };
 const missingTrait = (owner, w) => owner && (owner.traits || []).find(t => (t.options || []).length && !(w.traitChoices || {})[choiceKey(owner, t)]);
 function createView() {
   const w = S.wiz, s = w.step; let inner = '';
@@ -1009,6 +1078,7 @@ function createView() {
     const cls = find('classes', w.cls), bg = find('backgrounds', w.background);
     inner = `<h2 class="box-title text-left">Choose a class</h2><div class="grid sm:grid-cols-2 gap-2">${lib('classes').map(k => choice(w.cls === k.id, 'wClass', k.id, `<div class="flex items-center gap-2"><b>${esc(k.name)}</b><span class="chip ml-auto">${esc(k.source)}</span></div><div class="text-sm muted">d${k.hitDie} hit die · Saves: ${k.savingThrows.join(', ')}${k.spellcastingAbility ? ' · Casts with ' + k.spellcastingAbility : ''}</div><div class="text-sm mt-1">${esc(k.description)}</div>`)).join('')}</div>`;
     if (cls) inner += `<h3 class="box-title text-left mt-5">Choose ${cls.skillChoices} skills</h3><div class="flex flex-wrap gap-1.5">${cls.skillOptions.map(sk => { const fromBg = ownedSkills(w, true).has(sk), picked = w.skills.includes(sk); return `<button class="btn btn-sm ${picked || fromBg ? 'btn-primary' : ''}" data-act="wSkill" data-a="${esc(sk)}" ${fromBg || (!picked && w.skills.length >= cls.skillChoices) ? 'disabled' : ''} title="${fromBg ? 'Already granted by your heritage or background' : ''}">${esc(sk)}</button>`; }).join('')}</div><p class="muted text-sm mt-1">${w.skills.length} of ${cls.skillChoices} chosen.</p>`;
+    if (cls) inner += traitPicker(classL1(cls), w); // "choose one" 1st-level class features, e.g. Pact Boon (TVCS-117)
   } else if (s === 5) {
     const mb = (k, l) => `<button class="btn btn-sm ${w.method === k ? 'btn-primary' : ''}" data-act="wMethod" data-a="${k}">${l}</button>`;
     const fin = a => finalScore(w, a);
@@ -1093,7 +1163,8 @@ function levelModal(c) {
       <section class="gain"><h3 class="box-title text-left">What you gain</h3><ul style="display:grid;gap:.3rem">
         ${profFor(n) !== P(c) ? `<li>Proficiency bonus <span class="num">${sg(P(c))}</span> → <span class="num" style="color:var(--good)">${sg(profFor(n))}</span></li>` : ''}
         <li>Hit dice <span class="num">${c.level}</span> → <span class="num">${n}</span> (d${c.hitDie})</li>${slots ? `<li>Spell slots: ${slots}</li>` : ''}${rc.map(x => `<li><b>${esc(x.name)}</b> uses <span class="num">${x.from}</span> → <span class="num" style="color:var(--good)">${x.to}</span></li>`).join('')}
-        ${g.map(f => `<li><b>${esc(f.name)}</b> <span class="chip">${esc(f.source)}</span> <span class="text-sm muted">${esc(f.description)}</span></li>`).join('') || '<li class="muted text-sm">No new features at this level.</li>'}</ul></section>
+        ${c.features.filter(f => f.pickKind && pickCountAt(f, n) > pickCountAt(f, c.level)).map(f => `<li><b>${esc(f.name)}</b> <span class="num">${pickCountAt(f, c.level)}</span> → <span class="num" style="color:var(--good)">${pickCountAt(f, n)}</span>. Choose the new one on the Features tab.</li>`).join('')}
+        ${g.map(f => `<li><b>${esc(f.name)}</b> <span class="chip">${esc(f.source)}</span> <span class="text-sm muted">${esc(f.description)}</span>${(f.options || []).length || f.pickKind ? '<span class="text-sm"> Make your choice on the Features tab after levelling up.</span>' : ''}</li>`).join('') || '<li class="muted text-sm">No new features at this level.</li>'}</ul></section>
     </div>
     <div class="modal-foot">${missing ? `<span class="text-sm muted">${missing}</span>` : ''}<button class="btn ml-auto" data-act="closeModal">Cancel</button><button class="btn btn-primary" data-act="luApply" ${missing ? 'disabled' : ''}>Level up</button></div>
   </div></div>`;
@@ -1102,7 +1173,7 @@ function levelModal(c) {
 // ---------- settings ----------
 const ENUMS = { category: ['Magic', 'Martial', 'Technical'], type: ['Weapon', 'Armor', 'Shield', 'Gear'], armorCategory: ['None', 'Light', 'Medium', 'Heavy'], spellcastingAbility: ABIL };
 const ENUM_LISTS = { savingThrows: ABIL, talentCategories: ['Magic', 'Martial', 'Technical'] };
-const TEMPLATES = { traits: () => ({ name: '', level: 1, description: '', usesMax: 0, usesFrom: '', recharge: '' }), features: () => ({ name: '', level: 1, description: '', usesMax: 0, usesFrom: '', recharge: '' }),
+const TEMPLATES = { traits: () => ({ name: '', level: 1, description: '', usesMax: 0, usesFrom: '', recharge: '' }), features: () => ({ name: '', level: 1, description: '', usesMax: 0, usesFrom: '', recharge: '', pickKind: '', pickCount: '' }),
   levels: (list) => ({ level: list.length + 1, features: [], grantsTalent: false, grantsAbilityIncrease: false, spellSlots: [], resources: [] }),
   resources: () => ({ name: '', usesMax: 1, recharge: '' }), milestones: () => ({ rank: 'Least', name: '', description: '' }), spellSlots: (list) => ({ level: list.length ? list[list.length - 1].level + 1 : 1, slots: [] }) };
 const ADD_LABEL = { milestones: 'benefit', levels: 'level', traits: 'trait', features: 'feature', resources: 'resource', spellSlots: 'slot row' };
@@ -1116,9 +1187,10 @@ const BLANK = {
   spells: () => ({ id: '', name: 'New spell', source: 'Homebrew', description: '', circle: 1, school: '', tradition: '', castingTime: '1 action', range: '', components: '', duration: 'Instantaneous', concentration: false, ritual: false }),
   items: () => ({ id: '', name: 'New item', source: 'Homebrew', description: '', type: 'Gear', weaponCategory: '', damage: '', damageType: '', range: '', properties: '', weaponOptions: '', finesse: false, ranged: false, baseAC: 0, armorCategory: 'None', cost: '', weight: '' }),
   characterThreads: () => ({ id: '', name: 'New thread', source: 'Homebrew', description: '', milestones: [] }),
+  classOptions: () => ({ id: '', name: 'New class option', source: 'Homebrew', description: '', classId: '', kind: 'Eldritch Invocation', level: 0, prerequisite: '', repeatable: false }),
   magicItems: () => ({ id: '', name: 'New magic item', source: 'Homebrew', description: '', itemType: 'Wondrous Item', rarity: 'Uncommon', requiresAttunement: false, attunement: '', price: '' })
 };
-const HINTS = { milestones: 'Benefits by rank: Least (levels 1-4), Lesser (5-10), Greater (11-16), Superior (17-20).', rank: 'Least, Lesser, Greater or Superior.', extends: 'Optional: the id of an entry this one expands (e.g. syderean). Its new traits and choose-one options are added to that entry, which is then listed once.', itemType: 'e.g. Wondrous Item, Weapon (longsword), Armor (plate), Armor (shield), Ring, Potion.', rarity: 'Common, Uncommon, Rare, Very Rare, Legendary, Fabled, Artifact or Varies.', attunement: "Who can attune, if limited, e.g. 'by a spellcaster'. Blank if anyone can.", id: 'Unique key. Reusing a built-in id overrides that entry.', source: "Book or homebrew label, e.g. 'Player's Guide', 'Homebrew'.", skillProficiencies: 'Skills always granted, exactly as on the sheet.', skillOptions: 'Skills the player can choose from.', skillChoices: 'How many of the skill options to choose.', talentId: 'Talent id always granted at level 1 (optional).', talentOptions: 'Talent ids the player chooses one from (optional).', languageChoices: 'How many extra languages the player picks.', talentCategories: 'Talent lists for Improvement levels (subclass: lists it adds).', resources: 'Feature uses that change at this level, e.g. Rage 3.', usesFrom: 'Optional: PB, or STR/DEX/CON/INT/WIS/CHA for that modifier, with an optional +N (e.g. PB+1). Min 1.', repeatable: 'Tick if the talent can be taken more than once.', slots: 'Total slots for circles 1-9, e.g. 3, 2.', armorProficiencies: 'Any of: Light, Medium, Heavy, Shields.', weaponProficiencies: 'Simple, Martial, and/or specific weapons (e.g. Rapier, Scimitar). Named weapons can also go in Other Proficiencies.', startingEquipment: 'Item ids from the Items list.', spellSlots: 'Total slots for circles 1-9, e.g. 4, 3, 2.', usesMax: '0 if it has no limited uses.', recharge: 'Short Rest, Long Rest or blank.', classId: 'Id of the parent class.', circle: '0 for cantrips.', subclassLevel: 'Level at which the subclass is chosen.' };
+const HINTS = { pickKind: 'For a feature that picks several class options (e.g. Eldritch Invocations): the kind to pick from, exactly as on the Class Options list.', pickCount: 'How many to pick, by level, e.g. "2; 5:3; 7:4". Used with Pick Kind.', kind: 'e.g. Eldritch Invocation. Must match the Pick Kind of the feature that picks it.', milestones: 'Benefits by rank: Least (levels 1-4), Lesser (5-10), Greater (11-16), Superior (17-20).', rank: 'Least, Lesser, Greater or Superior.', extends: 'Optional: the id of an entry this one expands (e.g. syderean). Its new traits and choose-one options are added to that entry, which is then listed once.', itemType: 'e.g. Wondrous Item, Weapon (longsword), Armor (plate), Armor (shield), Ring, Potion.', rarity: 'Common, Uncommon, Rare, Very Rare, Legendary, Fabled, Artifact or Varies.', attunement: "Who can attune, if limited, e.g. 'by a spellcaster'. Blank if anyone can.", id: 'Unique key. Reusing a built-in id overrides that entry.', source: "Book or homebrew label, e.g. 'Player's Guide', 'Homebrew'.", skillProficiencies: 'Skills always granted, exactly as on the sheet.', skillOptions: 'Skills the player can choose from.', skillChoices: 'How many of the skill options to choose.', talentId: 'Talent id always granted at level 1 (optional).', talentOptions: 'Talent ids the player chooses one from (optional).', languageChoices: 'How many extra languages the player picks.', talentCategories: 'Talent lists for Improvement levels (subclass: lists it adds).', resources: 'Feature uses that change at this level, e.g. Rage 3.', usesFrom: 'Optional: PB, or STR/DEX/CON/INT/WIS/CHA for that modifier, with an optional +N (e.g. PB+1). Min 1.', repeatable: 'Tick if it can be taken more than once.', slots: 'Total slots for circles 1-9, e.g. 3, 2.', armorProficiencies: 'Any of: Light, Medium, Heavy, Shields.', weaponProficiencies: 'Simple, Martial, and/or specific weapons (e.g. Rapier, Scimitar). Named weapons can also go in Other Proficiencies.', startingEquipment: 'Item ids from the Items list.', spellSlots: 'Total slots for circles 1-9, e.g. 4, 3, 2.', usesMax: '0 if it has no limited uses.', recharge: 'Short Rest, Long Rest or blank.', classId: 'Id of the parent class.', circle: '0 for cantrips.', subclassLevel: 'Level at which the subclass is chosen.' };
 /** Fills fields added in later versions so they show up in the editor. */
 function withDefaults(kind, e) {
   const d = Object.assign(BLANK[kind](), e);
@@ -1159,6 +1231,8 @@ function summary(kind, e) {
     case 'talents': return e.category;
     case 'spells': return `${circ(e.circle)}${e.circle ? ' circle' : ''} · ${e.school}${e.ritual ? ' · ritual' : ''}`;
     case 'magicItems': return `${e.itemType} · ${e.rarity}${e.requiresAttunement ? ' · attunement' : ''}`;
+    case 'characterThreads': return `${(e.milestones || []).length} benefits`;
+    case 'classOptions': return [e.kind, e.classId, e.level ? 'level ' + e.level : ''].filter(Boolean).join(' · ');
     default: return e.type + (e.cost ? ' · ' + e.cost : '');
   }
 }
@@ -1265,6 +1339,10 @@ const A = {
     benefits: THREAD_RANKS.map(([r]) => ({ rank: r, name: r + ' benefit', description: 'Agree this with your GM.', gained: false })) }); save(); },
   addTalent() { const t = find('talents', S.pick.talent); if (t) { addTalent(cur(), t); save(); } S.pick.talent = ''; },
   rm(p) { const [list, i] = p.split('.'); cur()[list].splice(+i, 1); save(); },
+  fpOpen(i) { const fp = S.fp = S.fp || {}; fp[i] = Object.assign(fp[i] || {}, { open: !(fp[i] || {}).open }); },
+  fpAdd(v) { const [i, id] = String(v).split('\u0001'), c = cur(), f = c.features[+i], o = lib('classOptions').find(x => x.id === id); if (!f || !o) return;
+    (f.picks = f.picks || []).push({ name: o.name, source: o.source || '', description: o.description || '', note: '', effects: deepCopy(o.effects) || null }); save(); },
+  fpRm(v) { const [i, j] = String(v).split('.'), f = cur().features[+i]; if (f && f.picks) { f.picks.splice(+j, 1); save(); } },
   mode(m) { S.dice.mode = m; },
   trayToggle() { S.trayOpen = !S.trayOpen; },
   pickerToggle() { S.picker = !S.picker; S.trayOpen = true; },
@@ -1397,6 +1475,8 @@ root.addEventListener('change', e => {
   const el = e.target;
   if (el.dataset.act === 'toggleSource') { A.toggleSource(el.dataset.a); render(); return; }
   if (el.dataset.pick) { S.pick[el.dataset.pick] = el.value; if (el.dataset.pick === 'thread') render(); return; }
+  if (el.dataset.fpq != null || el.dataset.fpall != null) { const fp = S.fp = S.fp || {}, i = el.dataset.fpq ?? el.dataset.fpall; fp[i] = fp[i] || { open: true };
+    if (el.dataset.fpq != null) fp[i].q = el.value; else fp[i].all = el.checked; renderSoon(); return; }
   if (el.dataset.sfilter) {
     const [kind, key] = el.dataset.sfilter.split('.'); S.sf[kind][key] = el.value;
     // drop a selection that the new filters hide

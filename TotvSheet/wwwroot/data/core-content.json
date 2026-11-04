@@ -650,10 +650,12 @@
       {
        "name": "Fighting Style",
        "level": 1,
-       "description": "Adopt a fighting style that grants a combat benefit (sample text).",
+       "description": "Adopt a fighting style that grants a combat benefit (sample text). Pick it below.",
        "usesMax": 0,
        "recharge": "",
-       "usesFrom": ""
+       "usesFrom": "",
+       "pickKind": "Fighting Style",
+       "pickCount": "1"
       },
       {
        "name": "Second Wind",
@@ -1581,7 +1583,19 @@
        "description": "Choose a role in your faith that grants a benefit (sample text).",
        "usesMax": 0,
        "recharge": "",
-       "usesFrom": ""
+       "usesFrom": "",
+       "options": [
+        {
+         "name": "Protector (sample)",
+         "source": "",
+         "description": "Trained for battle (sample text)."
+        },
+        {
+         "name": "Thaumaturge (sample)",
+         "source": "",
+         "description": "Gifted with extra magic (sample text)."
+        }
+       ]
       }
      ],
      "grantsTalent": false,
@@ -2834,6 +2848,41 @@
      "description": "A bigger benefit (sample text)."
     }
    ]
+  }
+ ],
+ "classOptions": [
+  {
+   "id": "sample-style-guarded",
+   "name": "Guarded Stance (sample)",
+   "source": "Core (sample)",
+   "description": "A defensive style (sample text).",
+   "classId": "fighter",
+   "kind": "Fighting Style",
+   "level": 0,
+   "prerequisite": "None",
+   "repeatable": false
+  },
+  {
+   "id": "sample-style-keen",
+   "name": "Keen Aim (sample)",
+   "source": "Core (sample)",
+   "description": "A ranged style (sample text).",
+   "classId": "fighter",
+   "kind": "Fighting Style",
+   "level": 0,
+   "prerequisite": "None",
+   "repeatable": false
+  },
+  {
+   "id": "sample-style-veteran",
+   "name": "Veteran Technique (sample)",
+   "source": "Core (sample)",
+   "description": "A style for experienced fighters (sample text).",
+   "classId": "fighter",
+   "kind": "Fighting Style",
+   "level": 3,
+   "prerequisite": "3rd level",
+   "repeatable": false
   }
  ]
 }

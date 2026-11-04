@@ -168,6 +168,8 @@
         SpellDef s => $"{Rules.CircleName(s.Circle)}{(s.Circle > 0 ? " circle" : "")} · {s.School}" + (s.Ritual ? " · ritual" : ""),
         ItemDef i => i.Type.ToString() + (string.IsNullOrEmpty(i.Cost) ? "" : $" · {i.Cost}"),
         MagicItemDef m => $"{m.ItemType} · {m.Rarity}" + (m.RequiresAttunement ? " · attunement" : ""),
+        ClassOptionDef o => string.Join(" · ", new[] { o.Kind, o.ClassId, o.Level > 0 ? $"level {o.Level}" : "" }.Where(x => !string.IsNullOrWhiteSpace(x))),
+        ThreadDef t => $"{t.Milestones.Count} benefits",
         _ => ""
     };
 

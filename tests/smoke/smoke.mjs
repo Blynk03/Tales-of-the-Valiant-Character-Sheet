@@ -52,28 +52,39 @@ try {
     && /[?&]page=/.test(report) && /[?&]device=[^&·]+%C2%B7/.test(report), report || 'no link');
   if (await page.getByRole('link', { name: '+ New character' }).isVisible()) await page.getByRole('link', { name: '+ New character' }).click();
 
-  // Create a character with the built-in sample content, choosing whatever each step needs.
-  await page.locator('input.field').first().fill('Smoke Tester');
-  await page.locator('input.field').first().press('Tab'); // fields save on change (blur)
-  const actions = [];
-  let created = false;
-  for (let i = 0; i < 60 && !created; i++) {
-    const createBtn = page.getByRole('button', { name: 'Create character', exact: true });
-    if (await createBtn.isVisible() && await createBtn.isEnabled()) { actions.push('create'); await createBtn.click(); created = true; break; }
-    const next = page.getByRole('button', { name: 'Next', exact: true });
-    if (await next.isVisible() && await next.isEnabled()) { actions.push('next'); await next.click(); continue; }
-    const box = page.locator('.box').last();
-    const choices = box.locator('button.choice:not([disabled])');
-    if (await box.locator('.choice.selected').count() === 0 && await choices.count()) { actions.push('choice'); await choices.first().click(); continue; }
-    const radios = box.locator('button[role=radio]:not([disabled])');
-    if (await radios.count() && await box.locator('button[role=radio][aria-checked=true]').count() === 0) { actions.push('radio'); await radios.first().click(); continue; }
-    let filled = false;
-    for (const inp of await box.locator('input.field:not([type=number])').all()) { if (!(await inp.inputValue())) { await inp.fill('Common'); await inp.press('Tab'); filled = true; actions.push('text'); } }
-    if (filled) continue;
-    const skill = box.locator('button.btn-sm:not(.btn-primary):not([disabled])');
-    if (await skill.count()) { actions.push('skill'); await skill.first().click(); continue; }
-    break;
+  // Create a character with the built-in sample content, choosing whatever each step needs (and the class asked for).
+  async function createCharacter(name, className) {
+    await page.locator('input.field').first().fill(name);
+    await page.locator('input.field').first().press('Tab'); // fields save on change (blur)
+    const actions = [];
+    let created = false;
+    for (let i = 0; i < 60 && !created; i++) {
+      const createBtn = page.getByRole('button', { name: 'Create character', exact: true });
+      if (await createBtn.isVisible() && await createBtn.isEnabled()) { actions.push('create'); await createBtn.click(); created = true; break; }
+      const box = page.locator('.box').last();
+      if (className && await box.getByRole('heading', { name: 'Choose a class' }).isVisible().catch(() => false)) {
+        const want = box.locator('button.choice', { hasText: className }).first();
+        if (!(await want.getAttribute('class')).includes('selected')) { actions.push('class'); await want.click(); continue; }
+      }
+      const next = page.getByRole('button', { name: 'Next', exact: true });
+      if (await next.isVisible() && await next.isEnabled()) { actions.push('next'); await next.click(); continue; }
+      const choices = box.locator('button.choice:not([disabled])');
+      if (await box.locator('.choice.selected').count() === 0 && await choices.count()) { actions.push('choice'); await choices.first().click(); continue; }
+      const radios = box.locator('button[role=radio]:not([disabled])');
+      if (await radios.count() && await box.locator('button[role=radio][aria-checked=true]').count() === 0) { actions.push('radio'); await radios.first().click(); continue; }
+      // A second "choose one" group on the same step (e.g. the class's after its skills).
+      const group = box.locator('[role=radiogroup]').filter({ hasNot: page.locator('[aria-checked=true]') }).first();
+      if (await group.count()) { actions.push('radio2'); await group.locator('button[role=radio]').first().click(); continue; }
+      let filled = false;
+      for (const inp of await box.locator('input.field:not([type=number])').all()) { if (!(await inp.inputValue())) { await inp.fill('Common'); await inp.press('Tab'); filled = true; actions.push('text'); } }
+      if (filled) continue;
+      const skill = box.locator('button.btn-sm:not(.btn-primary):not([disabled])');
+      if (await skill.count()) { actions.push('skill'); await skill.first().click(); continue; }
+      break;
+    }
+    return { created, actions };
   }
+  const { created, actions } = await createCharacter('Smoke Tester', 'Cleric');
   const stuck = created ? '' : (await page.locator('.box').last().innerText()).replace(/\s+/g, ' ').slice(0, 300);
   check('A character can be created', created, `stuck after [${actions.join(',')}]: ${stuck}`);
   if (created) {
@@ -97,9 +108,34 @@ try {
     await page.goto(sheetUrl); await page.getByRole('tab', { name: 'Character', exact: true }).click();
     const ticked = await page.locator('label', { hasText: 'First Step (sample)' }).locator('input[type=checkbox]').isChecked().catch(() => false);
     check('A character thread can be added and its benefits saved', ticked && (await page.getByLabel('Your goal').inputValue().catch(() => '')) === 'Smoke goal');
+    // A "choose one" 1st-level class feature is picked in the wizard (TVCS-117): the sample Cleric's Divine Order.
+    await page.getByRole('tab', { name: /Equipment/ }).click();
+    const order = await page.locator('select[aria-label="Divine Order choice"]').inputValue().catch(() => '');
+    check('A class feature picked in the wizard is on the sheet', order === 'Protector (sample)', `Divine Order: "${order}"`);
     await page.goto(base);
     await page.getByRole('heading', { name: 'Your characters' }).waitFor({ timeout: 30000 });
     check('Character list shows the saved character', (await page.content()).includes('Smoke Tester'));
+
+    // Features that pick several class options (TVCS-117): the sample Fighter's Fighting Style allows 1 at 1st level;
+    // the level-3 option is shown as not yet available; a pick is saved.
+    await page.getByRole('link', { name: '+ New character' }).click();
+    const fighter = await createCharacter('Smoke Fighter', 'Fighter');
+    check('A second character (Fighter) can be created', fighter.created, `actions [${fighter.actions.join(',')}]`);
+    if (fighter.created) {
+      await page.waitForURL(/character\//, { timeout: 15000 });
+      const fighterUrl = page.url();
+      await page.getByRole('tab', { name: /Equipment/ }).click();
+      const before = await page.getByText('0 of 1 chosen').isVisible().catch(() => false);
+      await page.getByRole('button', { name: /\+ Choose fighting styles/i }).click();
+      await page.getByLabel("Show ones I can't take yet").check();
+      const locked = await page.getByRole('button', { name: 'Add Veteran Technique (sample)' }).isDisabled().catch(() => false);
+      const reason = await page.getByText('Needs level 3').first().isVisible().catch(() => false);
+      await page.getByRole('button', { name: 'Add Guarded Stance (sample)' }).click();
+      await page.goto(fighterUrl); await page.getByRole('tab', { name: /Equipment/ }).click();
+      const after = await page.getByText('1 of 1 chosen').isVisible().catch(() => false);
+      const kept = await page.getByRole('button', { name: 'Remove Guarded Stance (sample)' }).isVisible().catch(() => false);
+      check('Class options can be picked, with prerequisites checked', before && locked && reason && after && kept, JSON.stringify({ before, locked, reason, after, kept }));
+    }
   }
 
   // Import the sample content file on the Content page, then reload: it must still be there (IndexedDB).

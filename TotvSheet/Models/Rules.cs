@@ -112,6 +112,7 @@ public static class CharacterCalc
         {
             if (f.Effects is { } e) yield return (f, e);
             if (f.Options.FirstOrDefault(o => o.Name == f.Chosen)?.Effects is { } oe) yield return (f, oe);
+            foreach (var p in f.Picks) if (p.Effects is { } pe) yield return (f, pe); // picked class options (TVCS-117)
         }
     }
 
@@ -127,7 +128,8 @@ public static class CharacterCalc
             if (e.UnarmoredAcBase <= 0 || (withShield && !e.UnarmoredAcWithShield)) continue;
             var ac = e.UnarmoredAcBase + e.UnarmoredAcAbilities.Sum(a => c.Mod(a));
             var formula = string.Join(" + ", new[] { e.UnarmoredAcBase.ToString() }.Concat(e.UnarmoredAcAbilities.Select(a => a.ToString())));
-            var source = string.IsNullOrEmpty(f.Chosen) || f.Effects == e ? f.Name : $"{f.Name}: {f.Chosen}";
+            var source = f.Picks.FirstOrDefault(p => p.Effects == e) is { } pick ? pick.Name
+                : string.IsNullOrEmpty(f.Chosen) || f.Effects == e ? f.Name : $"{f.Name}: {f.Chosen}";
             if (ac > (best?.Item1 ?? 10 + c.Mod(Ability.DEX))) best = (ac, formula, source);
         }
         return best;

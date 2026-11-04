@@ -134,6 +134,25 @@ public class Feature
     public List<FeatureOptionDef> Options { get; set; } = new();
     /// <summary>The option the player picked, by name; blank until picked.</summary>
     public string Chosen { get; set; } = "";
+    /// <summary>For a feature that picks several class options (TVCS-117): the kind picked from, e.g. Eldritch Invocation.</summary>
+    public string PickKind { get; set; } = "";
+    /// <summary>How many to pick, by level (copied from content), e.g. "2; 5:3".</summary>
+    public string PickCount { get; set; } = "";
+    /// <summary>The class options picked for this feature.</summary>
+    public List<FeaturePick> Picks { get; set; } = new();
+}
+
+/// <summary>A class option picked for a feature, e.g. one eldritch invocation. Text is copied so the sheet still reads
+/// correctly if the content is edited, disabled or deleted.</summary>
+public class FeaturePick
+{
+    public string Name { get; set; } = "";
+    public string Source { get; set; } = "";
+    public string Description { get; set; } = "";
+    /// <summary>The player's note, e.g. the spell picked for Mystic Arcanum or the boon picked with Second Boon.</summary>
+    public string Note { get; set; } = "";
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public FeatureEffects? Effects { get; set; }
 }
 
 /// <summary>A thread the character has taken: copied from content, with the player's goal and the benefits gained.</summary>

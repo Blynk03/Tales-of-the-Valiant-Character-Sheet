@@ -142,9 +142,18 @@
                     {
                         <li><span class="font-semibold">@rc.Name</span> uses <span class="num">@rc.From</span> → <span class="num" style="color:var(--good)">@rc.To</span></li>
                     }
+                    @foreach (var rc in PickChanges())
+                    {
+                        <li><span class="font-semibold">@rc.Name</span> <span class="num">@rc.From</span> → <span class="num" style="color:var(--good)">@rc.To</span>. Choose the new one on the Features tab.</li>
+                    }
                     @foreach (var f in Gained())
                     {
-                        <li><span class="font-semibold">@f.Name</span> <span class="chip">@f.Source</span> <span class="text-sm muted">@f.Description</span></li>
+                        <li><span class="font-semibold">@f.Name</span> <span class="chip">@f.Source</span> <span class="text-sm muted">@f.Description</span>
+                            @if (f.Options.Count > 0 || f.PickKind.Length > 0)
+                            {
+                                <span class="text-sm"> Make your choice on the Features tab after levelling up.</span>
+                            }
+                        </li>
                     }
                     @if (!Gained().Any())
                     {
@@ -210,6 +219,12 @@
         if (available.All(t => t.Id != talentId)) talentId = "";
         if (available.All(t => t.Id != improvementTalentId)) improvementTalentId = "";
     }
+
+    /// <summary>Features that pick class options and allow more at the new level, e.g. Eldritch Invocations 2 → 3 (TVCS-117).</summary>
+    private IEnumerable<(string Name, int From, int To)> PickChanges() =>
+        C.Features.Where(f => f.PickKind.Length > 0)
+            .Select(f => (f.Name, From: ClassOptionRules.CountAt(f, C.Level), To: ClassOptionRules.CountAt(f, newLevel)))
+            .Where(x => x.To > x.From);
 
     private List<Feature> Gained() =>
         CharacterBuilder.FeaturesGained(C, cls, needsSubclass ? choices.Subclass : null, Content, newLevel);

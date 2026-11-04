@@ -43,6 +43,31 @@ public class FeatureDef
     public FeatureEffects? Effects { get; set; }
     [Hint("For a \"choose one\" feature (e.g. Natural Adaptation): the options. The player picks one at creation or on the sheet.")]
     public List<FeatureOptionDef> Options { get; set; } = new();
+    [Hint("For a feature that picks several class options (e.g. Eldritch Invocations): the kind of class option to pick from, exactly as on the Class Options list.")]
+    public string PickKind { get; set; } = "";
+    [Hint("How many to pick, by level, e.g. \"2; 5:3; 7:4\". Used with Pick Kind.")]
+    public string PickCount { get; set; } = "";
+}
+
+/// <summary>
+/// An option a class feature lets the player pick, e.g. an eldritch invocation (TVCS-117). Features name the kind they
+/// pick from with <see cref="FeatureDef.PickKind"/>.
+/// </summary>
+public class ClassOptionDef : ContentEntry
+{
+    [Hint("Id of the class it belongs to, e.g. warlock. Blank for any class.")]
+    public string ClassId { get; set; } = "";
+    [Hint("e.g. Eldritch Invocation. Must match the Pick Kind of the feature that picks it.")]
+    public string Kind { get; set; } = "";
+    [Hint("Minimum class level. 0 for none.")]
+    public int Level { get; set; }
+    [Hint("As in the book, comma separated, e.g. \"5th level, Pact of the Chain\". Pact boons, other options of the same kind (\"Kindred Menagerie invocation\") and subclasses (\"Elder Wood patron\") are checked.")]
+    public string Prerequisite { get; set; } = "";
+    [Hint("Tick if it can be taken more than once.")]
+    public bool Repeatable { get; set; }
+    [Hint("Optional rules the sheet applies while it is picked, e.g. unarmored AC.")]
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public FeatureEffects? Effects { get; set; }
 }
 
 /// <summary>A character thread (TVCS-114): an optional goal agreed with the GM whose milestones grant benefits by rank
@@ -283,4 +308,5 @@ public class ContentLibrary
     public List<ItemDef> Items { get; set; } = new();
     public List<MagicItemDef> MagicItems { get; set; } = new();
     public List<ThreadDef> CharacterThreads { get; set; } = new();
+    public List<ClassOptionDef> ClassOptions { get; set; } = new();
 }

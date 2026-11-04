@@ -41,6 +41,7 @@ public class ContentService
         new("items", "Items", typeof(ItemDef), l => l.Items),
         new("magicItems", "Magic Items", typeof(MagicItemDef), l => l.MagicItems),
         new("characterThreads", "Character Threads", typeof(ThreadDef), l => l.CharacterThreads),
+        new("classOptions", "Class Options", typeof(ClassOptionDef), l => l.ClassOptions),
     };
 
     public ContentLibrary Core { get; private set; } = new();
@@ -175,6 +176,20 @@ public class ContentService
     public IEnumerable<ItemDef> Items => Merge(Core.Items, User.Items);
     public IEnumerable<MagicItemDef> MagicItems => Merge(Core.MagicItems, User.MagicItems);
     public IEnumerable<ThreadDef> Threads => Merge(Core.CharacterThreads, User.CharacterThreads);
+    public IEnumerable<ClassOptionDef> ClassOptions => Merge(Core.ClassOptions, User.ClassOptions);
+
+    /// <summary>The enabled class options a feature can pick from (TVCS-117): its kind, for the character's class or any class.</summary>
+    public List<ClassOptionDef> OptionsFor(Character c, Feature f) =>
+        f.PickKind.Length == 0 ? new() : ClassOptions
+            .Where(o => string.Equals(o.Kind, f.PickKind, StringComparison.OrdinalIgnoreCase)
+                        && (o.ClassId.Length == 0 || o.ClassId == c.ClassId))
+            .OrderBy(o => o.Level).ThenBy(o => o.Name).ToList();
+
+    /// <summary>A class option by kind and name, including disabled books, for refreshing a pick's rules.</summary>
+    public ClassOptionDef? ClassOption(string kind, string name) =>
+        User.ClassOptions.Concat(Core.ClassOptions)
+            .FirstOrDefault(o => string.Equals(o.Kind, kind, StringComparison.OrdinalIgnoreCase)
+                                 && string.Equals(o.Name, name, StringComparison.OrdinalIgnoreCase));
 
     // Lookups by id ignore sample hiding, so characters built from a retired sample entry keep working.
     public ClassDef? Class(string id) => Merge(Core.Classes, User.Classes, hideSamples: false).FirstOrDefault(c => c.Id == id);

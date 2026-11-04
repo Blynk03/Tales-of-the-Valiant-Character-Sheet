@@ -19,7 +19,7 @@
             @foreach (var f in SortedFeatures())
             {
                 var feature = f;
-                <div class="rounded-lg p-2" style="border:1px solid var(--line)">
+                <div class="rounded-lg p-2" style="border:1px solid var(--line);@(feature.PickKind.Length > 0 ? "grid-column:1/-1" : "")">
                     <div class="flex items-start gap-2">
                         <div class="min-w-0 flex-1">
                             <input class="field font-semibold" aria-label="Feature name" @bind="feature.Name" @bind:after="Save" />
@@ -49,6 +49,10 @@
                         {
                             <p class="text-sm mt-1">@pick.Description</p>
                         }
+                    }
+                    @if (feature.PickKind.Length > 0)
+                    {
+                        <FeaturePicks C="C" Feature="feature" Changed="Save" />
                     }
                     @if (C.UsesMaxOf(feature) > 0)
                     {

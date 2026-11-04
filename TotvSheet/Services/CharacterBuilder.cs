@@ -134,7 +134,7 @@ public static class CharacterBuilder
             var lvl1 = cls.Levels.FirstOrDefault(l => l.Level == 1);
             if (lvl1 is not null)
             {
-                foreach (var f in lvl1.Features) c.Features.Add(ToFeature(f, cls.Name, 1));
+                foreach (var f in lvl1.Features) c.Features.Add(ToFeature(f, cls.Name, 1, ch.TraitChoices.GetValueOrDefault(ChoiceKey(cls, f))));
                 ApplySlots(c, lvl1.SpellSlots);
                 ApplyResources(c, lvl1.Resources, cls.Name, 1);
             }
@@ -284,6 +284,8 @@ public static class CharacterBuilder
         Effects = Clone(f.Effects),
         Options = Clone(f.Options) ?? new(),
         Chosen = chosen ?? "",
+        PickKind = f.PickKind ?? "",
+        PickCount = f.PickCount ?? "",
     };
 
     private static T? Clone<T>(T? value) where T : class =>
@@ -339,7 +341,16 @@ public static class CharacterBuilder
             if (Json.Serialize(f.Options) != Json.Serialize(def.Options)) { f.Options = Clone(def.Options) ?? new(); changed = true; }
             // A pick whose option was renamed or removed in the content is cleared, so the sheet asks again.
             if (f.Chosen.Length > 0 && !f.Options.Any(o => o.Name == f.Chosen)) { f.Chosen = ""; changed = true; }
+            // Features that pick class options (TVCS-117). Picks are kept, with their rules brought up to date.
+            if (f.PickKind != (def.PickKind ?? "")) { f.PickKind = def.PickKind ?? ""; changed = true; }
+            if (f.PickCount != (def.PickCount ?? "")) { f.PickCount = def.PickCount ?? ""; changed = true; }
         }
+        foreach (var f in c.Features.Where(f => f.PickKind.Length > 0))
+            foreach (var p in f.Picks)
+                if (content.ClassOption(f.PickKind, p.Name) is { } o && Json.Serialize(p.Effects) != Json.Serialize(o.Effects))
+                {
+                    p.Effects = Clone(o.Effects); changed = true;
+                }
         return changed;
     }
 

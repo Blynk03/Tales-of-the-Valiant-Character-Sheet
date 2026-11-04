@@ -1,0 +1,130 @@
+@inject ContentService Content
+
+@* Picks for a feature that chooses several class options, e.g. a warlock's Eldritch Invocations (TVCS-117). The count
+   follows the level; options whose prerequisites aren't met are shown with the reason and can't be added. *@
+@{
+    var max = ClassOptionRules.CountAt(Feature, C.Level);
+    var pool = Content.OptionsFor(C, Feature);
+    var full = max > 0 && Feature.Picks.Count >= max;
+    var label = Plural(Feature.PickKind);
+}
+<div class="mt-1.5">
+    <div class="flex flex-wrap items-center gap-2">
+        <span class="lbl">Your @label.ToLowerInvariant()</span>
+        @if (max > 0)
+        {
+            <span class="chip @(Feature.Picks.Count < max ? "needs-pick" : "")" role="status">@Feature.Picks.Count of @max chosen</span>
+        }
+    </div>
+    @if (max > 0 && Feature.Picks.Count > max)
+    {
+        <p class="text-sm mt-1" style="color:var(--danger)" role="status">That's more than your level allows (@max). Remove @(Feature.Picks.Count - max).</p>
+    }
+
+    @foreach (var p in Feature.Picks)
+    {
+        var pick = p;
+        var def = pool.FirstOrDefault(o => o.Name.Equals(pick.Name, StringComparison.OrdinalIgnoreCase));
+        var unmet = def is null ? new List<string>() : ClassOptionRules.Unmet(C, def, pool);
+        <div @key="pick" class="rounded-lg p-2 mt-1.5" style="border:1px solid var(--line)">
+            <div class="flex items-center gap-2">
+                <span class="font-semibold text-sm">@pick.Name</span>
+                @if (!string.IsNullOrWhiteSpace(pick.Source)) { <span class="chip">@pick.Source</span> }
+                <button type="button" class="icon-btn ml-auto" title="@($"Remove {pick.Name}")" aria-label="@($"Remove {pick.Name}")" @onclick="() => Remove(pick)">✕</button>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(pick.Description)) { <p class="text-sm muted">@pick.Description</p> }
+            @if (unmet.Count > 0)
+            {
+                <p class="text-xs mt-0.5" style="color:var(--danger)">Prerequisite not met: @string.Join("; ", unmet).</p>
+            }
+            <input class="field text-sm mt-1" placeholder="Note, e.g. the spell, skills or boon you chose" aria-label="@($"Note for {pick.Name}")"
+                   @bind="pick.Note" @bind:after="() => Changed.InvokeAsync()" />
+        </div>
+    }
+
+    <button type="button" class="btn btn-sm mt-2" aria-expanded="@(open ? "true" : "false")" @onclick="() => open = !open">
+        @(open ? "Done choosing" : $"+ Choose {label.ToLowerInvariant()}")
+    </button>
+
+    @if (open)
+    {
+        var shown = pool.Where(o => query.Length == 0 || o.Name.Contains(query, StringComparison.OrdinalIgnoreCase)
+                                    || o.Description.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+        <div class="mt-2">
+            @if (pool.Count == 0)
+            {
+                <p class="muted text-sm">No @label.ToLowerInvariant() in your content yet. Import the book that lists them (for warlocks, the Player's Guide file) or add them as Class Options on the Content page.</p>
+            }
+            else
+            {
+                if (full)
+                {
+                    <p class="text-sm mb-2" role="status">You have all @max. To swap one (allowed when you gain a level), remove it above, then choose another.</p>
+                }
+                <div class="flex flex-wrap items-center gap-2 mb-2">
+                    <input type="search" class="field text-sm flex-1 min-w-0" placeholder="Search" aria-label="@($"Search {label.ToLowerInvariant()}")" @bind="query" @bind:event="oninput" />
+                    <label class="text-sm flex items-center gap-1"><input type="checkbox" @bind="showAll" /> Show ones I can't take yet</label>
+                </div>
+                <div class="grid sm:grid-cols-2 gap-1.5">
+                    @foreach (var o in shown)
+                    {
+                        var opt = o;
+                        var unmet = ClassOptionRules.Unmet(C, opt, pool);
+                        var taken = !opt.Repeatable && Feature.Picks.Any(p => p.Name.Equals(opt.Name, StringComparison.OrdinalIgnoreCase));
+                        if (!showAll && (unmet.Count > 0 || taken)) continue;
+                        <div @key="opt" class="rounded-lg p-2" style="border:1px solid var(--line); @(unmet.Count > 0 || taken ? "opacity:.7" : "")">
+                            <div class="flex items-center gap-2">
+                                <span class="font-semibold text-sm">@opt.Name</span>
+                                @if (!string.IsNullOrWhiteSpace(opt.Source)) { <span class="chip">@opt.Source</span> }
+                                <button type="button" class="btn btn-sm ml-auto" aria-label="@($"Add {opt.Name}")"
+                                        disabled="@(full || taken || unmet.Count > 0)" @onclick="() => Add(opt)">Add</button>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(opt.Prerequisite) && !opt.Prerequisite.Equals("None", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <div class="text-xs muted">Prerequisite: @opt.Prerequisite</div>
+                            }
+                            <p class="text-sm muted">@opt.Description</p>
+                            @if (taken) { <p class="text-xs">Already chosen.</p> }
+                            else if (unmet.Count > 0) { <p class="text-xs" style="color:var(--danger)">@string.Join("; ", unmet).</p> }
+                        </div>
+                    }
+                </div>
+                if (shown.Count == 0)
+                {
+                    <p class="muted text-sm">No matches.</p>
+                }
+                else if (!showAll && shown.All(o => ClassOptionRules.Unmet(C, o, pool).Count > 0
+                                               || (!o.Repeatable && Feature.Picks.Any(p => p.Name.Equals(o.Name, StringComparison.OrdinalIgnoreCase)))))
+                {
+                    <p class="muted text-sm">Nothing else you can take right now. Tick "Show ones I can't take yet" to see the rest.</p>
+                }
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Character C { get; set; } = default!;
+    [Parameter, EditorRequired] public Feature Feature { get; set; } = default!;
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private bool open;
+    private bool showAll;
+    private string query = "";
+
+    /// <summary>"Eldritch Invocation" → "Eldritch Invocations".</summary>
+    private static string Plural(string kind) =>
+        string.IsNullOrWhiteSpace(kind) ? "Options" : kind.EndsWith("s", StringComparison.OrdinalIgnoreCase) ? kind : kind + "s";
+
+    private Task Add(ClassOptionDef o)
+    {
+        Feature.Picks.Add(ClassOptionRules.ToPick(o));
+        return Changed.InvokeAsync();
+    }
+
+    private Task Remove(FeaturePick p)
+    {
+        Feature.Picks.Remove(p);
+        return Changed.InvokeAsync();
+    }
+}

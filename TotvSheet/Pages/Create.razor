@@ -187,6 +187,8 @@
                         }
                     </div>
                     <p class="muted text-sm mt-1">@ch.ClassSkills.Count of @chosen.SkillChoices chosen.</p>
+                    @* "Choose one" 1st-level class features, e.g. a warlock's Pact Boon (TVCS-117). *@
+                    <TraitOptionPicker Owner="chosen" Traits="ClassLevel1(chosen)" Choices="ch.TraitChoices" Changed="@(() => { })" />
                 }
                 break;
 
@@ -444,6 +446,7 @@
         3 when NeedsBackgroundTalent() => "Choose a background talent.",
         4 when ch.Class is null => "Choose a class.",
         4 when ch.ClassSkills.Count < SkillsNeeded() => $"Choose {SkillsNeeded() - ch.ClassSkills.Count} more skill(s).",
+        4 when TraitOptionPicker.Missing(ch.Class, ClassLevel1(ch.Class), ch.TraitChoices) is { } cf => $"Choose your {cf.Name}.",
         5 when method == "roll" && pool.Count == 0 => "Roll your scores.",
         5 when (method is "standard" or "roll") && assign.Any(a => a is null) => "Assign a value to every ability.",
         5 when method == "pointbuy" && PointsLeft() < 0 => "You've spent too many points.",
@@ -557,6 +560,9 @@
         ch.BackgroundTalent = null;
         PruneSkills();
     }
+
+    private static List<FeatureDef> ClassLevel1(ClassDef? cls) =>
+        cls?.Levels.FirstOrDefault(l => l.Level == 1)?.Features ?? new();
 
     private void PickClass(ClassDef cls)
     {
