@@ -3378,7 +3378,7 @@ function refreshFeatureRules(c) {
     if (JSON.stringify(f.options || []) !== JSON.stringify(d.options || [])) { f.options = deepCopy(d.options) || []; changed = true; }
     if (f.chosen == null) f.chosen = '';
     if (f.chosen && !f.options.some(o => o.name === f.chosen)) { f.chosen = ''; changed = true; }
-    if ((f.pickKind || '') !== (d.pickKind || '')) { f.pickKind = d.pickKind || ''; changed = true; }
+    if ((f.pickKind || '') !== (d.pickKind || '')) { const gained = !f.pickKind; f.pickKind = d.pickKind || ''; changed = true; if (gained && f.pickKind) addAutoPicks(c, f); }
     if ((f.pickCount || '') !== (d.pickCount || '')) { f.pickCount = d.pickCount || ''; changed = true; }
   });
   (c.features || []).filter(f => f.pickKind).forEach(f => (f.picks = f.picks || []).forEach(p => {
@@ -3396,7 +3396,21 @@ const optionsFor = (c, f) => !f.pickKind ? [] : lib('classOptions').filter(o => 
 /** By kind and name, disabled books included (for refreshing a pick's rules). */
 const classOption = (kind, name) => (S.user.classOptions || []).concat(SEED.classOptions || []).find(o => ieq(o.kind, kind) && ieq(o.name, name));
 /** How many the feature allows at a level: "2; 5:3" → 3 at 5th. */
-const pickCountAt = (f, level) => { const m = /\d+/.exec(scaled(f.pickCount, level)); return m ? +m[0] : 0; };
+/** How many the feature allows at a level ("2; 5:3" → 3 at 5th) plus extra picks from other features or picks
+    (e.g. "Eldritch Invocation 2"); 0 means no limit (blank pick count). */
+function pickCountAt(c, f, level) {
+  const m = /\d+/.exec(scaled(f.pickCount, level)); if (!m) return 0;
+  let extra = 0;
+  activeEffects(c).forEach(([, e]) => (e.extraPicks || []).forEach(x => { const xm = /^(.*?)\s*\+?(\d+)\s*$/.exec(x || ''); if (xm && ieq(xm[1].trim(), f.pickKind)) extra += +xm[2]; }));
+  return +m[0] + extra;
+}
+/** Adds the options characters know automatically (e.g. a class's own martial actions) to a feature that picks them. */
+function addAutoPicks(c, f) {
+  if (!f.pickKind) return;
+  const pool = optionsFor(c, f); f.picks = f.picks || [];
+  pool.filter(o => o.autoPick && !f.picks.some(p => ieq(p.name, o.name)) && !unmetPrereqs(c, o, pool).length)
+    .forEach(o => f.picks.push({ name: o.name, source: o.source || '', description: o.description || '', note: '', effects: deepCopy(o.effects) || null }));
+}
 /** True when the character has name: a feature, a choose-one pick, a picked option, or a pick's note naming it. */
 function hasThing(c, name, isPact) {
   const word = isPact ? name.slice('Pact of the '.length).trim() : '';
@@ -3422,7 +3436,7 @@ function unmetPrereqs(c, o, pool) {
 const fpKey = (c, i) => `${c.id}/${(c.features[i] || {}).name}`;
 const plural = k => !k ? 'Options' : /s$/i.test(k) ? k : k + 's';
 function featurePicks(c, f, i) {
-  const max = pickCountAt(f, c.level), pool = optionsFor(c, f), picks = f.picks || [], full = max > 0 && picks.length >= max;
+  const max = pickCountAt(c, f, c.level), pool = optionsFor(c, f), picks = f.picks || [], full = max > 0 && picks.length >= max;
   const st = (S.fp = S.fp || {})[fpKey(c, i)] || {}, label = plural(f.pickKind).toLowerCase();
   const pickRows = picks.map((p, j) => { const def = pool.find(o => ieq(o.name, p.name)), un = def ? unmetPrereqs(c, def, pool) : [];
     return `<div class="rounded-lg p-2 mt-1.5" style="border:1px solid var(--line)"><div class="flex items-center gap-2"><span class="font-semibold text-sm">${esc(p.name)}</span>${p.source ? `<span class="chip">${esc(p.source)}</span>` : ''}
@@ -3444,7 +3458,7 @@ function featurePicks(c, f, i) {
         <label class="text-sm flex items-center gap-1"><input type="checkbox" data-fpall="${i}" ${st.all ? 'checked' : ''}> Show ones I can't take yet</label></div>
         <div class="grid sm:grid-cols-2 gap-1.5">${rows}</div>${!shown.length ? '<p class="muted text-sm">No matches.</p>' : !rows ? `<p class="muted text-sm">Nothing else you can take right now. Tick "Show ones I can't take yet" to see the rest.</p>` : ''}`}</div>`;
   }
-  return `<div class="mt-1.5"><div class="flex flex-wrap items-center gap-2"><span class="lbl">Your ${esc(label)}</span>${max > 0 ? `<span class="chip ${picks.length < max ? 'needs-pick' : ''}" role="status">${picks.length} of ${max} chosen</span>` : ''}</div>
+  return `<div class="mt-1.5"><div class="flex flex-wrap items-center gap-2"><span class="lbl">Your ${esc(label)}</span>${max > 0 ? `<span class="chip ${picks.length < max ? 'needs-pick' : ''}" role="status">${picks.length} of ${max} chosen</span>` : `<span class="chip" role="status">${picks.length} chosen</span>`}</div>
     ${max > 0 && picks.length > max ? `<p class="text-sm mt-1" style="color:var(--danger)" role="status">That's more than your level allows (${max}). Remove ${picks.length - max}.</p>` : ''}
     ${pickRows}<button class="btn btn-sm mt-2" data-act="fpOpen" data-a="${i}" aria-expanded="${!!st.open}">${st.open ? 'Done choosing' : '+ Choose ' + esc(label)}</button>${list}</div>`;
 }
@@ -3582,6 +3596,7 @@ function buildCharacter(w) {
   }
   const t = find('talents', w.talent); if (t && !c.talents.some(x => x.name === t.name)) addTalent(c, t);
   c.otherProficiencies = other.join('; ');
+  c.features.forEach(f => addAutoPicks(c, f));
   return c;
 }
 const levelDef = (cls, n) => cls && cls.levels.find(l => l.level === n);
@@ -3613,6 +3628,7 @@ function applyLevelUp(c, lu) {
   if (slots) applySlots(c, slots);
   if (csub && csub.spellcastingAbility && !c.spellAbility) { c.spellAbility = csub.spellcastingAbility; c.spellcasterClass = `${c.className} (${csub.name})`; }
   if (d) applyResources(c, d.resources, cls.name, n);
+  feats.forEach(f => addAutoPicks(c, f)); // after the subclass is set, for subclass prerequisites
   if (c.experience < XP[Math.min(n, 20)]) c.experience = XP[Math.min(n, 20)];
 }
 function takeDamage(c, n) { if (n <= 0) return; const t = Math.min(c.tempHp, n); c.tempHp -= t; c.currentHp = Math.max(0, c.currentHp - (n - t)); }
@@ -3731,7 +3747,7 @@ function render() {
 // "Report a problem" (TVCS-106): opens the project's GitHub issue form with the version, page and device filled in.
 // Set REPORT_URL to '' to hide the link; {version}, {page} and {device} placeholders are filled in if present.
 const REPORT_URL = 'https://github.com/Blynk03/Tales-of-the-Valiant-Character-Sheet/issues/new?template=problem-report.yml';
-const PREVIEW_VERSION = 'preview v23';
+const PREVIEW_VERSION = 'preview v24';
 function deviceInfo() {
   const ua = navigator.userAgent;
   const m = (re) => { const r = ua.match(re); return r ? r[1] : null; };
@@ -4300,7 +4316,7 @@ function levelModal(c) {
       <section class="gain"><h3 class="box-title text-left">What you gain</h3><ul style="display:grid;gap:.3rem">
         ${profFor(n) !== P(c) ? `<li>Proficiency bonus <span class="num">${sg(P(c))}</span> → <span class="num" style="color:var(--good)">${sg(profFor(n))}</span></li>` : ''}
         <li>Hit dice <span class="num">${c.level}</span> → <span class="num">${n}</span> (d${c.hitDie})</li>${slots ? `<li>Spell slots: ${slots}</li>` : ''}${rc.map(x => `<li><b>${esc(x.name)}</b> uses <span class="num">${x.from}</span> → <span class="num" style="color:var(--good)">${x.to}</span></li>`).join('')}
-        ${c.features.filter(f => f.pickKind && pickCountAt(f, n) > pickCountAt(f, c.level)).map(f => `<li><b>${esc(f.name)}</b> <span class="num">${pickCountAt(f, c.level)}</span> → <span class="num" style="color:var(--good)">${pickCountAt(f, n)}</span>. Choose the new one on the Features tab.</li>`).join('')}
+        ${c.features.filter(f => f.pickKind && pickCountAt(c, f, n) > pickCountAt(c, f, c.level)).map(f => `<li><b>${esc(f.name)}</b> <span class="num">${pickCountAt(c, f, c.level)}</span> → <span class="num" style="color:var(--good)">${pickCountAt(c, f, n)}</span>. Choose the new one on the Features tab.</li>`).join('')}
         ${g.map(f => `<li><b>${esc(f.name)}</b> <span class="chip">${esc(f.source)}</span> <span class="text-sm muted">${esc(f.description)}</span>${(f.options || []).length || f.pickKind ? '<span class="text-sm"> Make your choice on the Features tab after levelling up.</span>' : ''}</li>`).join('') || '<li class="muted text-sm">No new features at this level.</li>'}</ul></section>
     </div>
     <div class="modal-foot">${missing ? `<span class="text-sm muted">${missing}</span>` : ''}<button class="btn ml-auto" data-act="closeModal">Cancel</button><button class="btn btn-primary" data-act="luApply" ${missing ? 'disabled' : ''}>Level up</button></div>
@@ -4324,10 +4340,10 @@ const BLANK = {
   spells: () => ({ id: '', name: 'New spell', source: 'Homebrew', description: '', circle: 1, school: '', tradition: '', castingTime: '1 action', range: '', components: '', duration: 'Instantaneous', concentration: false, ritual: false }),
   items: () => ({ id: '', name: 'New item', source: 'Homebrew', description: '', type: 'Gear', weaponCategory: '', damage: '', damageType: '', range: '', properties: '', weaponOptions: '', finesse: false, ranged: false, baseAC: 0, armorCategory: 'None', cost: '', weight: '' }),
   characterThreads: () => ({ id: '', name: 'New thread', source: 'Homebrew', description: '', milestones: [] }),
-  classOptions: () => ({ id: '', name: 'New class option', source: 'Homebrew', description: '', classId: '', kind: 'Eldritch Invocation', level: 0, prerequisite: '', repeatable: false }),
+  classOptions: () => ({ id: '', name: 'New class option', source: 'Homebrew', description: '', classId: '', kind: 'Eldritch Invocation', level: 0, prerequisite: '', repeatable: false, autoPick: false }),
   magicItems: () => ({ id: '', name: 'New magic item', source: 'Homebrew', description: '', itemType: 'Wondrous Item', rarity: 'Uncommon', requiresAttunement: false, attunement: '', price: '' })
 };
-const HINTS = { pickKind: 'For a feature that picks several class options (e.g. Eldritch Invocations): the kind to pick from, exactly as on the Class Options list.', pickCount: 'How many to pick, by level, e.g. "2; 5:3; 7:4". Used with Pick Kind.', kind: 'e.g. Eldritch Invocation. Must match the Pick Kind of the feature that picks it.', milestones: 'Benefits by rank: Least (levels 1-4), Lesser (5-10), Greater (11-16), Superior (17-20).', rank: 'Least, Lesser, Greater or Superior.', extends: 'Optional: the id of an entry this one expands (e.g. syderean). Its new traits and choose-one options are added to that entry, which is then listed once.', itemType: 'e.g. Wondrous Item, Weapon (longsword), Armor (plate), Armor (shield), Ring, Potion.', rarity: 'Common, Uncommon, Rare, Very Rare, Legendary, Fabled, Artifact or Varies.', attunement: "Who can attune, if limited, e.g. 'by a spellcaster'. Blank if anyone can.", id: 'Unique key. Reusing a built-in id overrides that entry.', source: "Book or homebrew label, e.g. 'Player's Guide', 'Homebrew'.", skillProficiencies: 'Skills always granted, exactly as on the sheet.', skillOptions: 'Skills the player can choose from.', skillChoices: 'How many of the skill options to choose.', talentId: 'Talent id always granted at level 1 (optional).', talentOptions: 'Talent ids the player chooses one from (optional).', languageChoices: 'How many extra languages the player picks.', talentCategories: 'Talent lists for Improvement levels (subclass: lists it adds).', resources: 'Feature uses that change at this level, e.g. Rage 3.', usesFrom: 'Optional: PB, or STR/DEX/CON/INT/WIS/CHA for that modifier, with an optional +N (e.g. PB+1). Min 1.', repeatable: 'Tick if it can be taken more than once.', slots: 'Total slots for circles 1-9, e.g. 3, 2.', armorProficiencies: 'Any of: Light, Medium, Heavy, Shields.', weaponProficiencies: 'Simple, Martial, and/or specific weapons (e.g. Rapier, Scimitar). Named weapons can also go in Other Proficiencies.', startingEquipment: 'Item ids from the Items list.', spellSlots: 'Total slots for circles 1-9, e.g. 4, 3, 2.', usesMax: '0 if it has no limited uses.', recharge: 'Short Rest, Long Rest or blank.', classId: 'Id of the parent class.', circle: '0 for cantrips.', subclassLevel: 'Level at which the subclass is chosen.' };
+const HINTS = { autoPick: "Tick if characters know it automatically (e.g. a class's own martial actions): it is added when they gain the feature.", extraPicks: 'Extra picks for a feature that picks class options, as kind and number, e.g. "Eldritch Invocation 2".', pickKind: 'For a feature that picks several class options (e.g. Eldritch Invocations): the kind to pick from, exactly as on the Class Options list.', pickCount: 'How many to pick, by level, e.g. "2; 5:3; 7:4". Used with Pick Kind. Blank for no limit (e.g. martial actions you know).', kind: 'e.g. Eldritch Invocation. Must match the Pick Kind of the feature that picks it.', milestones: 'Benefits by rank: Least (levels 1-4), Lesser (5-10), Greater (11-16), Superior (17-20).', rank: 'Least, Lesser, Greater or Superior.', extends: 'Optional: the id of an entry this one expands (e.g. syderean). Its new traits and choose-one options are added to that entry, which is then listed once.', itemType: 'e.g. Wondrous Item, Weapon (longsword), Armor (plate), Armor (shield), Ring, Potion.', rarity: 'Common, Uncommon, Rare, Very Rare, Legendary, Fabled, Artifact or Varies.', attunement: "Who can attune, if limited, e.g. 'by a spellcaster'. Blank if anyone can.", id: 'Unique key. Reusing a built-in id overrides that entry.', source: "Book or homebrew label, e.g. 'Player's Guide', 'Homebrew'.", skillProficiencies: 'Skills always granted, exactly as on the sheet.', skillOptions: 'Skills the player can choose from.', skillChoices: 'How many of the skill options to choose.', talentId: 'Talent id always granted at level 1 (optional).', talentOptions: 'Talent ids the player chooses one from (optional).', languageChoices: 'How many extra languages the player picks.', talentCategories: 'Talent lists for Improvement levels (subclass: lists it adds).', resources: 'Feature uses that change at this level, e.g. Rage 3.', usesFrom: 'Optional: PB, or STR/DEX/CON/INT/WIS/CHA for that modifier, with an optional +N (e.g. PB+1). Min 1.', repeatable: 'Tick if it can be taken more than once.', slots: 'Total slots for circles 1-9, e.g. 3, 2.', armorProficiencies: 'Any of: Light, Medium, Heavy, Shields.', weaponProficiencies: 'Simple, Martial, and/or specific weapons (e.g. Rapier, Scimitar). Named weapons can also go in Other Proficiencies.', startingEquipment: 'Item ids from the Items list.', spellSlots: 'Total slots for circles 1-9, e.g. 4, 3, 2.', usesMax: '0 if it has no limited uses.', recharge: 'Short Rest, Long Rest or blank.', classId: 'Id of the parent class.', circle: '0 for cantrips.', subclassLevel: 'Level at which the subclass is chosen.' };
 /** Fills fields added in later versions so they show up in the editor. */
 function withDefaults(kind, e) {
   const d = Object.assign(BLANK[kind](), e);

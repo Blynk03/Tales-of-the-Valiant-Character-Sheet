@@ -10,9 +10,18 @@ public static class ClassOptionRules
 {
     private const StringComparison Ci = StringComparison.OrdinalIgnoreCase;
 
-    /// <summary>How many options the feature allows at <paramref name="level"/> ("2; 5:3; 7:4" → 3 at 5th). 0 if not set.</summary>
-    public static int CountAt(Feature f, int level) =>
-        Regex.Match(CharacterCalc.Scaled(f.PickCount, level), @"\d+") is { Success: true } m ? int.Parse(m.Value) : 0;
+    /// <summary>How many options the feature allows at <paramref name="level"/> ("2; 5:3; 7:4" → 3 at 5th), plus extra picks
+    /// granted by other features or picks (e.g. a heroic boon's "Eldritch Invocation 2"). 0 means no limit (blank Pick Count).</summary>
+    public static int CountAt(Character c, Feature f, int level)
+    {
+        if (Regex.Match(CharacterCalc.Scaled(f.PickCount, level), @"\d+") is not { Success: true } m) return 0;
+        var extra = 0;
+        foreach (var (_, e) in c.ActiveEffects())
+            foreach (var x in e.ExtraPicks ?? new())
+                if (Regex.Match(x ?? "", @"^(.*?)\s*\+?(\d+)\s*$") is { Success: true } xm
+                    && xm.Groups[1].Value.Trim().Equals(f.PickKind, Ci)) extra += int.Parse(xm.Groups[2].Value);
+        return int.Parse(m.Value) + extra;
+    }
 
     /// <summary>
     /// The prerequisites of <paramref name="o"/> the character doesn't meet, as short reasons ("Needs level 5",

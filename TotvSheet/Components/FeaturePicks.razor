@@ -3,7 +3,7 @@
 @* Picks for a feature that chooses several class options, e.g. a warlock's Eldritch Invocations (TVCS-117). The count
    follows the level; options whose prerequisites aren't met are shown with the reason and can't be added. *@
 @{
-    var max = ClassOptionRules.CountAt(Feature, C.Level);
+    var max = ClassOptionRules.CountAt(C, Feature, C.Level);
     var pool = Content.OptionsFor(C, Feature);
     var full = max > 0 && Feature.Picks.Count >= max;
     var label = Plural(Feature.PickKind);
@@ -14,6 +14,10 @@
         @if (max > 0)
         {
             <span class="chip @(Feature.Picks.Count < max ? "needs-pick" : "")" role="status">@Feature.Picks.Count of @max chosen</span>
+        }
+        else
+        {
+            <span class="chip" role="status">@Feature.Picks.Count chosen</span>
         }
     </div>
     @if (max > 0 && Feature.Picks.Count > max)

@@ -223,7 +223,7 @@
     /// <summary>Features that pick class options and allow more at the new level, e.g. Eldritch Invocations 2 → 3 (TVCS-117).</summary>
     private IEnumerable<(string Name, int From, int To)> PickChanges() =>
         C.Features.Where(f => f.PickKind.Length > 0)
-            .Select(f => (f.Name, From: ClassOptionRules.CountAt(f, C.Level), To: ClassOptionRules.CountAt(f, newLevel)))
+            .Select(f => (f.Name, From: ClassOptionRules.CountAt(C, f, C.Level), To: ClassOptionRules.CountAt(C, f, newLevel)))
             .Where(x => x.To > x.From);
 
     private List<Feature> Gained() =>

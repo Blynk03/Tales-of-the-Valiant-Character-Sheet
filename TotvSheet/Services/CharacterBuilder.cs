@@ -151,6 +151,7 @@ public static class CharacterBuilder
         if (ch.Talent is { } talent && c.Talents.All(t => t.Name != talent.Name)) AddTalent(c, talent);
 
         c.OtherProficiencies = string.Join("; ", other);
+        foreach (var f in c.Features) AddAutoPicks(c, f, content);
         return c;
     }
 
@@ -232,6 +233,7 @@ public static class CharacterBuilder
             c.SpellcasterClass = $"{c.ClassName} ({castingSub.Name})";
         }
         if (def is not null) ApplyResources(c, def.Resources, cls!.Name, newLevel);
+        foreach (var f in features) AddAutoPicks(c, f, content); // after the subclass is set, for subclass prerequisites
 
         if (c.Experience < Rules.XpForLevel[Math.Min(newLevel, 20)])
             c.Experience = Rules.XpForLevel[Math.Min(newLevel, 20)];
@@ -342,7 +344,12 @@ public static class CharacterBuilder
             // A pick whose option was renamed or removed in the content is cleared, so the sheet asks again.
             if (f.Chosen.Length > 0 && !f.Options.Any(o => o.Name == f.Chosen)) { f.Chosen = ""; changed = true; }
             // Features that pick class options (TVCS-117). Picks are kept, with their rules brought up to date.
-            if (f.PickKind != (def.PickKind ?? "")) { f.PickKind = def.PickKind ?? ""; changed = true; }
+            if (f.PickKind != (def.PickKind ?? ""))
+            {
+                var gained = string.IsNullOrEmpty(f.PickKind);
+                f.PickKind = def.PickKind ?? ""; changed = true;
+                if (gained && f.PickKind.Length > 0) AddAutoPicks(c, f, content); // an existing feature that now picks
+            }
             if (f.PickCount != (def.PickCount ?? "")) { f.PickCount = def.PickCount ?? ""; changed = true; }
         }
         foreach (var f in c.Features)
@@ -360,6 +367,17 @@ public static class CharacterBuilder
                     p.Effects = Clone(o.Effects); changed = true;
                 }
         return changed;
+    }
+
+    /// <summary>Adds the class options characters know automatically (e.g. a class's own martial actions, TVCS-118) to a
+    /// feature that picks them, when it is gained. Only those whose prerequisites are met and not already picked.</summary>
+    public static void AddAutoPicks(Character c, Feature f, ContentService content)
+    {
+        if (string.IsNullOrEmpty(f.PickKind)) return;
+        var pool = content.OptionsFor(c, f);
+        foreach (var o in pool.Where(o => o.AutoPick))
+            if (!f.Picks.Any(p => p.Name.Equals(o.Name, StringComparison.OrdinalIgnoreCase)) && ClassOptionRules.Unmet(c, o, pool).Count == 0)
+                f.Picks.Add(ClassOptionRules.ToPick(o));
     }
 
     /// <summary>Raises (or lowers) a feature's max uses. Uses already spent stay spent,

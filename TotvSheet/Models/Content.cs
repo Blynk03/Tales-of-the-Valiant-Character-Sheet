@@ -45,7 +45,7 @@ public class FeatureDef
     public List<FeatureOptionDef> Options { get; set; } = new();
     [Hint("For a feature that picks several class options (e.g. Eldritch Invocations): the kind of class option to pick from, exactly as on the Class Options list.")]
     public string PickKind { get; set; } = "";
-    [Hint("How many to pick, by level, e.g. \"2; 5:3; 7:4\". Used with Pick Kind.")]
+    [Hint("How many to pick, by level, e.g. \"2; 5:3; 7:4\". Used with Pick Kind. Blank for no limit (e.g. martial actions you know).")]
     public string PickCount { get; set; } = "";
 }
 
@@ -65,6 +65,8 @@ public class ClassOptionDef : ContentEntry
     public string Prerequisite { get; set; } = "";
     [Hint("Tick if it can be taken more than once.")]
     public bool Repeatable { get; set; }
+    [Hint("Tick if characters know it automatically (e.g. a class's own martial actions): it is added when they gain the feature.")]
+    public bool AutoPick { get; set; }
     [Hint("Optional rules the sheet applies while it is picked, e.g. unarmored AC.")]
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public FeatureEffects? Effects { get; set; }
@@ -127,6 +129,8 @@ public class FeatureEffects
     public bool UnarmedDex { get; set; }
     [Hint("Tick if the unarmed damage only applies without armor or a shield (Monk's Martial Arts).")]
     public bool UnarmedNeedsNoArmor { get; set; }
+    [Hint("Extra picks for a feature that picks class options, as kind and number, e.g. \"Eldritch Invocation 2\".")]
+    public List<string> ExtraPicks { get; set; } = new();
 }
 
 /// <summary>Sets the maximum uses of a feature by name at a given level, e.g. Rage uses 3.</summary>
