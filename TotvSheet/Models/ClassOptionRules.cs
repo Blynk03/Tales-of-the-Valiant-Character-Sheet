@@ -12,7 +12,7 @@ public static class ClassOptionRules
 
     /// <summary>How many options the feature allows at <paramref name="level"/> ("2; 5:3; 7:4" → 3 at 5th). 0 if not set.</summary>
     public static int CountAt(Feature f, int level) =>
-        Regex.Match(Rules.Scaled(f.PickCount, level), @"\d+") is { Success: true } m ? int.Parse(m.Value) : 0;
+        Regex.Match(CharacterCalc.Scaled(f.PickCount, level), @"\d+") is { Success: true } m ? int.Parse(m.Value) : 0;
 
     /// <summary>
     /// The prerequisites of <paramref name="o"/> the character doesn't meet, as short reasons ("Needs level 5",
