@@ -337,7 +337,27 @@ public static class CharacterBuilder
         var changed = false;
         foreach (var f in c.Features)
         {
+            // Hand-edited or older files may hold nulls here.
+            if (f.Picks is null) { f.Picks = new(); changed = true; }
+            if (f.PickKind is null) { f.PickKind = ""; changed = true; }
+            if (f.PickCount is null) { f.PickCount = ""; changed = true; }
+            foreach (var p in f.Picks.Where(p => p.Note is null || p.Name is null)) { p.Note ??= ""; p.Name ??= ""; changed = true; }
+        }
+        foreach (var f in c.Features)
+        {
             var def = content.FindFeatureDef(c, f);
+            // A fixed "Epic Boon: Primal Champion" from before epic boons became a pick (TVCS-118): rename it to the class's
+            // "Epic Boon" picker, keeping the boon it had as the pick.
+            if (def is null && f.Name.StartsWith("Epic Boon: ", StringComparison.OrdinalIgnoreCase) && f.Picks.Count == 0
+                && content.FindFeatureDef(c, new Feature { Name = "Epic Boon", Source = f.Source, Level = f.Level }) is { PickKind.Length: > 0 } epic)
+            {
+                var boon = f.Name["Epic Boon: ".Length..].Trim();
+                f.Picks.Add(content.ClassOption(epic.PickKind, boon) is { } bo ? ClassOptionRules.ToPick(bo)
+                    : new FeaturePick { Name = boon, Source = f.Source, Description = f.Description });
+                f.Name = "Epic Boon";
+                f.Description = epic.Description;
+                def = epic; changed = true;
+            }
             if (def is null) continue;
             if (Json.Serialize(f.Effects) != Json.Serialize(def.Effects)) { f.Effects = Clone(def.Effects); changed = true; }
             if (Json.Serialize(f.Options) != Json.Serialize(def.Options)) { f.Options = Clone(def.Options) ?? new(); changed = true; }
@@ -351,14 +371,6 @@ public static class CharacterBuilder
                 if (gained && f.PickKind.Length > 0) AddAutoPicks(c, f, content); // an existing feature that now picks
             }
             if (f.PickCount != (def.PickCount ?? "")) { f.PickCount = def.PickCount ?? ""; changed = true; }
-        }
-        foreach (var f in c.Features)
-        {
-            // Hand-edited or older files may hold nulls here.
-            if (f.Picks is null) { f.Picks = new(); changed = true; }
-            if (f.PickKind is null) { f.PickKind = ""; changed = true; }
-            if (f.PickCount is null) { f.PickCount = ""; changed = true; }
-            foreach (var p in f.Picks.Where(p => p.Note is null)) { p.Note = ""; changed = true; }
         }
         foreach (var f in c.Features.Where(f => f.PickKind.Length > 0))
             foreach (var p in f.Picks)
@@ -374,9 +386,10 @@ public static class CharacterBuilder
     public static void AddAutoPicks(Character c, Feature f, ContentService content)
     {
         if (string.IsNullOrEmpty(f.PickKind)) return;
+        f.Picks ??= new();
         var pool = content.OptionsFor(c, f);
         foreach (var o in pool.Where(o => o.AutoPick))
-            if (!f.Picks.Any(p => p.Name.Equals(o.Name, StringComparison.OrdinalIgnoreCase)) && ClassOptionRules.Unmet(c, o, pool).Count == 0)
+            if (!f.Picks.Any(p => (p.Name ?? "").Equals(o.Name, StringComparison.OrdinalIgnoreCase)) && ClassOptionRules.Unmet(c, o, pool).Count == 0)
                 f.Picks.Add(ClassOptionRules.ToPick(o));
     }
 

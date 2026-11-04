@@ -57,7 +57,7 @@
         <div class="mt-2">
             @if (pool.Count == 0)
             {
-                <p class="muted text-sm">No @label.ToLowerInvariant() in your content yet. Import the book that lists them (for warlocks, the Player's Guide file) or add them as Class Options on the Content page.</p>
+                <p class="muted text-sm">No @label.ToLowerInvariant() in your content yet. Import the book that lists them (usually the Player's Guide file) or add them as Class Options on the Content page.</p>
             }
             else
             {
@@ -118,7 +118,10 @@
 
     /// <summary>"Eldritch Invocation" → "Eldritch Invocations".</summary>
     private static string Plural(string kind) =>
-        string.IsNullOrWhiteSpace(kind) ? "Options" : kind.EndsWith("s", StringComparison.OrdinalIgnoreCase) ? kind : kind + "s";
+        string.IsNullOrWhiteSpace(kind) ? "Options"
+        : kind.EndsWith("s", StringComparison.OrdinalIgnoreCase) ? kind
+        : kind.Equals("Metamagic", StringComparison.OrdinalIgnoreCase) ? "Metamagic options"
+        : kind + "s";
 
     private Task Add(ClassOptionDef o)
     {

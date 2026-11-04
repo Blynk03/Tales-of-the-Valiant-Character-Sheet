@@ -19,8 +19,16 @@ public static class ClassOptionRules
         foreach (var (_, e) in c.ActiveEffects())
             foreach (var x in e.ExtraPicks ?? new())
                 if (Regex.Match(x ?? "", @"^(.*?)\s*\+?(\d+)\s*$") is { Success: true } xm
-                    && xm.Groups[1].Value.Trim().Equals(f.PickKind, Ci)) extra += int.Parse(xm.Groups[2].Value);
+                    && Matches(xm.Groups[1].Value.Trim(), f)) extra += int.Parse(xm.Groups[2].Value);
         return int.Parse(m.Value) + extra;
+    }
+
+    /// <summary>An Extra Picks kind names the feature by its option kind ("Eldritch Invocation") or its own name
+    /// ("Eldritch Invocations"), singular or plural.</summary>
+    private static bool Matches(string kind, Feature f)
+    {
+        static string One(string s) => s.EndsWith("s", Ci) ? s[..^1] : s;
+        return One(kind).Equals(One(f.PickKind), Ci) || One(kind).Equals(One(f.Name ?? ""), Ci);
     }
 
     /// <summary>

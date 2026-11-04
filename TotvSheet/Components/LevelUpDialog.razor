@@ -149,7 +149,7 @@
                     @foreach (var f in Gained())
                     {
                         <li><span class="font-semibold">@f.Name</span> <span class="chip">@f.Source</span> <span class="text-sm muted">@f.Description</span>
-                            @if (f.Options.Count > 0 || f.PickKind.Length > 0)
+                            @if (f.Options.Count > 0 || (f.PickKind.Length > 0 && f.PickCount.Length > 0))
                             {
                                 <span class="text-sm"> Make your choice on the Features tab after levelling up.</span>
                             }
