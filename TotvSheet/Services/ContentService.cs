@@ -114,16 +114,30 @@ public class ContentService
     /// </summary>
     private static List<T> Combine<T>(List<T> list, Func<T, string> extends, Func<T, List<FeatureDef>> traits) where T : ContentEntry
     {
-        var ids = list.Select(e => e.Id).ToHashSet();
-        var expansions = list.Where(e => extends(e) is { Length: > 0 } b && b != e.Id && ids.Contains(b)).ToList();
+        // Each entry's root: follow "extends" through the list (an expansion of an expansion folds into the first base).
+        var root = list.ToDictionary(e => e.Id, e => RootOf(e, list, extends));
+        var expansions = list.Where(e => root[e.Id] != e.Id).ToList();
         if (expansions.Count == 0) return list;
         var result = new List<T>();
         foreach (var e in list.Except(expansions))
         {
-            var mine = expansions.Where(x => extends(x) == e.Id).OrderBy(x => x.Source).ToList();
+            var mine = expansions.Where(x => root[x.Id] == e.Id).OrderBy(x => x.Source).ToList();
             result.Add(mine.Count == 0 ? e : WithExpansions(e, mine, traits));
         }
         return result;
+    }
+
+    /// <summary>The id of the entry <paramref name="e"/> ultimately extends within <paramref name="pool"/> (itself if none),
+    /// guarding against loops.</summary>
+    private static string RootOf<T>(T e, IList<T> pool, Func<T, string> extends) where T : ContentEntry
+    {
+        var seen = new HashSet<string> { e.Id };
+        var cur = e;
+        while (extends(cur) is { Length: > 0 } b && !seen.Contains(b) && pool.FirstOrDefault(x => x.Id == b) is { } next)
+        {
+            seen.Add(b); cur = next;
+        }
+        return cur.Id;
     }
 
     /// <summary>A copy of <paramref name="baseEntry"/> with the traits and options of <paramref name="expansions"/> added.</summary>
@@ -171,22 +185,21 @@ public class ContentService
     public MagicItemDef? MagicItem(string id) => Merge(Core.MagicItems, User.MagicItems, hideSamples: false).FirstOrDefault(i => i.Id == id);
 
     /// <summary>A lineage by id with any expansions folded in (disabled sources included, so existing characters keep working).</summary>
-    public LineageDef? LineageWithExpansions(string id)
-    {
-        var all = User.Lineages.Concat(Core.Lineages.Where(c => !User.Lineages.Any(u => u.Id == c.Id))).ToList();
-        var e = all.FirstOrDefault(l => l.Id == id);
-        if (e is null) return null;
-        var ext = all.Where(l => l.Extends == id && l.Id != id && !DisabledSources.Contains(l.Source)).OrderBy(l => l.Source).ToList();
-        return ext.Count == 0 ? e : WithExpansions(e, ext, l => l.Traits);
-    }
+    // For refreshing an existing character. Expansions from disabled books still count, so turning a book off never
+    // erases a pick made from it; built-in sample expansions count only while no book content of that kind is imported.
+    public LineageDef? LineageWithExpansions(string id) => WithExpansionsById(Core.Lineages, User.Lineages, id, l => l.Extends, l => l.Traits);
+    public HeritageDef? HeritageWithExpansions(string id) => WithExpansionsById(Core.Heritages, User.Heritages, id, h => h.Extends, h => h.Traits);
 
-    public HeritageDef? HeritageWithExpansions(string id)
+    private T? WithExpansionsById<T>(List<T> core, List<T> user, string id, Func<T, string> extends, Func<T, List<FeatureDef>> traits) where T : ContentEntry
     {
-        var all = User.Heritages.Concat(Core.Heritages.Where(c => !User.Heritages.Any(u => u.Id == c.Id))).ToList();
-        var e = all.FirstOrDefault(h => h.Id == id);
+        var all = user.Concat(core.Where(c => !user.Any(u => u.Id == c.Id))).ToList();
+        var e = all.FirstOrDefault(x => x.Id == id);
         if (e is null) return null;
-        var ext = all.Where(h => h.Extends == id && h.Id != id && !DisabledSources.Contains(h.Source)).OrderBy(h => h.Source).ToList();
-        return ext.Count == 0 ? e : WithExpansions(e, ext, h => h.Traits);
+        var hasBook = user.Any(u => !string.Equals(u.Source, HomebrewSource, StringComparison.OrdinalIgnoreCase));
+        var pool = all.Where(x => user.Contains(x) || !hasBook).ToList();
+        if (!pool.Contains(e)) pool.Add(e);
+        var ext = pool.Where(x => x.Id != id && RootOf(x, pool, extends) == id).OrderBy(x => x.Source).ToList();
+        return ext.Count == 0 ? e : WithExpansions(e, ext, traits);
     }
 
     /// <summary>The content definition a character's feature came from, found through the character's own lineage, heritage,

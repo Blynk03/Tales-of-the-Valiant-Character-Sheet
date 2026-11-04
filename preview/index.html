@@ -3235,10 +3235,16 @@ function lib(kind, keepSamples) {
 }
 /** Folds expansions into the entry they extend (TVCS-112, mirror of ContentService.Combine): e.g. Syderean (Expanded) adds
     its Aberrant and Spellborn options to the Player's Guide Syderean. An expansion whose base isn't available stays listed. */
+/** The id of the entry e ultimately extends within pool (itself if none), guarding against loops. */
+function rootOf(e, pool) {
+  const seen = new Set([e.id]); let cur = e, next;
+  while (cur.extends && !seen.has(cur.extends) && (next = pool.find(x => x.id === cur.extends))) { seen.add(cur.extends); cur = next; }
+  return cur.id;
+}
 function combineExpansions(list) {
-  const ids = new Set(list.map(e => e.id)), exps = list.filter(e => e.extends && e.extends !== e.id && ids.has(e.extends));
+  const root = new Map(list.map(e => [e.id, rootOf(e, list)])), exps = list.filter(e => root.get(e.id) !== e.id);
   if (!exps.length) return list;
-  return list.filter(e => !exps.includes(e)).map(e => { const mine = exps.filter(x => x.extends === e.id).sort((a, b) => String(a.source).localeCompare(String(b.source))); return mine.length ? withExpansions(e, mine) : e; });
+  return list.filter(e => !exps.includes(e)).map(e => { const mine = exps.filter(x => root.get(x.id) === e.id).sort((a, b) => String(a.source).localeCompare(String(b.source))); return mine.length ? withExpansions(e, mine) : e; });
 }
 function withExpansions(base, exps) {
   const copy = JSON.parse(JSON.stringify(base)), eq = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
@@ -3252,17 +3258,21 @@ function withExpansions(base, exps) {
     if (!added.length) return;
     const n = notes.find(n => n[0] === have && n[1] === x.source); if (n) n[2].push(...added); else notes.push([have, x.source, added]);
   }));
-  notes.forEach(([t, src, names]) => { t.description += ` More options from ${src}: ${names.join(', ')}.`; });
+  notes.forEach(([t, src, names]) => { t.description = (t.description || '') + ` More options from ${src}: ${names.join(', ')}.`; });
   return copy;
 }
 /** All entries of a kind by id, ignoring sample hiding, disabled sources and expansion folding (for characters' own ids). */
 const rawById = (kind, id) => (S.user[kind] || []).find(e => e.id === id) || (SEED[kind] || []).find(e => e.id === id);
 /** A lineage or heritage by id with its expansions folded in (disabled expansion sources left out). */
+/** For refreshing an existing character (mirror of ContentService.WithExpansionsById): expansions from disabled books still
+    count, so turning a book off never erases a pick; built-in sample expansions count only while no book content is imported. */
 function withExpansionsById(kind, id) {
   const e = rawById(kind, id); if (!e) return null;
-  const uids = new Set((S.user[kind] || []).map(u => u.id));
-  const all = (S.user[kind] || []).concat((SEED[kind] || []).filter(x => !uids.has(x.id)));
-  const exps = all.filter(x => x.extends === id && x.id !== id && !S.disabled.includes(x.source)).sort((a, b) => String(a.source).localeCompare(String(b.source)));
+  const user = S.user[kind] || [], uids = new Set(user.map(u => u.id));
+  const hasBook = user.some(u => String(u.source).toLowerCase() !== HOMEBREW.toLowerCase());
+  const pool = user.concat(hasBook ? [] : (SEED[kind] || []).filter(x => !uids.has(x.id)));
+  if (!pool.includes(e)) pool.push(e);
+  const exps = pool.filter(x => x.id !== id && rootOf(x, pool) === id).sort((a, b) => String(a.source).localeCompare(String(b.source)));
   return exps.length ? withExpansions(e, exps) : e;
 }
 // Lookups by id keep samples, so characters built from a retired sample still work; an expansion's own id still resolves.
@@ -3604,7 +3614,7 @@ function render() {
 // "Report a problem" (TVCS-106): opens the project's GitHub issue form with the version, page and device filled in.
 // Set REPORT_URL to '' to hide the link; {version}, {page} and {device} placeholders are filled in if present.
 const REPORT_URL = 'https://github.com/Blynk03/Tales-of-the-Valiant-Character-Sheet/issues/new?template=problem-report.yml';
-const PREVIEW_VERSION = 'preview v21';
+const PREVIEW_VERSION = 'preview v22';
 function deviceInfo() {
   const ua = navigator.userAgent;
   const m = (re) => { const r = ua.match(re); return r ? r[1] : null; };
@@ -3885,22 +3895,26 @@ const toThread = d => ({ threadId: d.id, name: d.name, source: d.source, descrip
 function threadsBox(c) {
   const ts = c.threads || (c.threads = []), lib_ = lib('characterThreads');
   const groups = [...new Set(lib_.map(x => x.source))].sort().map(src => `<optgroup label="${esc(src)}">${lib_.filter(x => x.source === src).map(x => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}</optgroup>`).join('');
+  // Rank group: Least/Lesser/Greater/Superior ignoring case and trailing text, else Other, so nothing is hidden.
+  const rankOf = b => (THREAD_RANKS.find(([r]) => String(b.rank || '').trim().toLowerCase().startsWith(r.toLowerCase())) || ['Other'])[0];
   const one = (t, i) => {
-    const lost = t.status === 'Abandoned';
-    const ranks = THREAD_RANKS.map(([r, lv]) => { const bs = t.benefits.map((b, j) => [b, j]).filter(([b]) => b.rank === r); if (!bs.length) return '';
-      return `<div class="lbl mt-2">${r} <span class="muted">(levels ${lv})</span></div>` + bs.map(([b, j]) => `<label class="flex items-start gap-2 text-sm mt-1 ${lost && b.gained ? 'line-through muted' : ''}">${chk(`c.threads.${i}.benefits.${j}.gained`, b.gained, b.name)}<span><b>${esc(b.name)}.</b> ${esc(b.description)}</span></label>`).join(''); }).join('');
-    return `<div class="rounded-lg p-2 mb-2" style="border:1px solid var(--line)"><div class="flex flex-wrap items-center gap-2"><span class="display font-bold">${esc(t.name)}</span>${t.source ? `<span class="chip">${esc(t.source)}</span>` : ''}
+    const lost = t.status === 'Abandoned', custom = !t.threadId, bl = t.benefits || (t.benefits = []);
+    const ranks = THREAD_RANKS.concat([['Other', '']]).map(([r, lv]) => { const bs = bl.map((b, j) => [b, j]).filter(([b]) => rankOf(b) === r); if (!bs.length) return '';
+      return `<div class="lbl mt-2">${r}${lv ? ` <span class="muted">(levels ${lv})</span>` : ''}</div>` + bs.map(([b, j]) => custom
+        ? `<div class="flex items-start gap-2 text-sm mt-1">${chk(`c.threads.${i}.benefits.${j}.gained`, b.gained, 'Gained')}<div class="flex-1 min-w-0 grid gap-1"><div class="flex gap-1">${inp(`c.threads.${i}.benefits.${j}.name`, b.name, 'text-sm font-semibold flex-1 min-w-0', 'aria-label="Benefit name"')}<select class="select text-sm" style="width:auto" data-f="c.threads.${i}.benefits.${j}.rank" data-t="s" aria-label="Rank">${THREAD_RANKS.map(([x]) => `<option ${b.rank === x ? 'selected' : ''}>${x}</option>`).join('')}</select><button class="icon-btn" data-act="rmBenefit" data-a="${i}.${j}" title="Remove benefit">✕</button></div>${area(`c.threads.${i}.benefits.${j}.description`, b.description, 2, 'aria-label="Benefit description"')}</div></div>`
+        : `<label class="flex items-start gap-2 text-sm mt-1 ${lost && b.gained ? 'line-through muted' : ''}">${chk(`c.threads.${i}.benefits.${j}.gained`, b.gained, b.name)}<span><b>${esc(b.name)}.</b> ${esc(b.description)}</span></label>`).join(''); }).join('');
+    return `<div class="rounded-lg p-2 mb-2" style="border:1px solid var(--line)"><div class="flex flex-wrap items-center gap-2">${custom ? inp(`c.threads.${i}.name`, t.name, 'display font-bold flex-1 min-w-0', 'aria-label="Thread name"') : `<span class="display font-bold">${esc(t.name)}</span>`}${t.source ? `<span class="chip">${esc(t.source)}</span>` : ''}
       <select class="select text-sm ml-auto" style="width:auto" data-f="c.threads.${i}.status" data-t="s" aria-label="${esc(t.name)} status">${['Active', 'Completed', 'Abandoned'].map(s => `<option ${t.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
       <button class="icon-btn" data-act="rm" data-a="threads.${i}" title="Remove thread">✕</button></div>
       ${t.description ? `<details class="text-sm mt-1"><summary class="muted">About this thread</summary><p class="mt-1">${esc(t.description)}</p></details>` : ''}
       <label class="lbl block mt-2">Your goal ${area(`c.threads.${i}.goal`, t.goal, 2, 'placeholder="Agree a specific, achievable goal with your GM"')}</label>
       ${lost ? '<p class="text-sm mt-1" style="color:var(--danger)">Abandoned before its goal: its benefits are lost.</p>' : ''}
-      ${ranks || '<p class="muted text-sm mt-1">No benefits listed. Add notes about your milestones to the goal.</p>'}</div>`;
+      ${ranks}${custom ? `<button class="btn btn-sm mt-2" data-act="addBenefit" data-a="${i}">+ Benefit</button>` : (bl.length ? '' : '<p class="muted text-sm mt-1">No benefits listed. Add notes about your milestones to the goal.</p>')}</div>`;
   };
   return box('Character Threads', `${ts.length ? '' : '<p class="muted text-sm">A thread is an optional goal you agree with your GM. Reaching its milestones grants benefits by rank: Least (levels 1–4), Lesser (5–10), Greater (11–16) and Superior (17–20).</p>'}
     ${ts.filter(t => t.status === 'Active').length > 1 ? '<p class="text-sm mb-2" style="color:var(--danger)" role="status">The rules allow one active thread at a time. Mark the others completed or abandoned.</p>' : ''}
     ${ts.map(one).join('')}
-    <div class="flex flex-wrap items-center gap-1.5 mt-1"><select class="select text-sm" style="max-width:20rem" data-pick="thread" aria-label="Thread to add"><option value="">Add a thread…</option>${groups}</select><button class="btn btn-sm" data-act="addThread">Add</button><button class="btn btn-sm" data-act="addCustomThread">+ Custom thread</button></div>
+    <div class="flex flex-wrap items-center gap-1.5 mt-1"><select class="select text-sm" style="max-width:20rem" data-pick="thread" aria-label="Thread to add"><option value="">Add a thread…</option>${groups.replace(`value="${esc(S.pick.thread || '')}"`, `value="${esc(S.pick.thread || '')}" selected`)}</select><button class="btn btn-sm" data-act="addThread" ${S.pick.thread ? '' : 'disabled'}>Add</button><button class="btn btn-sm" data-act="addCustomThread">+ Custom thread</button></div>
     ${lib_.length ? '' : '<p class="muted text-xs mt-1">Import a book with character threads (Northlands Worldbook, Campaign Builder: Castles &amp; Crowns) to pick one here.</p>'}`);
 }
 
@@ -4329,6 +4343,8 @@ const A = {
   hp(kind) { const c = cur(), n = S.hpAmt || 0; if (kind === 'dmg') takeDamage(c, n); else if (kind === 'heal') heal(c, n); else c.tempHp = Math.max(c.tempHp, n); S.hpAmt = 0; save(); },
   hitDie() { const c = cur(); const r = rollExpr('Hit die', `1d${c.hitDie}${sg(M(c, 'CON'))}`); c.hitDiceUsed++; heal(c, Math.max(0, total(r))); save(); },
   deathSave() { const c = cur(), r = d20('Death save', 0, null, null, 'save'), n = r.dice[0]; if (n === 20) { c.currentHp = 1; c.deathSuccesses = 0; c.deathFailures = 0; } else if (n === 1) c.deathFailures = Math.min(3, c.deathFailures + 2); else if (n >= 10) c.deathSuccesses = Math.min(3, c.deathSuccesses + 1); else c.deathFailures = Math.min(3, c.deathFailures + 1); save(); },
+  addBenefit(i) { const t = cur().threads[+i]; (t.benefits = t.benefits || []).push({ rank: 'Least', name: 'New benefit', description: '', gained: false }); save(); },
+  rmBenefit(p) { const [i, j] = p.split('.').map(Number); cur().threads[i].benefits.splice(j, 1); save(); },
   addThread() { const d = find('characterThreads', S.pick.thread); if (d) { const c = cur(); (c.threads = c.threads || []).push(toThread(d)); save(); } S.pick.thread = ''; },
   addCustomThread() { const c = cur(); (c.threads = c.threads || []).push({ threadId: '', name: 'Custom thread', source: 'Homebrew', description: '', goal: '', status: 'Active',
     benefits: THREAD_RANKS.map(([r]) => ({ rank: r, name: r + ' benefit', description: 'Agree this with your GM.', gained: false })) }); save(); },
@@ -4465,7 +4481,7 @@ root.addEventListener('click', e => {
 root.addEventListener('change', e => {
   const el = e.target;
   if (el.dataset.act === 'toggleSource') { A.toggleSource(el.dataset.a); render(); return; }
-  if (el.dataset.pick) { S.pick[el.dataset.pick] = el.value; return; }
+  if (el.dataset.pick) { S.pick[el.dataset.pick] = el.value; if (el.dataset.pick === 'thread') render(); return; }
   if (el.dataset.sfilter) {
     const [kind, key] = el.dataset.sfilter.split('.'); S.sf[kind][key] = el.value;
     // drop a selection that the new filters hide

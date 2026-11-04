@@ -16,9 +16,17 @@
     {
         var thread = t;
         var lost = thread.Status == "Abandoned";
-        <div class="rounded-lg p-2 mb-2" style="border:1px solid var(--line)">
+        var custom = string.IsNullOrEmpty(thread.ThreadId);
+        <div @key="thread" class="rounded-lg p-2 mb-2" style="border:1px solid var(--line)">
             <div class="flex flex-wrap items-center gap-2">
-                <span class="display font-bold">@thread.Name</span>
+                @if (custom)
+                {
+                    <input class="field display font-bold flex-1 min-w-0" aria-label="Thread name" @bind="thread.Name" @bind:after="Save" />
+                }
+                else
+                {
+                    <span class="display font-bold">@thread.Name</span>
+                }
                 @if (!string.IsNullOrWhiteSpace(thread.Source)) { <span class="chip">@thread.Source</span> }
                 <select class="select text-sm ml-auto" style="width:auto" aria-label="@($"{thread.Name} status")" @bind="thread.Status" @bind:after="Save">
                     <option value="Active">Active</option>
@@ -38,21 +46,45 @@
             {
                 <p class="text-sm mt-1" style="color:var(--danger)">Abandoned before its goal: its benefits are lost.</p>
             }
-            @foreach (var rank in Ranks)
+            @foreach (var rank in Ranks.Append(("Other", "")))
             {
-                var benefits = thread.Benefits.Where(b => b.Rank == rank.Name).ToList();
+                var benefits = thread.Benefits.Where(b => RankOf(b) == rank.Item1).ToList();
                 if (benefits.Count == 0) continue;
-                <div class="lbl mt-2">@rank.Name <span class="muted">(levels @rank.Levels)</span></div>
+                <div class="lbl mt-2">@rank.Item1 @if (rank.Item2.Length > 0) { <span class="muted">(levels @rank.Item2)</span> }</div>
                 @foreach (var b in benefits)
                 {
                     var benefit = b;
-                    <label class="flex items-start gap-2 text-sm mt-1 @(lost && benefit.Gained ? "line-through muted" : "")">
-                        <input type="checkbox" class="mt-1" @bind="benefit.Gained" @bind:after="Save" />
-                        <span><span class="font-semibold">@benefit.Name.</span> @benefit.Description</span>
-                    </label>
+                    if (custom)
+                    {
+                        @* A custom thread's benefits are the player's to write (agreed with the GM). *@
+                        <div @key="benefit" class="flex items-start gap-2 text-sm mt-1">
+                            <input type="checkbox" class="mt-2" aria-label="Gained" @bind="benefit.Gained" @bind:after="Save" />
+                            <div class="flex-1 min-w-0 grid gap-1">
+                                <div class="flex gap-1">
+                                    <input class="field text-sm font-semibold flex-1 min-w-0" aria-label="Benefit name" @bind="benefit.Name" @bind:after="Save" />
+                                    <select class="select text-sm" style="width:auto" aria-label="Rank" @bind="benefit.Rank" @bind:after="Save">
+                                        @foreach (var r in Ranks) { <option value="@r.Name">@r.Name</option> }
+                                    </select>
+                                    <button type="button" class="icon-btn" title="Remove benefit" @onclick="() => RemoveBenefit(thread, benefit)">✕</button>
+                                </div>
+                                <textarea class="area text-sm" rows="2" aria-label="Benefit description" @bind="benefit.Description" @bind:after="Save"></textarea>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <label @key="benefit" class="flex items-start gap-2 text-sm mt-1 @(lost && benefit.Gained ? "line-through muted" : "")">
+                            <input type="checkbox" class="mt-1" @bind="benefit.Gained" @bind:after="Save" />
+                            <span><span class="font-semibold">@benefit.Name.</span> @benefit.Description</span>
+                        </label>
+                    }
                 }
             }
-            @if (thread.Benefits.Count == 0)
+            @if (custom)
+            {
+                <button type="button" class="btn btn-sm mt-2" @onclick="() => AddBenefit(thread)">+ Benefit</button>
+            }
+            else if (thread.Benefits.Count == 0)
             {
                 <p class="muted text-sm mt-1">No benefits listed. Add notes about your milestones to the goal.</p>
             }
@@ -103,6 +135,23 @@
             Name = "Custom thread", Source = "Homebrew",
             Benefits = Ranks.Select(r => new ThreadBenefit { Rank = r.Name, Name = $"{r.Name} benefit", Description = "Agree this with your GM." }).ToList(),
         });
+        await Save();
+    }
+
+    /// <summary>The rank group a benefit is shown under: Least, Lesser, Greater or Superior (ignoring case and anything after
+    /// the name, e.g. "lesser (5-10)"), otherwise Other, so nothing is ever hidden.</summary>
+    private static string RankOf(ThreadBenefit b) =>
+        Ranks.Select(r => r.Name).FirstOrDefault(r => (b.Rank ?? "").Trim().StartsWith(r, StringComparison.OrdinalIgnoreCase)) ?? "Other";
+
+    private async Task AddBenefit(CharacterThread t)
+    {
+        t.Benefits.Add(new ThreadBenefit { Rank = "Least", Name = "New benefit" });
+        await Save();
+    }
+
+    private async Task RemoveBenefit(CharacterThread t, ThreadBenefit b)
+    {
+        t.Benefits.Remove(b);
         await Save();
     }
 
