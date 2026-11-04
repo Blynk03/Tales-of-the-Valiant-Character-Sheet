@@ -345,6 +345,14 @@ public static class CharacterBuilder
             if (f.PickKind != (def.PickKind ?? "")) { f.PickKind = def.PickKind ?? ""; changed = true; }
             if (f.PickCount != (def.PickCount ?? "")) { f.PickCount = def.PickCount ?? ""; changed = true; }
         }
+        foreach (var f in c.Features)
+        {
+            // Hand-edited or older files may hold nulls here.
+            if (f.Picks is null) { f.Picks = new(); changed = true; }
+            if (f.PickKind is null) { f.PickKind = ""; changed = true; }
+            if (f.PickCount is null) { f.PickCount = ""; changed = true; }
+            foreach (var p in f.Picks.Where(p => p.Note is null)) { p.Note = ""; changed = true; }
+        }
         foreach (var f in c.Features.Where(f => f.PickKind.Length > 0))
             foreach (var p in f.Picks)
                 if (content.ClassOption(f.PickKind, p.Name) is { } o && Json.Serialize(p.Effects) != Json.Serialize(o.Effects))

@@ -77,7 +77,7 @@ function activeEffects(c) {
     if (f.effects) out.push([f, f.effects]);
     const o = (f.options || []).find(o => o.name === f.chosen);
     if (o && o.effects) out.push([f, o.effects]);
-    (f.picks || []).forEach(p => { if (p.effects) out.push([f, p.effects]); }); // picked class options (TVCS-117)
+    if (f.pickKind) (f.picks || []).forEach(p => { if (p.effects) out.push([f, p.effects]); }); // picked class options (TVCS-117)
   });
   return out;
 }
@@ -265,9 +265,10 @@ const classOption = (kind, name) => (S.user.classOptions || []).concat(SEED.clas
 const pickCountAt = (f, level) => { const m = /\d+/.exec(scaled(f.pickCount, level)); return m ? +m[0] : 0; };
 /** True when the character has name: a feature, a choose-one pick, a picked option, or a pick's note naming it. */
 function hasThing(c, name, isPact) {
-  const word = isPact ? name.slice('Pact of the '.length).trim() : name;
+  const word = isPact ? name.slice('Pact of the '.length).trim() : '';
+  const re = word && new RegExp(`\\b(?:Pact of the )?${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
   return (c.features || []).some(f => ieq(f.name, name) || ieq(f.chosen, name)
-    || (f.picks || []).some(p => ieq(p.name, name) || icontains(p.note, name) || (isPact && word && icontains(p.note, word))));
+    || (f.picks || []).some(p => ieq(p.name, name) || (re && ieq(p.name, 'Second Boon') && re.test(p.note || ''))));
 }
 /** Prerequisites not met, as short reasons; empty when it can be picked. */
 function unmetPrereqs(c, o, pool) {
@@ -283,10 +284,12 @@ function unmetPrereqs(c, o, pool) {
   if (c.level < level) why.unshift(`Needs level ${level}`);
   return why;
 }
+/** Picker UI state (open, search, show all) per character and feature name, so it doesn't carry over to another sheet. */
+const fpKey = (c, i) => `${c.id}/${(c.features[i] || {}).name}`;
 const plural = k => !k ? 'Options' : /s$/i.test(k) ? k : k + 's';
 function featurePicks(c, f, i) {
   const max = pickCountAt(f, c.level), pool = optionsFor(c, f), picks = f.picks || [], full = max > 0 && picks.length >= max;
-  const st = (S.fp = S.fp || {})[i] || {}, label = plural(f.pickKind).toLowerCase();
+  const st = (S.fp = S.fp || {})[fpKey(c, i)] || {}, label = plural(f.pickKind).toLowerCase();
   const pickRows = picks.map((p, j) => { const def = pool.find(o => ieq(o.name, p.name)), un = def ? unmetPrereqs(c, def, pool) : [];
     return `<div class="rounded-lg p-2 mt-1.5" style="border:1px solid var(--line)"><div class="flex items-center gap-2"><span class="font-semibold text-sm">${esc(p.name)}</span>${p.source ? `<span class="chip">${esc(p.source)}</span>` : ''}
       <button class="icon-btn ml-auto" data-act="fpRm" data-a="${i}.${j}" title="Remove ${esc(p.name)}" aria-label="Remove ${esc(p.name)}">✕</button></div>
@@ -1339,7 +1342,7 @@ const A = {
     benefits: THREAD_RANKS.map(([r]) => ({ rank: r, name: r + ' benefit', description: 'Agree this with your GM.', gained: false })) }); save(); },
   addTalent() { const t = find('talents', S.pick.talent); if (t) { addTalent(cur(), t); save(); } S.pick.talent = ''; },
   rm(p) { const [list, i] = p.split('.'); cur()[list].splice(+i, 1); save(); },
-  fpOpen(i) { const fp = S.fp = S.fp || {}; fp[i] = Object.assign(fp[i] || {}, { open: !(fp[i] || {}).open }); },
+  fpOpen(i) { const fp = S.fp = S.fp || {}, k = fpKey(cur(), +i); fp[k] = Object.assign(fp[k] || {}, { open: !(fp[k] || {}).open }); },
   fpAdd(v) { const [i, id] = String(v).split('\u0001'), c = cur(), f = c.features[+i], o = lib('classOptions').find(x => x.id === id); if (!f || !o) return;
     (f.picks = f.picks || []).push({ name: o.name, source: o.source || '', description: o.description || '', note: '', effects: deepCopy(o.effects) || null }); save(); },
   fpRm(v) { const [i, j] = String(v).split('.'), f = cur().features[+i]; if (f && f.picks) { f.picks.splice(+j, 1); save(); } },
@@ -1475,8 +1478,8 @@ root.addEventListener('change', e => {
   const el = e.target;
   if (el.dataset.act === 'toggleSource') { A.toggleSource(el.dataset.a); render(); return; }
   if (el.dataset.pick) { S.pick[el.dataset.pick] = el.value; if (el.dataset.pick === 'thread') render(); return; }
-  if (el.dataset.fpq != null || el.dataset.fpall != null) { const fp = S.fp = S.fp || {}, i = el.dataset.fpq ?? el.dataset.fpall; fp[i] = fp[i] || { open: true };
-    if (el.dataset.fpq != null) fp[i].q = el.value; else fp[i].all = el.checked; renderSoon(); return; }
+  if (el.dataset.fpq != null || el.dataset.fpall != null) { const fp = S.fp = S.fp || {}, k = fpKey(cur(), +(el.dataset.fpq ?? el.dataset.fpall)); fp[k] = fp[k] || { open: true };
+    if (el.dataset.fpq != null) fp[k].q = el.value; else fp[k].all = el.checked; renderSoon(); return; }
   if (el.dataset.sfilter) {
     const [kind, key] = el.dataset.sfilter.split('.'); S.sf[kind][key] = el.value;
     // drop a selection that the new filters hide

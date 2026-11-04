@@ -112,7 +112,8 @@ public static class CharacterCalc
         {
             if (f.Effects is { } e) yield return (f, e);
             if (f.Options.FirstOrDefault(o => o.Name == f.Chosen)?.Effects is { } oe) yield return (f, oe);
-            foreach (var p in f.Picks) if (p.Effects is { } pe) yield return (f, pe); // picked class options (TVCS-117)
+            // Picked class options (TVCS-117); not while the feature no longer picks (its picks are hidden, so inactive).
+            if (f.PickKind.Length > 0) foreach (var p in f.Picks) if (p.Effects is { } pe) yield return (f, pe);
         }
     }
 

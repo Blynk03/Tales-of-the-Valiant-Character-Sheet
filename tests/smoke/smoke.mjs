@@ -125,14 +125,16 @@ try {
       await page.waitForURL(/character\//, { timeout: 15000 });
       const fighterUrl = page.url();
       await page.getByRole('tab', { name: /Equipment/ }).click();
-      const before = await page.getByText('0 of 1 chosen').isVisible().catch(() => false);
+      const before = await page.getByText('0 of 1 chosen').waitFor({ timeout: 10000 }).then(() => true, () => false);
       await page.getByRole('button', { name: /\+ Choose fighting styles/i }).click();
       await page.getByLabel("Show ones I can't take yet").check();
       const locked = await page.getByRole('button', { name: 'Add Veteran Technique (sample)' }).isDisabled().catch(() => false);
       const reason = await page.getByText('Needs level 3').first().isVisible().catch(() => false);
       await page.getByRole('button', { name: 'Add Guarded Stance (sample)' }).click();
+      await page.getByText('1 of 1 chosen').waitFor({ timeout: 10000 }).catch(() => { });
+      await page.waitForTimeout(500); // let the save to browser storage finish before leaving the page
       await page.goto(fighterUrl); await page.getByRole('tab', { name: /Equipment/ }).click();
-      const after = await page.getByText('1 of 1 chosen').isVisible().catch(() => false);
+      const after = await page.getByText('1 of 1 chosen').waitFor({ timeout: 15000 }).then(() => true, () => false);
       const kept = await page.getByRole('button', { name: 'Remove Guarded Stance (sample)' }).isVisible().catch(() => false);
       check('Class options can be picked, with prerequisites checked', before && locked && reason && after && kept, JSON.stringify({ before, locked, reason, after, kept }));
     }

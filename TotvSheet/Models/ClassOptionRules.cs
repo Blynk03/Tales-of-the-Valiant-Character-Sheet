@@ -45,12 +45,15 @@ public static class ClassOptionRules
     }
 
     /// <summary>True when the character has <paramref name="name"/>: a feature, a "choose one" pick (a Pact Boon), a picked
-    /// class option, or a pick's note naming it (Second Boon's note: "Pact of the Tome", or just "Tome").</summary>
+    /// class option, or, for a pact boon, the note on a Second Boon pick ("Pact of the Tome", or just "Tome", as a whole word,
+    /// so a Mystic Arcanum note like "chain lightning" doesn't count).</summary>
     public static bool Has(Character c, string name, bool isPact = false)
     {
-        var word = isPact ? name["Pact of the ".Length..].Trim() : name;
-        return c.Features.Any(f => f.Name.Equals(name, Ci) || f.Chosen.Equals(name, Ci)
-            || f.Picks.Any(p => p.Name.Equals(name, Ci) || p.Note.Contains(name, Ci) || (isPact && word.Length > 0 && p.Note.Contains(word, Ci))));
+        var word = isPact ? name["Pact of the ".Length..].Trim() : "";
+        return c.Features.Any(f => (f.Name ?? "").Equals(name, Ci) || (f.Chosen ?? "").Equals(name, Ci)
+            || (f.Picks ?? new()).Any(p => (p.Name ?? "").Equals(name, Ci)
+                || (isPact && word.Length > 0 && (p.Name ?? "").Equals("Second Boon", Ci)
+                    && Regex.IsMatch(p.Note ?? "", $@"\b(?:Pact of the )?{Regex.Escape(word)}\b", RegexOptions.IgnoreCase))));
     }
 
     /// <summary>A pick for a character, copied from content.</summary>
