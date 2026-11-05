@@ -132,6 +132,9 @@
     private Task Add(ClassOptionDef o)
     {
         Feature.Picks.Add(ClassOptionRules.ToPick(o));
+        // Automatic options on other features that needed this pick follow it, e.g. Improved Summoning Focus after a focus.
+        foreach (var f in C.Features.Where(f => f != Feature && f.PickKind.Length > 0))
+            CharacterBuilder.AddAutoPicks(C, f, Content, needs: o.Name);
         return Changed.InvokeAsync();
     }
 

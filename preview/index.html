@@ -3421,21 +3421,28 @@ function pickCountAt(c, f, level) {
 /** Adds the options characters know automatically (e.g. a class's own martial actions) to a feature that picks them.
     With aboveLevel, only those unlocking above it (on level up), so removed ones don't come back. Repeats until nothing
     more is added, since one auto pick can meet another's prerequisite (a Duelist's stance before its techniques). */
-function addAutoPicks(c, f, aboveLevel) {
+function addAutoPicks(c, f, aboveLevel, needs) {
   if (!f.pickKind) return;
   const pool = optionsFor(c, f), names = classOptionsFor(c); f.picks = f.picks || [];
   for (let added = true; added;) {
     added = false;
-    pool.filter(o => o.autoPick && (aboveLevel == null || (o.level || 0) > aboveLevel) && !f.picks.some(p => ieq(p.name, o.name)) && !unmetPrereqs(c, o, names).length)
-      .forEach(o => { f.picks.push({ name: o.name, source: o.source || '', description: o.description || '', note: '', effects: deepCopy(o.effects) || null }); added = true; });
+    pool.filter(o => o.autoPick && (aboveLevel == null || minLevel(o) > aboveLevel) && (needs == null || namesIt(o, needs)))
+      .forEach(o => { if (f.picks.some(p => ieq(p.name, o.name)) || unmetPrereqs(c, o, names).length) return;
+        f.picks.push({ name: o.name, source: o.source || '', description: o.description || '', note: '', effects: deepCopy(o.effects) || null }); added = true; });
   }
 }
+/** The lowest level an option can be taken at: its level, or a higher level in its prerequisite ("11th level"). */
+const minLevel = o => Math.max(o.level || 0, ...[...String(o.prerequisite || '').matchAll(/(\d+)(?:st|nd|rd|th)[\s-]+level\b/gi)].map(m => +m[1]));
+/** True when o's prerequisite names name as a whole phrase. */
+const namesIt = (o, name) => !!name && new RegExp(`(?<![\\w'])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w'])`, 'i').test(o.prerequisite || '');
 /** True when the character has name: a feature, a choose-one pick, a picked option, or a pick's note naming it. */
-function hasThing(c, name, isPact) {
+function hasThing(c, name, isPact, self) {
   const word = isPact ? name.slice('Pact of the '.length).trim() : '';
   const re = word && new RegExp(`\\b(?:Pact of the )?${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+  // The option being checked doesn't satisfy itself (Improved Summoning Focus "Athame" needs the Summoning Focus "Athame").
+  const own = (f, p) => self && ieq(p.name, self.name) && pickKinds(f.pickKind).some(k => ieq(k, self.kind));
   return (c.features || []).some(f => ieq(f.name, name) || ieq(f.chosen, name)
-    || (f.picks || []).some(p => ieq(p.name, name) || (re && ieq(p.name, 'Second Boon') && re.test(p.note || ''))));
+    || (f.picks || []).some(p => (ieq(p.name, name) && !own(f, p)) || (re && ieq(p.name, 'Second Boon') && re.test(p.note || ''))));
 }
 /** Prerequisites not met, as short reasons; empty when it can be picked. */
 function unmetPrereqs(c, o, pool) {
@@ -3446,7 +3453,7 @@ function unmetPrereqs(c, o, pool) {
     const pm = /^(.+?)\s+(patron|subclass)$/i.exec(p);
     if (pm) { if (!icontains(c.subclassName, pm[1].trim())) why.push(`Needs the ${pm[1].trim()} ${pm[2].toLowerCase()}`); return; }
     const name = p.replace(/\s+(?:invocation|option|focus|stance|style|binding|implement|trick|technique)$/i, '').trim(), isPact = /^pact of the /i.test(name);
-    if ((isPact || pool.some(x => ieq(x.name, name))) && !hasThing(c, name, isPact)) why.push(`Needs ${name}`);
+    if ((isPact || pool.some(x => ieq(x.name, name))) && !hasThing(c, name, isPact, o)) why.push(`Needs ${name}`);
   });
   if (c.level < level) why.unshift(`Needs level ${level}`);
   return why;
@@ -4515,7 +4522,9 @@ const A = {
   rm(p) { const [list, i] = p.split('.'); cur()[list].splice(+i, 1); save(); },
   fpOpen(i) { const fp = S.fp = S.fp || {}, k = fpKey(cur(), +i); fp[k] = Object.assign(fp[k] || {}, { open: !(fp[k] || {}).open }); },
   fpAdd(v) { const [i, id] = String(v).split('\u0001'), c = cur(), f = c.features[+i], o = lib('classOptions').find(x => x.id === id); if (!f || !o) return;
-    (f.picks = f.picks || []).push({ name: o.name, source: o.source || '', description: o.description || '', note: '', effects: deepCopy(o.effects) || null }); save(); },
+    (f.picks = f.picks || []).push({ name: o.name, source: o.source || '', description: o.description || '', note: '', effects: deepCopy(o.effects) || null });
+    c.features.filter(g => g !== f && g.pickKind).forEach(g => addAutoPicks(c, g, null, o.name)); // e.g. Improved Summoning Focus after a focus
+    save(); },
   fpRm(v) { const [i, j] = String(v).split('.'), f = cur().features[+i]; if (f && f.picks) { f.picks.splice(+j, 1); save(); } },
   mode(m) { S.dice.mode = m; },
   trayToggle() { S.trayOpen = !S.trayOpen; },

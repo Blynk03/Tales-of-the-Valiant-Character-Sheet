@@ -60,7 +60,7 @@ public static class ClassOptionRules
             }
             var name = Regex.Replace(p, @"\s+(?:invocation|option|focus|stance|style|binding|implement|trick|technique)$", "", RegexOptions.IgnoreCase).Trim();
             var isPact = name.StartsWith("Pact of the ", Ci);
-            if ((isPact || pool.Any(x => x.Name.Equals(name, Ci))) && !Has(c, name, isPact)) why.Add($"Needs {name}");
+            if ((isPact || pool.Any(x => x.Name.Equals(name, Ci))) && !Has(c, name, isPact, o)) why.Add($"Needs {name}");
         }
         if (c.Level < level) why.Insert(0, $"Needs level {level}");
         return why;
@@ -69,14 +69,27 @@ public static class ClassOptionRules
     /// <summary>True when the character has <paramref name="name"/>: a feature, a "choose one" pick (a Pact Boon), a picked
     /// class option, or, for a pact boon, the note on a Second Boon pick ("Pact of the Tome", or just "Tome", as a whole word,
     /// so a Mystic Arcanum note like "chain lightning" doesn't count).</summary>
-    public static bool Has(Character c, string name, bool isPact = false)
+    /// <param name="self">The option being checked: its own pick doesn't count (Improved Summoning Focus "Athame" needs the
+    /// Summoning Focus "Athame", not itself).</param>
+    public static bool Has(Character c, string name, bool isPact = false, ClassOptionDef? self = null)
     {
         var word = isPact ? name["Pact of the ".Length..].Trim() : "";
+        bool Own(Feature f, FeaturePick p) => self is not null && (p.Name ?? "").Equals(self.Name, Ci)
+            && Kinds(f.PickKind).Any(k => k.Equals(self.Kind, Ci));
         return c.Features.Any(f => (f.Name ?? "").Equals(name, Ci) || (f.Chosen ?? "").Equals(name, Ci)
-            || (f.Picks ?? new()).Any(p => (p.Name ?? "").Equals(name, Ci)
+            || (f.Picks ?? new()).Any(p => ((p.Name ?? "").Equals(name, Ci) && !Own(f, p))
                 || (isPact && word.Length > 0 && (p.Name ?? "").Equals("Second Boon", Ci)
                     && Regex.IsMatch(p.Note ?? "", $@"\b(?:Pact of the )?{Regex.Escape(word)}\b", RegexOptions.IgnoreCase))));
     }
+
+    /// <summary>The lowest level an option can be taken at: its Level, or a higher level in its prerequisite ("11th level").</summary>
+    public static int MinLevel(ClassOptionDef o) =>
+        Regex.Matches(o.Prerequisite ?? "", @"(\d+)(?:st|nd|rd|th)[\s-]+level\b", RegexOptions.IgnoreCase)
+            .Select(m => int.Parse(m.Groups[1].Value)).Append(o.Level).Max();
+
+    /// <summary>True when <paramref name="o"/>'s prerequisite names <paramref name="name"/> (as a whole phrase).</summary>
+    public static bool Names(ClassOptionDef o, string name) =>
+        name.Length > 0 && Regex.IsMatch(o.Prerequisite ?? "", $@"(?<![\w']){Regex.Escape(name)}(?![\w'])", RegexOptions.IgnoreCase);
 
     /// <summary>A pick for a character, copied from content.</summary>
     public static FeaturePick ToPick(ClassOptionDef o) => new()
