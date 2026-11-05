@@ -75,10 +75,12 @@ public class StorageService
     /// <summary>Saves a large value to IndexedDB, falling back to localStorage. Returns false (and warns) if both fail.</summary>
     public async Task<bool> SetLargeAsync<T>(string key, T value)
     {
-        var json = Json.Serialize(value);
+        // Serialized straight to UTF-8 bytes and passed to JavaScript as bytes: a 3 MB library would otherwise be held as a
+        // UTF-16 string and again as an escaped interop argument, which on a phone could run the app out of memory (TVCS-120).
+        var bytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(value, Json.Options);
         try
         {
-            if (await _js.InvokeAsync<bool>("totv.idbSet", key, json))
+            if (await _js.InvokeAsync<bool>("totv.idbSetBytes", key, bytes))
             {
                 await RemoveAsync(key); // drop any copy left in localStorage from before TVCS-101
                 await _js.InvokeAsync<bool>("totv.lsSet", key.Replace(".content", ".contentInIdb"), "true");
@@ -87,7 +89,7 @@ public class StorageService
         }
         catch (Exception ex) { Console.WriteLine($"Could not save '{key}' to IndexedDB: {ex.Message}"); }
         bool ok;
-        try { ok = await _js.InvokeAsync<bool>("totv.lsSet", key, json); }
+        try { ok = await _js.InvokeAsync<bool>("totv.lsSet", key, System.Text.Encoding.UTF8.GetString(bytes)); }
         catch { ok = false; }
         if (!ok) Fail();
         return ok;

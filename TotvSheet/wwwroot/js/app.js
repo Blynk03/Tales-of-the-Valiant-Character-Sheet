@@ -38,9 +38,23 @@ window.totv = {
   // Reads the files picked in a file input as text (TVCS-107). Reading in JS, as the preview does, avoids Blazor's
   // chunked file stream, which can stall on Android when the file comes from Google Drive or another cloud picker.
   // Each file gets a time limit, so a stalled read reports an error instead of hanging the import.
-  readPickedFiles: async function (id, timeoutMs) {
+  // Number of files picked in a file input; the import reads them one at a time (TVCS-120).
+  pickedFileCount: function (id) {
     const el = document.getElementById(id);
-    const files = el && el.files ? Array.from(el.files) : [];
+    return el && el.files ? el.files.length : 0;
+  },
+  // Reads one picked file, so only one file's text is in memory at a time (TVCS-120).
+  readPickedFile: async function (id, index, timeoutMs) {
+    const el = document.getElementById(id);
+    const f = el && el.files ? el.files[index] : null;
+    if (!f) return { name: 'file ' + (index + 1), text: null, error: 'not found' };
+    const out = await this.readPickedFiles(id, timeoutMs, index);
+    return out[0];
+  },
+  readPickedFiles: async function (id, timeoutMs, only) {
+    const el = document.getElementById(id);
+    const all = el && el.files ? Array.from(el.files) : [];
+    const files = typeof only === 'number' ? all.slice(only, only + 1) : all;
     const readOne = function (f) {
       const text = typeof f.text === 'function' ? f.text() : new Promise(function (res, rej) {
         const r = new FileReader(); r.onload = function () { res(r.result); }; r.onerror = function () { rej(r.error); }; r.readAsText(f);
@@ -86,6 +100,13 @@ window.totv = {
         q.onerror = function () { rej(q.error); };
       });
     } catch (e) { return null; }
+  },
+  // Saves UTF-8 bytes (a Uint8Array from .NET) as text: passing bytes avoids a second, escaped copy of a large
+  // string in the app's memory (TVCS-120). Stored in the same form as idbSet, so idbGet reads either.
+  idbSetBytes: async function (key, bytes) {
+    let text;
+    try { text = new TextDecoder('utf-8').decode(bytes); } catch (e) { return false; }
+    return this.idbSet(key, text);
   },
   idbSet: async function (key, value) {
     try {

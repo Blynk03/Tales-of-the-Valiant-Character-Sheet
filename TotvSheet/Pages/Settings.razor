@@ -288,7 +288,9 @@
     }
 
     /// <summary>Imports one or more picked files, saving once at the end, and reports each file's result.
-    /// Every step has a time limit or a catch, so the message always ends with a result (TVCS-107).</summary>
+    /// Every step has a time limit or a catch, so the message always ends with a result (TVCS-107).
+    /// Files are read and added one at a time, freeing each before the next, so picking every book at once doesn't run a
+    /// phone out of memory (TVCS-120).</summary>
     private async Task Import(InputFileChangeEventArgs e)
     {
         if (importing) return;
@@ -297,11 +299,10 @@
         int total = 0, count = Math.Max(1, e.FileCount);
         try
         {
-            await Progress($"Reading {count} file{(count == 1 ? "" : "s")}…");
-            var picked = await ReadPicked(e);
-            count = picked.Count;
-            foreach (var (file, i) in picked.Select((f, i) => (f, i)))
+            for (var i = 0; i < count; i++)
             {
+                await Progress(count > 1 ? $"Reading file {i + 1} of {count}…" : "Reading the file…");
+                PickedFile? file = await ReadPicked(e, i);
                 if (file.Text is null) { lines.Add($"{file.Name}: couldn't read the file ({file.Error})"); continue; }
                 await Progress($"Adding {file.Name}" + (count > 1 ? $" ({i + 1} of {count})…" : "…"));
                 try
@@ -319,11 +320,14 @@
                 {
                     lines.Add($"{file.Name}: couldn't import ({ex.Message})");
                 }
+                file = null;
+                GC.Collect(); // let the next file reuse this one's memory rather than growing the app's heap
             }
             var saved = true;
             if (total > 0)
             {
                 await Progress($"Saving {total} entries…");
+                GC.Collect();
                 saved = await Content.SaveAsync();
             }
             message = count == 1 && total > 0
@@ -339,28 +343,27 @@
         finally { importing = false; }
     }
 
-    /// <summary>Reads the picked files in JavaScript; falls back to Blazor's file stream (with a time limit) if that fails.</summary>
-    private async Task<List<PickedFile>> ReadPicked(InputFileChangeEventArgs e)
+    /// <summary>Reads picked file number <paramref name="index"/> in JavaScript; falls back to Blazor's file stream (with a
+    /// time limit) if that fails.</summary>
+    private async Task<PickedFile> ReadPicked(InputFileChangeEventArgs e, int index)
     {
         try
         {
-            var viaJs = await JS.InvokeAsync<PickedFile[]>("totv.readPickedFiles", "content-import", 60_000);
-            if (viaJs.Length > 0) return viaJs.ToList();
+            var viaJs = await JS.InvokeAsync<PickedFile?>("totv.readPickedFile", "content-import", index, 60_000);
+            if (viaJs is not null && (viaJs.Text is not null || viaJs.Error != "not found")) return viaJs;
         }
-        catch (Exception ex) { Console.WriteLine($"Reading files in JS failed, using the stream: {ex.Message}"); }
-        var result = new List<PickedFile>();
-        foreach (var file in e.GetMultipleFiles(Math.Max(1, e.FileCount)))
+        catch (Exception ex) { Console.WriteLine($"Reading the file in JS failed, using the stream: {ex.Message}"); }
+        var files = e.GetMultipleFiles(Math.Max(1, e.FileCount));
+        if (index >= files.Count) return new($"file {index + 1}", null, "not found");
+        var file = files[index];
+        try
         {
-            try
-            {
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-                using var reader = new StreamReader(file.OpenReadStream(20_000_000, cts.Token));
-                result.Add(new(file.Name, await reader.ReadToEndAsync(cts.Token), null));
-            }
-            catch (OperationCanceledException) { result.Add(new(file.Name, null, "reading took longer than 60 s")); }
-            catch (Exception ex) { result.Add(new(file.Name, null, ex.Message)); }
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            using var reader = new StreamReader(file.OpenReadStream(20_000_000, cts.Token));
+            return new(file.Name, await reader.ReadToEndAsync(cts.Token), null);
         }
-        return result;
+        catch (OperationCanceledException) { return new(file.Name, null, "reading took longer than 60 s"); }
+        catch (Exception ex) { return new(file.Name, null, ex.Message); }
     }
 
     private static string Slug(string name)
