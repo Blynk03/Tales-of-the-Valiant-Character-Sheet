@@ -43,7 +43,7 @@ public class FeatureDef
     public FeatureEffects? Effects { get; set; }
     [Hint("For a \"choose one\" feature (e.g. Natural Adaptation): the options. The player picks one at creation or on the sheet.")]
     public List<FeatureOptionDef> Options { get; set; } = new();
-    [Hint("For a feature that picks several class options (e.g. Eldritch Invocations): the kind of class option to pick from, exactly as on the Class Options list.")]
+    [Hint("For a feature that picks several class options (e.g. Eldritch Invocations): the kind of class option to pick from, exactly as on the Class Options list. Several kinds can be separated by commas.")]
     public string PickKind { get; set; } = "";
     [Hint("How many to pick, by level, e.g. \"2; 5:3; 7:4\". Used with Pick Kind. Blank for no limit (e.g. martial actions you know).")]
     public string PickCount { get; set; } = "";
