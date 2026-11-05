@@ -35,14 +35,6 @@ window.totv = {
     const installed = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone ? 'installed' : 'in browser';
     return [browser, os, screen.width + '×' + screen.height, installed].join(' · ');
   },
-  // Reads the files picked in a file input as text (TVCS-107). Reading in JS, as the preview does, avoids Blazor's
-  // chunked file stream, which can stall on Android when the file comes from Google Drive or another cloud picker.
-  // Each file gets a time limit, so a stalled read reports an error instead of hanging the import.
-  // Number of files picked in a file input; the import reads them one at a time (TVCS-120).
-  pickedFileCount: function (id) {
-    const el = document.getElementById(id);
-    return el && el.files ? el.files.length : 0;
-  },
   // Reads one picked file, so only one file's text is in memory at a time (TVCS-120).
   readPickedFile: async function (id, index, timeoutMs) {
     const el = document.getElementById(id);
@@ -51,6 +43,9 @@ window.totv = {
     const out = await this.readPickedFiles(id, timeoutMs, index);
     return out[0];
   },
+  // Reads the files picked in a file input as text (TVCS-107). Reading in JS, as the preview does, avoids Blazor's
+  // chunked file stream, which can stall on Android when the file comes from Google Drive or another cloud picker.
+  // Each file gets a time limit, so a stalled read reports an error instead of hanging the import.
   readPickedFiles: async function (id, timeoutMs, only) {
     const el = document.getElementById(id);
     const all = el && el.files ? Array.from(el.files) : [];
@@ -59,10 +54,13 @@ window.totv = {
       const text = typeof f.text === 'function' ? f.text() : new Promise(function (res, rej) {
         const r = new FileReader(); r.onload = function () { res(r.result); }; r.onerror = function () { rej(r.error); }; r.readAsText(f);
       });
-      const limit = new Promise(function (_, rej) { setTimeout(function () { rej(new Error('reading took longer than ' + Math.round(timeoutMs / 1000) + ' s')); }, timeoutMs); });
+      let timer;
+      const limit = new Promise(function (_, rej) { timer = setTimeout(function () { rej(new Error('reading took longer than ' + Math.round(timeoutMs / 1000) + ' s')); }, timeoutMs); });
+      // The timer is cleared once the race settles, so a finished read doesn't keep its text alive for the full limit.
       return Promise.race([text, limit])
         .then(function (t) { return { name: f.name, text: t, error: null }; })
-        .catch(function (e) { return { name: f.name, text: null, error: (e && e.message) || String(e) }; });
+        .catch(function (e) { return { name: f.name, text: null, error: (e && e.message) || String(e) }; })
+        .finally(function () { clearTimeout(timer); });
     };
     const out = [];
     for (const f of files) out.push(await readOne(f));
