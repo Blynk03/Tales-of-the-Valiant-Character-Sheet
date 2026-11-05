@@ -10,6 +10,10 @@ public static class ClassOptionRules
 {
     private const StringComparison Ci = StringComparison.OrdinalIgnoreCase;
 
+    /// <summary>The kinds a feature picks from: one, or several separated by commas (e.g. a Duelist's "Stance, Technique").</summary>
+    public static string[] Kinds(string? pickKind) =>
+        (pickKind ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
     /// <summary>How many options the feature allows at <paramref name="level"/> ("2; 5:3; 7:4" → 3 at 5th), plus extra picks
     /// granted by other features or picks (e.g. a heroic boon's "Eldritch Invocation 2"). 0 means no limit (blank Pick Count).</summary>
     public static int CountAt(Character c, Feature f, int level)
@@ -28,14 +32,15 @@ public static class ClassOptionRules
     private static bool Matches(string kind, Feature f)
     {
         static string One(string s) => s.EndsWith("s", Ci) ? s[..^1] : s;
-        return One(kind).Equals(One(f.PickKind), Ci) || One(kind).Equals(One(f.Name ?? ""), Ci);
+        return Kinds(f.PickKind).Any(k => One(kind).Equals(One(k), Ci)) || One(kind).Equals(One(f.Name ?? ""), Ci);
     }
 
     /// <summary>
     /// The prerequisites of <paramref name="o"/> the character doesn't meet, as short reasons ("Needs level 5",
     /// "Needs Pact of the Chain"). Empty when it can be picked. Checks the option's level and, from the prerequisite text,
-    /// levels ("7th level"), pact boons and other options of the same kind ("Kindred Menagerie invocation", "Second Boon"),
-    /// and subclasses ("Elder Wood patron"). Other text is shown to the player but not checked.
+    /// levels ("7th level"), pact boons, other class options ("Kindred Menagerie invocation", "Second Boon", "Athame focus",
+    /// "Allegro stance"; <paramref name="pool"/> is every option for the class, of any kind) and subclasses ("Elder Wood
+    /// patron"). Other text is shown to the player but not checked.
     /// </summary>
     public static List<string> Unmet(Character c, ClassOptionDef o, IReadOnlyCollection<ClassOptionDef> pool)
     {
@@ -53,7 +58,7 @@ public static class ClassOptionRules
                 if (!(c.SubclassName ?? "").Contains(pm.Groups[1].Value.Trim(), Ci)) why.Add($"Needs the {pm.Groups[1].Value.Trim()} {(p.EndsWith("patron", Ci) ? "patron" : "subclass")}");
                 continue;
             }
-            var name = Regex.Replace(p, @"\s+(?:invocation|option)$", "", RegexOptions.IgnoreCase).Trim();
+            var name = Regex.Replace(p, @"\s+(?:invocation|option|focus|stance|style|binding|implement|trick|technique)$", "", RegexOptions.IgnoreCase).Trim();
             var isPact = name.StartsWith("Pact of the ", Ci);
             if ((isPact || pool.Any(x => x.Name.Equals(name, Ci))) && !Has(c, name, isPact)) why.Add($"Needs {name}");
         }

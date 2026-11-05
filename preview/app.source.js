@@ -266,27 +266,35 @@ function refreshFeatureRules(c) {
 // ---------- Class options (TVCS-117, mirror of ClassOptionRules): e.g. a warlock's Eldritch Invocations ----------
 const ieq = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
 const icontains = (a, b) => String(a || '').toLowerCase().includes(String(b || '').toLowerCase());
-/** The enabled options a feature picks from: its kind, for the character's class or any class. */
-const optionsFor = (c, f) => !f.pickKind ? [] : lib('classOptions').filter(o => ieq(o.kind, f.pickKind) && (!o.classId || o.classId === c.classId))
+/** The kinds a feature picks from: one, or several separated by commas (a Duelist's "Stance, Technique"). */
+const pickKinds = k => String(k || '').split(',').map(x => x.trim()).filter(Boolean);
+/** Every enabled option for the character's class (or any class), of every kind: for prerequisites naming another option. */
+const classOptionsFor = c => lib('classOptions').filter(o => !o.classId || o.classId === c.classId)
   .sort((a, b) => (a.level || 0) - (b.level || 0) || a.name.localeCompare(b.name));
-/** By kind and name, disabled books included (for refreshing a pick's rules). */
-const classOption = (kind, name) => (S.user.classOptions || []).concat(SEED.classOptions || []).find(o => ieq(o.kind, kind) && ieq(o.name, name));
-/** How many the feature allows at a level: "2; 5:3" → 3 at 5th. */
+/** The enabled options a feature picks from: its kinds, for the character's class or any class. */
+const optionsFor = (c, f) => { const ks = pickKinds(f.pickKind); return ks.length ? classOptionsFor(c).filter(o => ks.some(k => ieq(o.kind, k))) : []; };
+/** By kind (one of a feature's kinds) and name, disabled books included (for refreshing a pick's rules). */
+const classOption = (kind, name) => { const ks = pickKinds(kind); return (S.user.classOptions || []).concat(SEED.classOptions || []).find(o => ks.some(k => ieq(o.kind, k)) && ieq(o.name, name)); };
 /** How many the feature allows at a level ("2; 5:3" → 3 at 5th) plus extra picks from other features or picks
     (e.g. "Eldritch Invocation 2"); 0 means no limit (blank pick count). */
 function pickCountAt(c, f, level) {
   const m = /\d+/.exec(scaled(f.pickCount, level)); if (!m) return 0;
   let extra = 0;
   const one = s => String(s || '').replace(/s$/i, '');
-  activeEffects(c).forEach(([, e]) => (e.extraPicks || []).forEach(x => { const xm = /^(.*?)\s*\+?(\d+)\s*$/.exec(x || ''); if (xm && (ieq(one(xm[1].trim()), one(f.pickKind)) || ieq(one(xm[1].trim()), one(f.name)))) extra += +xm[2]; }));
+  activeEffects(c).forEach(([, e]) => (e.extraPicks || []).forEach(x => { const xm = /^(.*?)\s*\+?(\d+)\s*$/.exec(x || ''); if (xm && (pickKinds(f.pickKind).some(k => ieq(one(xm[1].trim()), one(k))) || ieq(one(xm[1].trim()), one(f.name)))) extra += +xm[2]; }));
   return +m[0] + extra;
 }
-/** Adds the options characters know automatically (e.g. a class's own martial actions) to a feature that picks them. */
-function addAutoPicks(c, f) {
+/** Adds the options characters know automatically (e.g. a class's own martial actions) to a feature that picks them.
+    With aboveLevel, only those unlocking above it (on level up), so removed ones don't come back. Repeats until nothing
+    more is added, since one auto pick can meet another's prerequisite (a Duelist's stance before its techniques). */
+function addAutoPicks(c, f, aboveLevel) {
   if (!f.pickKind) return;
-  const pool = optionsFor(c, f); f.picks = f.picks || [];
-  pool.filter(o => o.autoPick && !f.picks.some(p => ieq(p.name, o.name)) && !unmetPrereqs(c, o, pool).length)
-    .forEach(o => f.picks.push({ name: o.name, source: o.source || '', description: o.description || '', note: '', effects: deepCopy(o.effects) || null }));
+  const pool = optionsFor(c, f), names = classOptionsFor(c); f.picks = f.picks || [];
+  for (let added = true; added;) {
+    added = false;
+    pool.filter(o => o.autoPick && (aboveLevel == null || (o.level || 0) > aboveLevel) && !f.picks.some(p => ieq(p.name, o.name)) && !unmetPrereqs(c, o, names).length)
+      .forEach(o => { f.picks.push({ name: o.name, source: o.source || '', description: o.description || '', note: '', effects: deepCopy(o.effects) || null }); added = true; });
+  }
 }
 /** True when the character has name: a feature, a choose-one pick, a picked option, or a pick's note naming it. */
 function hasThing(c, name, isPact) {
@@ -303,7 +311,7 @@ function unmetPrereqs(c, o, pool) {
     const lm = /^(\d+)(?:st|nd|rd|th)[\s-]+level\b/i.exec(p); if (lm) { level = Math.max(level, +lm[1]); return; }
     const pm = /^(.+?)\s+(patron|subclass)$/i.exec(p);
     if (pm) { if (!icontains(c.subclassName, pm[1].trim())) why.push(`Needs the ${pm[1].trim()} ${pm[2].toLowerCase()}`); return; }
-    const name = p.replace(/\s+(?:invocation|option)$/i, '').trim(), isPact = /^pact of the /i.test(name);
+    const name = p.replace(/\s+(?:invocation|option|focus|stance|style|binding|implement|trick|technique)$/i, '').trim(), isPact = /^pact of the /i.test(name);
     if ((isPact || pool.some(x => ieq(x.name, name))) && !hasThing(c, name, isPact)) why.push(`Needs ${name}`);
   });
   if (c.level < level) why.unshift(`Needs level ${level}`);
@@ -313,9 +321,10 @@ function unmetPrereqs(c, o, pool) {
 const fpKey = (c, i) => `${c.id}/${(c.features[i] || {}).name}`;
 const plural = k => !k ? 'Options' : /s$/i.test(k) ? k : /^metamagic$/i.test(k) ? 'Metamagic options' : k + 's';
 function featurePicks(c, f, i) {
-  const max = pickCountAt(c, f, c.level), pool = optionsFor(c, f), picks = f.picks || [], full = max > 0 && picks.length >= max;
-  const st = (S.fp = S.fp || {})[fpKey(c, i)] || {}, label = plural(f.pickKind).toLowerCase();
-  const pickRows = picks.map((p, j) => { const def = pool.find(o => ieq(o.name, p.name)), un = def ? unmetPrereqs(c, def, pool) : [];
+  const max = pickCountAt(c, f, c.level), pool = optionsFor(c, f), names = classOptionsFor(c), picks = f.picks || [], full = max > 0 && picks.length >= max;
+  if (!max && !pool.length && !picks.length) return ''; // no limit and nothing to pick: the book isn't imported
+  const st = (S.fp = S.fp || {})[fpKey(c, i)] || {}, label = (pickKinds(f.pickKind).length > 1 ? f.name : plural(f.pickKind)).toLowerCase();
+  const pickRows = picks.map((p, j) => { const def = pool.find(o => ieq(o.name, p.name)), un = def ? unmetPrereqs(c, def, names) : [];
     return `<div class="rounded-lg p-2 mt-1.5" style="border:1px solid var(--line)"><div class="flex items-center gap-2"><span class="font-semibold text-sm">${esc(p.name)}</span>${p.source ? `<span class="chip">${esc(p.source)}</span>` : ''}
       <button class="icon-btn ml-auto" data-act="fpRm" data-a="${i}.${j}" title="Remove ${esc(p.name)}" aria-label="Remove ${esc(p.name)}">✕</button></div>
       ${p.description ? `<p class="text-sm muted">${esc(p.description)}</p>` : ''}${un.length ? `<p class="text-xs mt-0.5" style="color:var(--danger)">Prerequisite not met: ${esc(un.join('; '))}.</p>` : ''}
@@ -323,7 +332,7 @@ function featurePicks(c, f, i) {
   let list = '';
   if (st.open) {
     const q = (st.q || '').toLowerCase(), shown = pool.filter(o => !q || o.name.toLowerCase().includes(q) || String(o.description || '').toLowerCase().includes(q));
-    const rows = shown.map(o => { const un = unmetPrereqs(c, o, pool), taken = !o.repeatable && picks.some(p => ieq(p.name, o.name));
+    const rows = shown.map(o => { const un = unmetPrereqs(c, o, names), taken = !o.repeatable && picks.some(p => ieq(p.name, o.name));
       if (!st.all && (un.length || taken)) return '';
       return `<div class="rounded-lg p-2" style="border:1px solid var(--line);${un.length || taken ? 'opacity:.7' : ''}"><div class="flex items-center gap-2"><span class="font-semibold text-sm">${esc(o.name)}</span>${o.source ? `<span class="chip">${esc(o.source)}</span>` : ''}
         <button class="btn btn-sm ml-auto" data-act="fpAdd" data-a="${i}\u0001${esc(o.id)}" aria-label="Add ${esc(o.name)}" ${full || taken || un.length ? 'disabled' : ''}>Add</button></div>
@@ -506,6 +515,7 @@ function applyLevelUp(c, lu) {
   if (csub && csub.spellcastingAbility && !c.spellAbility) { c.spellAbility = csub.spellcastingAbility; c.spellcasterClass = `${c.className} (${csub.name})`; }
   if (d) applyResources(c, d.resources, cls.name, n);
   feats.forEach(f => addAutoPicks(c, f)); // after the subclass is set, for subclass prerequisites
+  c.features.filter(f => !feats.includes(f) && f.pickKind).forEach(f => addAutoPicks(c, f, n - 1)); // options unlocking at this level
   if (c.experience < XP[Math.min(n, 20)]) c.experience = XP[Math.min(n, 20)];
 }
 function takeDamage(c, n) { if (n <= 0) return; const t = Math.min(c.tempHp, n); c.tempHp -= t; c.currentHp = Math.max(0, c.currentHp - (n - t)); }
@@ -624,7 +634,7 @@ function render() {
 // "Report a problem" (TVCS-106): opens the project's GitHub issue form with the version, page and device filled in.
 // Set REPORT_URL to '' to hide the link; {version}, {page} and {device} placeholders are filled in if present.
 const REPORT_URL = 'https://github.com/Blynk03/Tales-of-the-Valiant-Character-Sheet/issues/new?template=problem-report.yml';
-const PREVIEW_VERSION = 'preview v24';
+const PREVIEW_VERSION = 'preview v25';
 function deviceInfo() {
   const ua = navigator.userAgent;
   const m = (re) => { const r = ua.match(re); return r ? r[1] : null; };

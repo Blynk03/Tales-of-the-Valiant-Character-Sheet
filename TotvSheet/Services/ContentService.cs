@@ -179,17 +179,27 @@ public class ContentService
     public IEnumerable<ClassOptionDef> ClassOptions => Merge(Core.ClassOptions, User.ClassOptions);
 
     /// <summary>The enabled class options a feature can pick from (TVCS-117): its kind, for the character's class or any class.</summary>
-    public List<ClassOptionDef> OptionsFor(Character c, Feature f) =>
-        f.PickKind.Length == 0 ? new() : ClassOptions
-            .Where(o => string.Equals(o.Kind, f.PickKind, StringComparison.OrdinalIgnoreCase)
-                        && (o.ClassId.Length == 0 || o.ClassId == c.ClassId))
+    public List<ClassOptionDef> OptionsFor(Character c, Feature f)
+    {
+        var kinds = ClassOptionRules.Kinds(f.PickKind);
+        return kinds.Length == 0 ? new() : ClassOptionsFor(c)
+            .Where(o => kinds.Any(k => string.Equals(o.Kind, k, StringComparison.OrdinalIgnoreCase))).ToList();
+    }
+
+    /// <summary>Every enabled class option for the character's class (or any class), of every kind: used to check
+    /// prerequisites that name another option, such as "Athame focus" (TVCS-119).</summary>
+    public List<ClassOptionDef> ClassOptionsFor(Character c) =>
+        ClassOptions.Where(o => o.ClassId.Length == 0 || o.ClassId == c.ClassId)
             .OrderBy(o => o.Level).ThenBy(o => o.Name).ToList();
 
-    /// <summary>A class option by kind and name, including disabled books, for refreshing a pick's rules.</summary>
-    public ClassOptionDef? ClassOption(string kind, string name) =>
-        User.ClassOptions.Concat(Core.ClassOptions)
-            .FirstOrDefault(o => string.Equals(o.Kind, kind, StringComparison.OrdinalIgnoreCase)
+    /// <summary>A class option by kind (one of a feature's kinds) and name, including disabled books, for refreshing a pick's rules.</summary>
+    public ClassOptionDef? ClassOption(string kind, string name)
+    {
+        var kinds = ClassOptionRules.Kinds(kind);
+        return User.ClassOptions.Concat(Core.ClassOptions)
+            .FirstOrDefault(o => kinds.Any(k => string.Equals(o.Kind, k, StringComparison.OrdinalIgnoreCase))
                                  && string.Equals(o.Name, name, StringComparison.OrdinalIgnoreCase));
+    }
 
     // Lookups by id ignore sample hiding, so characters built from a retired sample entry keep working.
     public ClassDef? Class(string id) => Merge(Core.Classes, User.Classes, hideSamples: false).FirstOrDefault(c => c.Id == id);

@@ -5,9 +5,14 @@
 @{
     var max = ClassOptionRules.CountAt(C, Feature, C.Level);
     var pool = Content.OptionsFor(C, Feature);
+    var names = Content.ClassOptionsFor(C);
+    // A feature with no limit and nothing to pick (its book isn't imported, e.g. Book of Blades rogue tricks) shows nothing.
+    var hidden = max == 0 && pool.Count == 0 && Feature.Picks.Count == 0;
     var full = max > 0 && Feature.Picks.Count >= max;
-    var label = Plural(Feature.PickKind);
+    var label = ClassOptionRules.Kinds(Feature.PickKind).Length > 1 ? Feature.Name : Plural(Feature.PickKind);
 }
+@if (!hidden)
+{
 <div class="mt-1.5">
     <div class="flex flex-wrap items-center gap-2">
         <span class="lbl">Your @label.ToLowerInvariant()</span>
@@ -29,7 +34,7 @@
     {
         var pick = p;
         var def = pool.FirstOrDefault(o => o.Name.Equals(pick.Name, StringComparison.OrdinalIgnoreCase));
-        var unmet = def is null ? new List<string>() : ClassOptionRules.Unmet(C, def, pool);
+        var unmet = def is null ? new List<string>() : ClassOptionRules.Unmet(C, def, names);
         <div @key="pick" class="rounded-lg p-2 mt-1.5" style="border:1px solid var(--line)">
             <div class="flex items-center gap-2">
                 <span class="font-semibold text-sm">@pick.Name</span>
@@ -73,7 +78,7 @@
                     @foreach (var o in shown)
                     {
                         var opt = o;
-                        var unmet = ClassOptionRules.Unmet(C, opt, pool);
+                        var unmet = ClassOptionRules.Unmet(C, opt, names);
                         var taken = !opt.Repeatable && Feature.Picks.Any(p => p.Name.Equals(opt.Name, StringComparison.OrdinalIgnoreCase));
                         if (!showAll && (unmet.Count > 0 || taken)) continue;
                         <div @key="opt" class="rounded-lg p-2" style="border:1px solid var(--line); @(unmet.Count > 0 || taken ? "opacity:.7" : "")">
@@ -97,7 +102,7 @@
                 {
                     <p class="muted text-sm">No matches.</p>
                 }
-                else if (!showAll && shown.All(o => ClassOptionRules.Unmet(C, o, pool).Count > 0
+                else if (!showAll && shown.All(o => ClassOptionRules.Unmet(C, o, names).Count > 0
                                                || (!o.Repeatable && Feature.Picks.Any(p => p.Name.Equals(o.Name, StringComparison.OrdinalIgnoreCase)))))
                 {
                     <p class="muted text-sm">Nothing else you can take right now. Tick "Show ones I can't take yet" to see the rest.</p>
@@ -107,6 +112,7 @@
     }
 </div>
 
+}
 @code {
     [Parameter, EditorRequired] public Character C { get; set; } = default!;
     [Parameter, EditorRequired] public Feature Feature { get; set; } = default!;

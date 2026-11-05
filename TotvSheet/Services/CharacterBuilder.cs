@@ -234,6 +234,8 @@ public static class CharacterBuilder
         }
         if (def is not null) ApplyResources(c, def.Resources, cls!.Name, newLevel);
         foreach (var f in features) AddAutoPicks(c, f, content); // after the subclass is set, for subclass prerequisites
+        // Features the character already had gain the automatic options that unlock at this level (TVCS-119).
+        foreach (var f in c.Features.Except(features).Where(f => f.PickKind.Length > 0)) AddAutoPicks(c, f, content, newLevel - 1);
 
         if (c.Experience < Rules.XpForLevel[Math.Min(newLevel, 20)])
             c.Experience = Rules.XpForLevel[Math.Min(newLevel, 20)];
@@ -382,15 +384,26 @@ public static class CharacterBuilder
     }
 
     /// <summary>Adds the class options characters know automatically (e.g. a class's own martial actions, TVCS-118) to a
-    /// feature that picks them, when it is gained. Only those whose prerequisites are met and not already picked.</summary>
-    public static void AddAutoPicks(Character c, Feature f, ContentService content)
+    /// feature that picks them, when it is gained. Only those whose prerequisites are met and not already picked. With
+    /// <paramref name="aboveLevel"/>, only options of a higher level: those that unlock on level up, so options the player
+    /// removed earlier don't come back (TVCS-119). Repeats until nothing more is added, since one auto pick can meet
+    /// another's prerequisite (a Duelist's stance before its techniques).</summary>
+    public static void AddAutoPicks(Character c, Feature f, ContentService content, int? aboveLevel = null)
     {
         if (string.IsNullOrEmpty(f.PickKind)) return;
         f.Picks ??= new();
         var pool = content.OptionsFor(c, f);
-        foreach (var o in pool.Where(o => o.AutoPick))
-            if (!f.Picks.Any(p => (p.Name ?? "").Equals(o.Name, StringComparison.OrdinalIgnoreCase)) && ClassOptionRules.Unmet(c, o, pool).Count == 0)
-                f.Picks.Add(ClassOptionRules.ToPick(o));
+        var names = content.ClassOptionsFor(c);
+        for (var added = true; added;)
+        {
+            added = false;
+            foreach (var o in pool.Where(o => o.AutoPick && (aboveLevel is null || o.Level > aboveLevel)))
+                if (!f.Picks.Any(p => (p.Name ?? "").Equals(o.Name, StringComparison.OrdinalIgnoreCase)) && ClassOptionRules.Unmet(c, o, names).Count == 0)
+                {
+                    f.Picks.Add(ClassOptionRules.ToPick(o));
+                    added = true;
+                }
+        }
     }
 
     /// <summary>Raises (or lowers) a feature's max uses. Uses already spent stay spent,
