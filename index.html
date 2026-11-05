@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Valiant Sheet</title>
+    <base href="/" />
+    <meta name="description" content="Interactive character sheet for the Tales of the Valiant RPG." />
+    <meta name="theme-color" content="#24479a" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Valiant Sheet" />
+    <!-- Everything is served from the app itself so it works offline (TVCS-105). -->
+    <link rel="stylesheet" href="fonts/fonts.css" />
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="stylesheet" href="css/tailwind.css" />
+</head>
+<body>
+    <div id="app">
+        <div class="loading">Loading your sheet…</div>
+    </div>
+
+    <div id="blazor-error-ui">
+        Something went wrong. <a href="" class="reload">Reload</a>
+        <a class="dismiss">✕</a>
+    </div>
+    <div id="update-bar" class="update-bar" role="status" hidden>
+        A new version of Valiant Sheet is ready.
+        <button type="button" class="btn btn-sm btn-primary" id="update-reload">Reload</button>
+    </div>
+
+    <script src="js/app.js"></script>
+    <script src="js/pwa.js"></script>
+    <script src="_framework/blazor.webassembly.js"></script>
+</body>
+</html>
