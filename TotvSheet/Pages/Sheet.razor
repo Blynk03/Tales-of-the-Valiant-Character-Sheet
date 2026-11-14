@@ -114,7 +114,8 @@ else
         C = Characters.Get(Id);
         // Characters made before their content had rules for unarmored AC, speed, unarmed strikes or "choose one"
         // options pick them up here (TVCS-108/109/110).
-        if (C is not null && (CharacterBuilder.RefreshFeatureRules(C, Content) | CharacterBuilder.FixWeaponProficiency(C, Content)))
+        if (C is not null && (CharacterBuilder.RefreshFeatureRules(C, Content) | CharacterBuilder.FixWeaponProficiency(C, Content)
+                              | C.SyncHpBonus()))
             await Characters.SaveAsync(C);
         loaded = true;
     }
@@ -122,6 +123,8 @@ else
     private async Task Save()
     {
         notice = "";
+        // Adding or removing a trait, feature, pick or talent can change maximum hit points (TVCS-121).
+        C!.SyncHpBonus();
         await Characters.SaveAsync(C);
     }
 

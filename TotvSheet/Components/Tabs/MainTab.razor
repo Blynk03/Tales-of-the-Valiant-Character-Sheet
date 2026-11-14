@@ -136,6 +136,20 @@
                     <div><div class="lbl">Current</div><input type="number" class="field text-center num text-xl" style="color:@HpColor()" @bind="C.CurrentHp" @bind:after="Save" /></div>
                     <div><div class="lbl">Temp</div><input type="number" class="field text-center num" @bind="C.TempHp" @bind:after="Save" /></div>
                 </div>
+                @* Where the maximum comes from (TVCS-121): the bonuses already counted in it. *@
+                @if (C.HpBonuses() is { Count: > 0 } bonuses)
+                {
+                    <p class="text-xs muted mt-1" aria-label="Hit point bonuses">
+                        Max @C.MaxHp = @(C.MaxHp - bonuses.Sum(b => b.Amount)) (hit dice, CON and your own changes) @string.Join(" ", bonuses.Select(b => $"+ {b.Amount} {b.Source}"))
+                    </p>
+                }
+                @if (!string.IsNullOrEmpty(C.HpBonusNotice))
+                {
+                    <div class="text-xs mt-1 flex items-start gap-1" role="status">
+                        <span class="flex-1">@C.HpBonusNotice</span>
+                        <button type="button" class="icon-btn" title="Dismiss" aria-label="Dismiss the hit point note" @onclick="DismissHpNotice">✕</button>
+                    </div>
+                }
                 @* Wraps so the buttons never spill out of a narrow Hit Points column (TVCS-94). *@
                 <div class="flex flex-wrap items-center gap-1 mt-2">
                     <input type="number" min="0" class="field-box num w-16 flex-none" placeholder="0" aria-label="Amount" @bind="hpAmount" />
@@ -264,6 +278,12 @@
     private async Task TakeDamage() { CharacterBuilder.TakeDamage(C, hpAmount); hpAmount = 0; await Save(); }
     private async Task Heal() { CharacterBuilder.Heal(C, hpAmount); hpAmount = 0; await Save(); }
     private async Task GainTemp() { CharacterBuilder.GainTemp(C, hpAmount); hpAmount = 0; await Save(); }
+
+    private Task DismissHpNotice()
+    {
+        C.HpBonusNotice = "";
+        return Save();
+    }
 
     private async Task SpendHitDie()
     {

@@ -172,6 +172,10 @@ public class ContentService
     public IEnumerable<ClassDef> Classes => Merge(Core.Classes, User.Classes);
     public IEnumerable<SubclassDef> Subclasses => Merge(Core.Subclasses, User.Subclasses);
     public IEnumerable<TalentDef> Talents => Merge(Core.Talents, User.Talents);
+
+    /// <summary>A talent by name, including disabled books, for refreshing a taken talent's rules (TVCS-121).</summary>
+    public TalentDef? TalentByName(string name) =>
+        User.Talents.Concat(Core.Talents).FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase));
     public IEnumerable<SpellDef> Spells => Merge(Core.Spells, User.Spells);
     public IEnumerable<ItemDef> Items => Merge(Core.Items, User.Items);
     public IEnumerable<MagicItemDef> MagicItems => Merge(Core.MagicItems, User.MagicItems);

@@ -31,7 +31,9 @@
                         <div class="muted text-sm">@(choices.RolledHp is int r ? $"Rolled {r} {Rules.Signed(C.Mod(Ability.CON))} CON (click to reroll)" : "Click to roll")</div>
                     </button>
                 </div>
-                <p class="mt-1.5">Max HP <span class="num">@C.MaxHp</span> → <span class="num" style="color:var(--good)">@(C.MaxHp + CharacterBuilder.HpGain(C, choices))</span></p>
+                @{ var bonusGain = C.HpBonuses(newLevel).Sum(b => b.Amount) - C.HpBonuses().Sum(b => b.Amount); }
+                <p class="mt-1.5">Max HP <span class="num">@C.MaxHp</span> → <span class="num" style="color:var(--good)">@(C.MaxHp + CharacterBuilder.HpGain(C, choices) + bonusGain)</span>
+                    @if (bonusGain > 0) { <span class="text-sm muted"> (including +@bonusGain from hit point bonuses)</span> }</p>
             </section>
 
             @* ---------- subclass ---------- *@

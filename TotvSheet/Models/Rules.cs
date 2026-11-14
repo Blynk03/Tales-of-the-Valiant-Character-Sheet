@@ -115,6 +115,48 @@ public static class CharacterCalc
             // Picked class options (TVCS-117); not while the feature no longer picks (its picks are hidden, so inactive).
             if (f.PickKind.Length > 0) foreach (var p in f.Picks) if (p.Effects is { } pe) yield return (f, pe);
         }
+        // Talents' rules (TVCS-121), labelled with the talent's name.
+        foreach (var t in c.Talents)
+            if (t.Effects is { } te) yield return (new Feature { Name = t.Name, Source = "Talent" }, te);
+    }
+
+    /// <summary>A hit point bonus at a level: "1/level" → level, "2/level" → 2 × level, "1/level-2" → level − 2, "5" → 5;
+    /// level-scaled specs like "5; 11:10" too (TVCS-121). Never below 0.</summary>
+    public static int HpBonusAt(string? spec, int level)
+    {
+        var v = Scaled(spec, level).Replace(" ", "");
+        var m = System.Text.RegularExpressions.Regex.Match(v, @"^\+?(-?\d+)(/(?:character)?level)?([+-]\d+)?$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (!m.Success) return 0;
+        var n = int.Parse(m.Groups[1].Value) * (m.Groups[2].Success ? level : 1) + (m.Groups[3].Success ? int.Parse(m.Groups[3].Value) : 0);
+        return Math.Max(0, n);
+    }
+
+    /// <summary>Each hit point bonus the character has at <paramref name="level"/> (their level by default), by source.</summary>
+    public static List<(string Source, int Amount)> HpBonuses(this Character c, int? level = null) =>
+        c.ActiveEffects().Where(x => !string.IsNullOrWhiteSpace(x.Effects.HpBonus))
+            .Select(x => (Source: x.Feature.Picks.FirstOrDefault(p => p.Effects == x.Effects)?.Name ?? x.Feature.Name,
+                          Amount: HpBonusAt(x.Effects.HpBonus, level ?? c.Level)))
+            .Where(x => x.Amount != 0).ToList();
+
+    /// <summary>
+    /// Brings <see cref="Character.MaxHp"/> in line with the character's hit point bonuses (TVCS-121): adds the change since
+    /// the last sync, so hit dice, CON and any change the player made by hand are kept. Current HP moves by the same
+    /// amount, never below 0 or above the maximum. For a character from before these bonuses, the first sync also leaves a
+    /// note in case the player had already added a bonus by hand. Returns true if anything changed.
+    /// </summary>
+    public static bool SyncHpBonus(this Character c, bool newCharacter = false)
+    {
+        var total = c.HpBonuses().Sum(b => b.Amount);
+        var first = c.HpBonusApplied is null;
+        var delta = total - (c.HpBonusApplied ?? 0);
+        if (delta == 0 && !first) return false;
+        c.MaxHp += delta;
+        c.CurrentHp = Math.Clamp(c.CurrentHp + delta, 0, Math.Max(0, c.MaxHp));
+        c.HpBonusApplied = total;
+        if (first && !newCharacter && total > 0)
+            c.HpBonusNotice = $"Max HP now includes +{total} from {string.Join(", ", c.HpBonuses().Select(b => b.Source))}. " +
+                              $"If you had already added this by hand, lower Max HP by {total}.";
+        return true;
     }
 
     /// <summary>True when no armor is worn and no shield is equipped (Monk features).</summary>

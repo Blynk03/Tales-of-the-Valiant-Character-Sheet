@@ -129,6 +129,8 @@ public class FeatureEffects
     public bool UnarmedDex { get; set; }
     [Hint("Tick if the unarmed damage only applies without armor or a shield (Monk's Martial Arts).")]
     public bool UnarmedNeedsNoArmor { get; set; }
+    [Hint("Raises maximum hit points: a number, or a number per level with an optional adjustment, e.g. \"1/level\" (Dwarven Toughness), \"2/level\", \"1/level-2\" (+1 at 3rd level and +1 each level after) or \"5\". Can grow with level: \"5; 11:10\".")]
+    public string HpBonus { get; set; } = "";
     [Hint("Extra picks for a feature that picks class options, as kind and number, e.g. \"Eldritch Invocation 2\". The number can grow with level: \"Binding 1; 11:2\".")]
     public List<string> ExtraPicks { get; set; } = new();
 }
@@ -201,6 +203,9 @@ public class TalentDef : ContentEntry
     public string Prerequisite { get; set; } = "";
     [Hint("Tick if the talent can be taken more than once.")]
     public bool Repeatable { get; set; }
+    [Hint("Optional rules the sheet applies while the character has the talent, e.g. a hit point bonus.")]
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public FeatureEffects? Effects { get; set; }
 }
 
 public class SpellDef : ContentEntry

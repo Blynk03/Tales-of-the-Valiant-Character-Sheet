@@ -152,6 +152,7 @@ public static class CharacterBuilder
 
         c.OtherProficiencies = string.Join("; ", other);
         foreach (var f in c.Features) AddAutoPicks(c, f, content);
+        c.SyncHpBonus(newCharacter: true); // hit point bonuses from the lineage, class or talent (TVCS-121)
         return c;
     }
 
@@ -236,6 +237,7 @@ public static class CharacterBuilder
         foreach (var f in features) AddAutoPicks(c, f, content); // after the subclass is set, for subclass prerequisites
         // Features the character already had gain the automatic options that unlock at this level (TVCS-119).
         foreach (var f in c.Features.Except(features).Where(f => f.PickKind.Length > 0)) AddAutoPicks(c, f, content, newLevel - 1);
+        c.SyncHpBonus(); // per-level bonuses grow, and new features or picks may add one (TVCS-121)
 
         if (c.Experience < Rules.XpForLevel[Math.Min(newLevel, 20)])
             c.Experience = Rules.XpForLevel[Math.Min(newLevel, 20)];
@@ -374,6 +376,12 @@ public static class CharacterBuilder
             }
             if (f.PickCount != (def.PickCount ?? "")) { f.PickCount = def.PickCount ?? ""; changed = true; }
         }
+        // Talents pick up rules their content gained since they were taken, e.g. a hit point bonus (TVCS-121).
+        foreach (var t in c.Talents)
+            if (content.TalentByName(t.Name) is { } td && Json.Serialize(t.Effects) != Json.Serialize(td.Effects))
+            {
+                t.Effects = Clone(td.Effects); changed = true;
+            }
         foreach (var f in c.Features.Where(f => f.PickKind.Length > 0))
             foreach (var p in f.Picks)
                 if (content.ClassOption(f.PickKind, p.Name) is { } o && Json.Serialize(p.Effects) != Json.Serialize(o.Effects))
@@ -427,7 +435,7 @@ public static class CharacterBuilder
     }
 
     public static void AddTalent(Character c, TalentDef t) =>
-        c.Talents.Add(new Talent { Name = t.Name, Category = t.Category, Description = t.Description });
+        c.Talents.Add(new Talent { Name = t.Name, Category = t.Category, Description = t.Description, Effects = Clone(t.Effects) });
 
     /// <summary>The attunement restriction without a leading "requires attunement", which the checkbox already says
     /// ("requires attunement by a cleric" → "by a cleric"; "requires attunement" alone → "").</summary>

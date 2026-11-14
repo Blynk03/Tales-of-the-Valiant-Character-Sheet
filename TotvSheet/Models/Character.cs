@@ -41,9 +41,15 @@ public class Character
     // ---- Combat ----
     public string Speed { get; set; } = "30 ft.";
     public int InitiativeBonus { get; set; }
+    /// <summary>Maximum hit points, including <see cref="HpBonusApplied"/> and any change the player made by hand.</summary>
     public int MaxHp { get; set; }
     public int CurrentHp { get; set; }
     public int TempHp { get; set; }
+    /// <summary>The hit point bonus from traits, features, picks and talents last added to <see cref="MaxHp"/> (TVCS-121).
+    /// Null for a character from before these bonuses existed.</summary>
+    public int? HpBonusApplied { get; set; }
+    /// <summary>A one-time note shown in the Hit Points box when an older character's maximum first gains bonuses.</summary>
+    public string HpBonusNotice { get; set; } = "";
     public int HitDie { get; set; } = 8;
     public int HitDiceUsed { get; set; }
     public int DeathSuccesses { get; set; }
@@ -182,6 +188,9 @@ public class Talent
     public string Name { get; set; } = "";
     public TalentCategory Category { get; set; }
     public string Description { get; set; } = "";
+    /// <summary>Rules copied from the talent's content, e.g. a hit point bonus (TVCS-121).</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public FeatureEffects? Effects { get; set; }
 }
 
 public class Weapon

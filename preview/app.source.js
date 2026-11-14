@@ -79,7 +79,24 @@ function activeEffects(c) {
     if (o && o.effects) out.push([f, o.effects]);
     if (f.pickKind) (f.picks || []).forEach(p => { if (p.effects) out.push([f, p.effects]); }); // picked class options (TVCS-117)
   });
+  (c.talents || []).forEach(t => { if (t.effects) out.push([{ name: t.name, source: 'Talent', picks: [] }, t.effects]); }); // talents (TVCS-121)
   return out;
+}
+/** A hit point bonus at a level: "1/level", "2/level", "1/level-2", "5", or level-scaled "5; 11:10" (TVCS-121). */
+function hpBonusAt(spec, level) {
+  const m = /^\+?(-?\d+)(\/(?:character)?level)?([+-]\d+)?$/i.exec(scaled(spec, level).replace(/\s+/g, ''));
+  return m ? Math.max(0, +m[1] * (m[2] ? level : 1) + (m[3] ? +m[3] : 0)) : 0;
+}
+/** Each hit point bonus the character has at a level (theirs by default), by source. */
+const hpBonuses = (c, level) => activeEffects(c).filter(([, e]) => e.hpBonus)
+  .map(([f, e]) => ({ source: ((f.picks || []).find(p => p.effects === e) || f).name, amount: hpBonusAt(e.hpBonus, level ?? c.level) })).filter(b => b.amount);
+/** Brings max HP in line with the bonuses: adds the change since the last sync, keeping hand edits (mirror of SyncHpBonus). */
+function syncHpBonus(c, newCharacter) {
+  const total = hpBonuses(c).reduce((s, b) => s + b.amount, 0), first = c.hpBonusApplied == null, delta = total - (c.hpBonusApplied || 0);
+  if (!delta && !first) return false;
+  c.maxHp += delta; c.currentHp = Math.max(0, Math.min(Math.max(0, c.maxHp), c.currentHp + delta)); c.hpBonusApplied = total;
+  if (first && !newCharacter && total > 0) c.hpBonusNotice = `Max HP now includes +${total} from ${hpBonuses(c).map(b => b.source).join(', ')}. If you had already added this by hand, lower Max HP by ${total}.`;
+  return true;
 }
 const unarmoredNoShield = c => !wornArmor(c) && !wornShield(c);
 function bestUnarmored(c, withShield) {
@@ -257,6 +274,9 @@ function refreshFeatureRules(c) {
     if ((f.pickKind || '') !== (d.pickKind || '')) { const gained = !f.pickKind; f.pickKind = d.pickKind || ''; changed = true; if (gained && f.pickKind) addAutoPicks(c, f); }
     if ((f.pickCount || '') !== (d.pickCount || '')) { f.pickCount = d.pickCount || ''; changed = true; }
   });
+  // Talents pick up rules their content gained since they were taken, e.g. a hit point bonus (TVCS-121).
+  (c.talents || []).forEach(t => { const d = (S.user.talents || []).concat(SEED.talents || []).find(x => ieq(x.name, t.name));
+    if (d && JSON.stringify(t.effects || null) !== JSON.stringify(d.effects || null)) { t.effects = deepCopy(d.effects) || null; changed = true; } });
   (c.features || []).filter(f => f.pickKind).forEach(f => (f.picks = f.picks || []).forEach(p => {
     const o = classOption(f.pickKind, p.name);
     if (o && JSON.stringify(p.effects || null) !== JSON.stringify(o.effects || null)) { p.effects = deepCopy(o.effects) || null; changed = true; }
@@ -385,7 +405,7 @@ function resourceChanges(c, cls, n) {
   const d = levelDef(cls, n);
   return ((d && d.resources) || []).map(r => { const f = [...c.features].reverse().find(x => x.name === r.name); return { name: r.name, from: f ? usesMax(c, f) : 0, to: r.usesMax }; }).filter(x => x.from !== x.to);
 }
-const addTalent = (c, t) => c.talents.push({ name: t.name, category: t.category, description: t.description });
+const addTalent = (c, t) => c.talents.push({ name: t.name, category: t.category, description: t.description, effects: deepCopy(t.effects) || null });
 /** Weapon proficiency (TVCS-111, mirror of Models/WeaponProficiency.cs): the Simple/Martial groups, plus weapons a class
     lists one by one in Other Proficiencies (the Duelist's "Rapier, Scimitar, Hand crossbow, Firearms", a Rogue's
     "Martial weapons with the Finesse property"). Word order and plurals don't matter ("Hand crossbow" = "Crossbow, hand"). */
@@ -495,6 +515,7 @@ function buildCharacter(w) {
   const t = find('talents', w.talent); if (t && !c.talents.some(x => x.name === t.name)) addTalent(c, t);
   c.otherProficiencies = other.join('; ');
   c.features.forEach(f => addAutoPicks(c, f));
+  syncHpBonus(c, true); // hit point bonuses from the lineage, class or talent (TVCS-121)
   return c;
 }
 const levelDef = (cls, n) => cls && cls.levels.find(l => l.level === n);
@@ -528,6 +549,7 @@ function applyLevelUp(c, lu) {
   if (d) applyResources(c, d.resources, cls.name, n);
   feats.forEach(f => addAutoPicks(c, f)); // after the subclass is set, for subclass prerequisites
   c.features.filter(f => !feats.includes(f) && f.pickKind).forEach(f => addAutoPicks(c, f, n - 1)); // options unlocking at this level
+  syncHpBonus(c); // per-level bonuses grow, and new features or picks may add one (TVCS-121)
   if (c.experience < XP[Math.min(n, 20)]) c.experience = XP[Math.min(n, 20)];
 }
 function takeDamage(c, n) { if (n <= 0) return; const t = Math.min(c.tempHp, n); c.tempHp -= t; c.currentHp = Math.max(0, c.currentHp - (n - t)); }
@@ -619,7 +641,7 @@ function saveContent() {
     if (!store.set('vs.content', snapshot)) { S.storageWarn = STORAGE_WARN; render(); }
   }).catch(() => { /* keep the chain alive for later saves */ });
 }
-function save() { const c = C(); if (c) c.updated = new Date().toISOString(); persist(); }
+function save() { const c = C(); if (c) { syncHpBonus(c); c.updated = new Date().toISOString(); } persist(); } // a change can move max HP (TVCS-121)
 
 function exampleCharacter() {
   const w = { name: 'Brannoc Ironvale', playerName: 'Example', lineage: 'dwarf', heritage: 'fireforge', background: 'soldier', cls: 'fighter',
@@ -800,6 +822,8 @@ function mainTab(c) {
         <div><div class="lbl">Max</div>${num('c.maxHp', c.maxHp, 'text-center')}</div>
         <div><div class="lbl">Current</div>${num('c.currentHp', c.currentHp, 'text-center text-xl', `style="color:${c.maxHp > 0 && c.currentHp * 4 <= c.maxHp ? 'var(--danger)' : 'var(--text)'}"`)}</div>
         <div><div class="lbl">Temp</div>${num('c.tempHp', c.tempHp, 'text-center')}</div></div>
+        ${hpBonuses(c).length ? `<p class="text-xs muted mt-1" aria-label="Hit point bonuses">Max ${c.maxHp} = ${c.maxHp - hpBonuses(c).reduce((s, b) => s + b.amount, 0)} (hit dice, CON and your own changes) ${esc(hpBonuses(c).map(b => `+ ${b.amount} ${b.source}`).join(' '))}</p>` : ''}
+        ${c.hpBonusNotice ? `<div class="text-xs mt-1 flex items-start gap-1" role="status"><span class="flex-1">${esc(c.hpBonusNotice)}</span><button class="icon-btn" data-act="dismissHp" title="Dismiss" aria-label="Dismiss the hit point note">✕</button></div>` : ''}
         <div class="flex flex-wrap items-center gap-1 mt-2"><input type="number" min="0" class="field-box num w-16 flex-none" placeholder="0" data-f="hpAmt" data-t="n" value="${S.hpAmt || ''}" aria-label="Amount">
         <button class="btn btn-sm btn-danger flex-1" data-act="hp" data-a="dmg" title="Temp HP is used first">Dmg</button><button class="btn btn-sm flex-1" data-act="hp" data-a="heal">Heal</button><button class="btn btn-sm flex-1" data-act="hp" data-a="temp" title="Temp HP doesn't stack: keeps the higher value">Temp</button></div>
         <div class="box-title mt-3">Hit Dice</div><div class="grid grid-cols-3 gap-1.5 text-center">
@@ -1204,7 +1228,8 @@ function levelModal(c) {
       <section><h3 class="box-title text-left">Hit points</h3><div class="grid sm:grid-cols-2 gap-2">
         <button class="choice ${!lu.roll ? 'selected' : ''}" data-act="luAvg"><b>Take the average</b><div class="muted text-sm">${hitAvg(c.hitDie)} ${sg(M(c, 'CON'))} CON</div></button>
         <button class="choice ${lu.roll ? 'selected' : ''}" data-act="luRoll"><b>Roll d${c.hitDie}</b><div class="muted text-sm">${lu.rolled != null ? `Rolled ${lu.rolled} ${sg(M(c, 'CON'))} CON (click to reroll)` : 'Click to roll'}</div></button></div>
-        <p class="mt-1.5">Max HP <span class="num">${c.maxHp}</span> → <span class="num" style="color:var(--good)">${c.maxHp + hpGain(c, lu)}</span></p></section>
+        ${(() => { const bg = hpBonuses(c, c.level + 1).reduce((s, b) => s + b.amount, 0) - hpBonuses(c).reduce((s, b) => s + b.amount, 0);
+          return `<p class="mt-1.5">Max HP <span class="num">${c.maxHp}</span> → <span class="num" style="color:var(--good)">${c.maxHp + hpGain(c, lu) + bg}</span>${bg > 0 ? `<span class="text-sm muted"> (including +${bg} from hit point bonuses)</span>` : ''}</p></section>`; })()}
       ${ns ? `<section><h3 class="box-title text-left">Choose your subclass</h3>${subs.length ? '' : `<p class="muted text-sm">No subclasses for ${esc(c.className)} in your content yet. You can add one in Content, or continue without.</p>`}
         <div class="grid sm:grid-cols-2 gap-2">${subs.map(x => choice(lu.sub === x.id, 'luSub', x.id, `<b>${esc(x.name)}</b><div class="muted text-sm">${esc(x.description)}</div>`)).join('')}</div></section>` : ''}
       ${d && d.grantsAbilityIncrease ? `<section><h3 class="box-title text-left">Improvement</h3><div class="flex flex-wrap gap-2 mb-2"><button class="btn btn-sm ${lu.mode === 'two' ? 'btn-primary' : ''}" data-act="luMode" data-a="two">+2 to one</button><button class="btn btn-sm ${lu.mode === 'one' ? 'btn-primary' : ''}" data-act="luMode" data-a="one">+1 to two</button><button class="btn btn-sm ${lu.mode === 'talent' ? 'btn-primary' : ''}" data-act="luMode" data-a="talent">+1 and a talent</button></div>
@@ -1242,7 +1267,7 @@ const BLANK = {
   classOptions: () => ({ id: '', name: 'New class option', source: 'Homebrew', description: '', classId: '', kind: 'Eldritch Invocation', level: 0, prerequisite: '', repeatable: false, autoPick: false }),
   magicItems: () => ({ id: '', name: 'New magic item', source: 'Homebrew', description: '', itemType: 'Wondrous Item', rarity: 'Uncommon', requiresAttunement: false, attunement: '', price: '' })
 };
-const HINTS = { autoPick: "Tick if characters know it automatically (e.g. a class's own martial actions): it is added when they gain the feature.", extraPicks: 'Extra picks for a feature that picks class options, as kind and number, e.g. "Eldritch Invocation 2". The number can grow with level: "Binding 1; 11:2".', pickKind: 'For a feature that picks several class options (e.g. Eldritch Invocations): the kind to pick from, exactly as on the Class Options list. Several kinds can be separated by commas.', pickCount: 'How many to pick, by level, e.g. "2; 5:3; 7:4". Used with Pick Kind. Blank for no limit (e.g. martial actions you know).', kind: 'e.g. Eldritch Invocation. Must match the Pick Kind of the feature that picks it.', milestones: 'Benefits by rank: Least (levels 1-4), Lesser (5-10), Greater (11-16), Superior (17-20).', rank: 'Least, Lesser, Greater or Superior.', extends: 'Optional: the id of an entry this one expands (e.g. syderean). Its new traits and choose-one options are added to that entry, which is then listed once.', itemType: 'e.g. Wondrous Item, Weapon (longsword), Armor (plate), Armor (shield), Ring, Potion.', rarity: 'Common, Uncommon, Rare, Very Rare, Legendary, Fabled, Artifact or Varies.', attunement: "Who can attune, if limited, e.g. 'by a spellcaster'. Blank if anyone can.", id: 'Unique key. Reusing a built-in id overrides that entry.', source: "Book or homebrew label, e.g. 'Player's Guide', 'Homebrew'.", skillProficiencies: 'Skills always granted, exactly as on the sheet.', skillOptions: 'Skills the player can choose from.', skillChoices: 'How many of the skill options to choose.', talentId: 'Talent id always granted at level 1 (optional).', talentOptions: 'Talent ids the player chooses one from (optional).', languageChoices: 'How many extra languages the player picks.', talentCategories: 'Talent lists for Improvement levels (subclass: lists it adds).', resources: 'Feature uses that change at this level, e.g. Rage 3.', usesFrom: 'Optional: PB, or STR/DEX/CON/INT/WIS/CHA for that modifier, with an optional +N (e.g. PB+1). Min 1.', repeatable: 'Tick if it can be taken more than once.', slots: 'Total slots for circles 1-9, e.g. 3, 2.', armorProficiencies: 'Any of: Light, Medium, Heavy, Shields.', weaponProficiencies: 'Simple, Martial, and/or specific weapons (e.g. Rapier, Scimitar). Named weapons can also go in Other Proficiencies.', startingEquipment: 'Item ids from the Items list.', spellSlots: 'Total slots for circles 1-9, e.g. 4, 3, 2.', usesMax: '0 if it has no limited uses.', recharge: 'Short Rest, Long Rest or blank.', classId: 'Id of the parent class.', circle: '0 for cantrips.', subclassLevel: 'Level at which the subclass is chosen.' };
+const HINTS = { hpBonus: 'Raises maximum hit points: a number, or a number per level with an optional adjustment, e.g. "1/level" (Dwarven Toughness), "2/level", "1/level-2" (+1 at 3rd level and +1 each level after) or "5". Can grow with level: "5; 11:10".', autoPick: "Tick if characters know it automatically (e.g. a class's own martial actions): it is added when they gain the feature.", extraPicks: 'Extra picks for a feature that picks class options, as kind and number, e.g. "Eldritch Invocation 2". The number can grow with level: "Binding 1; 11:2".', pickKind: 'For a feature that picks several class options (e.g. Eldritch Invocations): the kind to pick from, exactly as on the Class Options list. Several kinds can be separated by commas.', pickCount: 'How many to pick, by level, e.g. "2; 5:3; 7:4". Used with Pick Kind. Blank for no limit (e.g. martial actions you know).', kind: 'e.g. Eldritch Invocation. Must match the Pick Kind of the feature that picks it.', milestones: 'Benefits by rank: Least (levels 1-4), Lesser (5-10), Greater (11-16), Superior (17-20).', rank: 'Least, Lesser, Greater or Superior.', extends: 'Optional: the id of an entry this one expands (e.g. syderean). Its new traits and choose-one options are added to that entry, which is then listed once.', itemType: 'e.g. Wondrous Item, Weapon (longsword), Armor (plate), Armor (shield), Ring, Potion.', rarity: 'Common, Uncommon, Rare, Very Rare, Legendary, Fabled, Artifact or Varies.', attunement: "Who can attune, if limited, e.g. 'by a spellcaster'. Blank if anyone can.", id: 'Unique key. Reusing a built-in id overrides that entry.', source: "Book or homebrew label, e.g. 'Player's Guide', 'Homebrew'.", skillProficiencies: 'Skills always granted, exactly as on the sheet.', skillOptions: 'Skills the player can choose from.', skillChoices: 'How many of the skill options to choose.', talentId: 'Talent id always granted at level 1 (optional).', talentOptions: 'Talent ids the player chooses one from (optional).', languageChoices: 'How many extra languages the player picks.', talentCategories: 'Talent lists for Improvement levels (subclass: lists it adds).', resources: 'Feature uses that change at this level, e.g. Rage 3.', usesFrom: 'Optional: PB, or STR/DEX/CON/INT/WIS/CHA for that modifier, with an optional +N (e.g. PB+1). Min 1.', repeatable: 'Tick if it can be taken more than once.', slots: 'Total slots for circles 1-9, e.g. 3, 2.', armorProficiencies: 'Any of: Light, Medium, Heavy, Shields.', weaponProficiencies: 'Simple, Martial, and/or specific weapons (e.g. Rapier, Scimitar). Named weapons can also go in Other Proficiencies.', startingEquipment: 'Item ids from the Items list.', spellSlots: 'Total slots for circles 1-9, e.g. 4, 3, 2.', usesMax: '0 if it has no limited uses.', recharge: 'Short Rest, Long Rest or blank.', classId: 'Id of the parent class.', circle: '0 for cantrips.', subclassLevel: 'Level at which the subclass is chosen.' };
 /** Fills fields added in later versions so they show up in the editor. */
 function withDefaults(kind, e) {
   const d = Object.assign(BLANK[kind](), e);
@@ -1362,7 +1387,8 @@ function bindChange(el) {
 function cur() { return C(); }
 const A = {
   go(r) { if (r === 'list') { S.route = 'list'; } else S.route = r; S.notice = ''; },
-  open(id) { S.charId = id; S.route = 'sheet'; S.tab = 'main'; S.notice = ''; S.castMsg = ''; const c = C(); if (c && refreshFeatureRules(c)) persist(); },
+  open(id) { S.charId = id; S.route = 'sheet'; S.tab = 'main'; S.notice = ''; S.castMsg = ''; const c = C(); if (c && (refreshFeatureRules(c) | syncHpBonus(c))) persist(); },
+  dismissHp() { cur().hpBonusNotice = ''; save(); },
   startCreate() { S.wiz = newWizard(); S.route = 'create'; },
   dupChar(id) { const c = clone(S.chars.find(x => x.id === id)); c.id = uid(); c.name += ' (copy)'; c.updated = new Date().toISOString(); S.chars.push(c); persist(); },
   delChar(id) { const c = S.chars.find(x => x.id === id); S.modal = { confirm: `Delete ${c.name}? This can't be undone.`, yes: 'Delete', danger: true, then() { S.chars = S.chars.filter(x => x.id !== id); persist(); } }; },
