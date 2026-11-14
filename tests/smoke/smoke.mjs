@@ -158,7 +158,7 @@ try {
           async e => check('A book-sized file imports', false, (await page.locator('p.text-sm').first().textContent().catch(() => '')) || e.message));
   // Re-importing a newer copy of a book removes the entries it dropped (TVCS-123): the same book without its last 10 spells.
   big.spells = big.spells.slice(0, 1490);
-  fs.writeFileSync(bigPath, JSON.stringify(big));
+  fs.writeFileSync(bigPath, JSON.stringify(big)); // same file name, as when a player re-imports a newer copy
   await page.setInputFiles('#content-import', bigPath);
   await page.getByText(/Imported 1490 entries\. Removed 10 old entries/).waitFor({ timeout: 90000 })
     .then(() => check('Re-importing a book removes the entries it dropped', true),

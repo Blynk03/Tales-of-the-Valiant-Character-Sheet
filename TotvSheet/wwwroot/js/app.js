@@ -71,6 +71,11 @@ window.totv = {
     const el = document.getElementById(id);
     if (el) el.click();
   },
+  // Clears a file input so picking the same file again (a newer copy of a book) still counts as a change (TVCS-123).
+  clearFileInput: function (id) {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  },
   // IndexedDB key/value store for data too big for localStorage (the content library).
   // idbGet resolves the stored string, "" when the key is missing, or null when IndexedDB is unavailable.
   _db: null,

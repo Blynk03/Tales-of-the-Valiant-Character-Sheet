@@ -275,7 +275,12 @@
     private async Task Export() =>
         await JS.InvokeVoidAsync("totv.download", "valiant-content.json", Content.ExportUserJson());
 
-    private async Task PickImport() => await JS.InvokeVoidAsync("totv.clickElement", "content-import");
+    private async Task PickImport()
+    {
+        // Picking the same file again (a newer copy of a book) must still import (TVCS-123).
+        await JS.InvokeVoidAsync("totv.clearFileInput", "content-import");
+        await JS.InvokeVoidAsync("totv.clickElement", "content-import");
+    }
 
     private record PickedFile(string Name, string? Text, string? Error);
 
@@ -355,7 +360,12 @@
             Console.WriteLine($"Import failed: {ex}");
             message = $"Import stopped: {ex.Message}. " + string.Join(" · ", lines);
         }
-        finally { importing = false; }
+        finally
+        {
+            importing = false;
+            // Done with the picked files: clear the input so the same file can be picked again (TVCS-123).
+            try { await JS.InvokeVoidAsync("totv.clearFileInput", "content-import"); } catch (JSException) { }
+        }
     }
 
     /// <summary>Reads picked file number <paramref name="index"/> in JavaScript; falls back to Blazor's file stream (with a
