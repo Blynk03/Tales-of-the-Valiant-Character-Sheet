@@ -4,6 +4,9 @@ namespace TotvSheet.Models;
 [AttributeUsage(AttributeTargets.Property)]
 public class MultilineAttribute : Attribute { }
 
+/// <summary>Not shown in the Content page editor.</summary>
+public class HiddenAttribute : Attribute { }
+
 /// <summary>Short help text shown under a field in Settings.</summary>
 [AttributeUsage(AttributeTargets.Property)]
 public class HintAttribute : Attribute
@@ -22,6 +25,11 @@ public abstract class ContentEntry
     public string Source { get; set; } = "Homebrew";
     [Multiline]
     public string Description { get; set; } = "";
+    /// <summary>Set when the player saves the entry on the Content page, so re-importing its book asks before removing it
+    /// (TVCS-123).</summary>
+    [Hidden]
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Edited { get; set; }
 }
 
 /// <summary>A trait or feature granted by content (lineage, class, subclass...).</summary>

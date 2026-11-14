@@ -4664,6 +4664,7 @@ const A = {
     const d = st.draft; if (!d.name || !d.name.trim()) { st.err = 'Give it a name.'; return; }
     if (!d.id) d.id = 'hb-' + (d.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || uid().slice(0, 6));
     if (st.isNew && allEntries(st.kind).some(r => r.e.id === d.id)) { st.err = `The id '${d.id}' is already used. Change the Id field.`; return; }
+    d.edited = true; // saved here: re-importing its book asks before removing it (TVCS-123)
     const list = S.user[st.kind] = (S.user[st.kind] || []).filter(x => x.id !== d.id); list.push(d); persist(true);
     st.msg = `Saved ${d.name}.`; S.modal = null; st.draft = null;
   },
@@ -4746,18 +4747,42 @@ async function readFile(el) {
     render(); return;
   }
   S.set.msg = `Importing ${files.length} file${files.length > 1 ? 's' : ''}…`; render();
-  const lines = []; let total = 0;
+  const lines = [], pending = []; let total = 0, removed = 0;
   for (const file of files) {
     try {
-      const data = JSON.parse(await readText(file)); let n = 0;
-      KINDS.forEach(([k]) => (Array.isArray(data[k]) ? data[k] : []).forEach(en => { if (!en.id) en.id = uid().slice(0, 8); S.user[k] = (S.user[k] || []).filter(x => x.id !== en.id); S.user[k].push(en); n++; }));
+      const data = JSON.parse(await readText(file)); let n = 0, gone = 0;
+      // A file is a newer copy of its book(s): entries of the same source it no longer has are removed (TVCS-123),
+      // except entries edited here and a removal of over half a book (more than 10), which are asked about.
+      const isBook = src => src && !/^homebrew$/i.test(src) && !/^core/i.test(src);
+      const sources = new Set(), ids = {};
+      KINDS.forEach(([k]) => { ids[k] = new Set(); (Array.isArray(data[k]) ? data[k] : []).forEach(en => { if (!en.id) en.id = uid().slice(0, 8); ids[k].add(en.id); if (isBook(en.source)) sources.add(en.source.toLowerCase()); }); });
+      const stale = [];
+      KINDS.forEach(([k]) => (S.user[k] || []).forEach(en => { if (sources.has(String(en.source || '').toLowerCase()) && !ids[k].has(en.id)) stale.push([k, en]); }));
+      const bySource = {}; stale.forEach(x => (bySource[x[1].source.toLowerCase()] = bySource[x[1].source.toLowerCase()] || []).push(x));
+      Object.entries(bySource).forEach(([src, list]) => {
+        const had = KINDS.reduce((sum, [k]) => sum + (S.user[k] || []).filter(e => String(e.source || '').toLowerCase() === src).length, 0);
+        const large = list.length > 10 && list.length * 2 > had;
+        list.forEach(([k, en]) => {
+          if (en.edited) pending.push({ k, en, reason: 'you edited it' });
+          else if (large) pending.push({ k, en, reason: `the new file has fewer than half of ${en.source}'s entries` });
+          else { S.user[k] = S.user[k].filter(x => x !== en); gone++; }
+        });
+      });
+      KINDS.forEach(([k]) => (Array.isArray(data[k]) ? data[k] : []).forEach(en => { S.user[k] = (S.user[k] || []).filter(x => x.id !== en.id); S.user[k].push(en); n++; }));
       if (!n) throw new Error('it has no content entries');
-      total += n; lines.push(`${file.name}: ${n} entries`);
+      total += n; removed += gone; lines.push(`${file.name}: ${n} entries` + (gone ? `, ${gone} old ones removed` : ''));
     } catch (err) { lines.push(`${file.name}: couldn't import (${err instanceof SyntaxError ? "not a JSON file" : err.message})`); }
   }
   if (total) persist(true);
-  S.set.msg = (files.length > 1 ? `Imported ${total} entries from ${files.length} files. ` : '') + lines.join(' · ');
-  if (files.length === 1 && total) S.set.msg = `Imported ${total} entries.`;
+  const summary = () => (files.length === 1 && total ? `Imported ${total} entries.` : (files.length > 1 ? `Imported ${total} entries from ${files.length} files. ` : '') + lines.join(' · '))
+    + (removed ? ` Removed ${removed} old entr${removed === 1 ? 'y' : 'ies'} the new files no longer have.` : '');
+  S.set.msg = summary();
+  if (pending.length) {
+    const names = pending.slice(0, 8).map(p => `${p.en.name} (${p.reason})`).join(', ') + (pending.length > 8 ? ` and ${pending.length - 8} more` : '');
+    S.modal = { confirm: `${pending.length} entr${pending.length === 1 ? "y isn't" : "ies aren't"} in the new book files: ${names}. Remove ${pending.length === 1 ? 'it' : 'them'} from your library? Characters keep what they already have.`,
+      yes: 'Remove', danger: true,
+      then() { pending.forEach(p => { S.user[p.k] = (S.user[p.k] || []).filter(x => x !== p.en); }); removed += pending.length; persist(true); S.set.msg = summary(); } };
+  }
   render();
 }
 

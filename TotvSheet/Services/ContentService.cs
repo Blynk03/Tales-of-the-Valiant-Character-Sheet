@@ -289,6 +289,7 @@ public class ContentService
     /// <summary>Adds or replaces a user entry (matched by Id).</summary>
     public async Task UpsertAsync(ContentKind kind, ContentEntry entry)
     {
+        entry.Edited = true; // saved on the Content page: a re-import of its book asks before removing it (TVCS-123)
         var list = kind.List(User);
         var existing = list.Cast<ContentEntry>().FirstOrDefault(e => e.Id == entry.Id);
         if (existing is not null) list.Remove(existing);
@@ -306,17 +307,57 @@ public class ContentService
 
     public string ExportUserJson() => Json.Serialize(User, pretty: true);
 
-    /// <summary>Merges an exported content file into the user's content. Returns entries imported.</summary>
-    public async Task<int> ImportAsync(string json, bool save = true)
+    /// <summary>An entry the import wants to remove but asks about first.</summary>
+    public record PendingRemoval(ContentKind Kind, ContentEntry Entry, string Reason);
+
+    /// <summary>What an import did: entries added or replaced, entries removed, and removals to ask the player about.</summary>
+    public record ImportResult(int Count, int Removed, List<PendingRemoval> Pending);
+
+    /// <summary>
+    /// Merges a content file into the user's content (TVCS-123). Entries are added or replaced by id. A file is a newer
+    /// copy of its book(s): entries of the same source that the file no longer has are removed, in every content kind, so
+    /// dropped entries and the random-id copies older imports made don't linger. Homebrew and the built-in samples are never
+    /// removed. Two cases are asked about instead (returned as Pending): entries the player edited on the Content page,
+    /// and a removal of more than half of a book's entries (more than 10), which more likely means a partial file.
+    /// Characters are unaffected: what they took was copied onto the sheet.
+    /// </summary>
+    public async Task<ImportResult> ImportAsync(string json, bool save = true)
     {
         var incoming = Json.Deserialize<ContentLibrary>(json) ?? new();
-        int count = 0;
+        int count = 0, removed = 0;
+        var pending = new List<PendingRemoval>();
+        var sources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var newIds = new Dictionary<string, HashSet<string>>();
+        foreach (var kind in Kinds)
+        {
+            var ids = newIds[kind.Key] = new HashSet<string>();
+            foreach (ContentEntry entry in kind.List(incoming))
+            {
+                if (string.IsNullOrWhiteSpace(entry.Id)) entry.Id = Guid.NewGuid().ToString("n")[..8];
+                ids.Add(entry.Id);
+                if (IsBookSource(entry.Source)) sources.Add(entry.Source);
+            }
+        }
+        // Stale entries: same book, not in the new file.
+        var stale = Kinds.SelectMany(k => k.List(User).Cast<ContentEntry>()
+                .Where(e => sources.Contains(e.Source ?? "") && !newIds[k.Key].Contains(e.Id)).Select(e => (Kind: k, Entry: e)))
+            .ToList();
+        foreach (var bySource in stale.GroupBy(s => s.Entry.Source ?? "", StringComparer.OrdinalIgnoreCase))
+        {
+            var had = Kinds.Sum(k => k.List(User).Cast<ContentEntry>().Count(e => string.Equals(e.Source, bySource.Key, StringComparison.OrdinalIgnoreCase)));
+            var large = bySource.Count() > 10 && bySource.Count() * 2 > had;
+            foreach (var (kind, entry) in bySource)
+            {
+                if (entry.Edited) pending.Add(new(kind, entry, "you edited it"));
+                else if (large) pending.Add(new(kind, entry, $"the new file has fewer than half of {bySource.Key}'s entries"));
+                else { kind.List(User).Remove(entry); removed++; }
+            }
+        }
         foreach (var kind in Kinds)
         {
             var target = kind.List(User);
             foreach (ContentEntry entry in kind.List(incoming))
             {
-                if (string.IsNullOrWhiteSpace(entry.Id)) entry.Id = Guid.NewGuid().ToString("n")[..8];
                 var existing = target.Cast<ContentEntry>().FirstOrDefault(e => e.Id == entry.Id);
                 if (existing is not null) target.Remove(existing);
                 target.Add(entry);
@@ -324,6 +365,17 @@ public class ContentService
             }
         }
         if (save) await SaveAsync();
-        return count;
+        return new(count, removed, pending);
     }
+
+    /// <summary>Removes entries an import asked about, once the player agrees (TVCS-123). Doesn't save.</summary>
+    public void Remove(IEnumerable<PendingRemoval> entries)
+    {
+        foreach (var p in entries) p.Kind.List(User).Remove(p.Entry);
+    }
+
+    /// <summary>A book's source: not homebrew and not the built-in samples.</summary>
+    private static bool IsBookSource(string? source) =>
+        !string.IsNullOrWhiteSpace(source) && !source.Equals(HomebrewSource, StringComparison.OrdinalIgnoreCase)
+        && !source.StartsWith("Core", StringComparison.OrdinalIgnoreCase);
 }

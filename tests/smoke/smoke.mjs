@@ -156,6 +156,13 @@ try {
   await page.getByText('Imported 1500 entries.').waitFor({ timeout: 90000 })
     .then(() => check(`A book-sized file imports (${fs.statSync(bigPath).size} bytes, ${((Date.now() - t0) / 1000).toFixed(1)} s)`, true),
           async e => check('A book-sized file imports', false, (await page.locator('p.text-sm').first().textContent().catch(() => '')) || e.message));
+  // Re-importing a newer copy of a book removes the entries it dropped (TVCS-123): the same book without its last 10 spells.
+  big.spells = big.spells.slice(0, 1490);
+  fs.writeFileSync(bigPath, JSON.stringify(big));
+  await page.setInputFiles('#content-import', bigPath);
+  await page.getByText(/Imported 1490 entries\. Removed 10 old entries/).waitFor({ timeout: 90000 })
+    .then(() => check('Re-importing a book removes the entries it dropped', true),
+          async e => check('Re-importing a book removes the entries it dropped', false, (await page.locator('p.text-sm').first().textContent().catch(() => '')) || e.message));
   await page.reload();
   await page.getByRole('heading', { name: 'Content library' }).waitFor({ timeout: 30000 });
   const lineages = await page.getByRole('button', { name: /Lineages/ }).first().textContent();

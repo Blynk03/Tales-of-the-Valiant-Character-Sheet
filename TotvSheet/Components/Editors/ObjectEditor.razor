@@ -131,7 +131,7 @@
 
     private IEnumerable<PropertyInfo> Props() =>
         Target.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.CanRead && p.CanWrite)
+            .Where(p => p.CanRead && p.CanWrite && p.GetCustomAttribute<HiddenAttribute>() is null)
             .OrderBy(p => p.Name switch { "Id" => 0, "Name" => 1, "Source" => 2, "Description" => 4, _ => 3 });
 
     private static string Label(string name) => Regex.Replace(name, "(?<=[a-z])(?=[A-Z])", " ");
