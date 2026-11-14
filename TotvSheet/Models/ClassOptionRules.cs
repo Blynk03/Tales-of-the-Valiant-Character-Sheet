@@ -22,9 +22,19 @@ public static class ClassOptionRules
         var extra = 0;
         foreach (var (_, e) in c.ActiveEffects())
             foreach (var x in e.ExtraPicks ?? new())
-                if (Regex.Match(x ?? "", @"^(.*?)\s*\+?(\d+)\s*$") is { Success: true } xm
-                    && Matches(xm.Groups[1].Value.Trim(), f)) extra += int.Parse(xm.Groups[2].Value);
+                if (ParseExtra(x) is { } xp && Matches(xp.Kind, f)) extra += xp.CountAt(level);
         return int.Parse(m.Value) + extra;
+    }
+
+    /// <summary>An Extra Picks entry: a kind and a number, which can grow with level like a Pick Count
+    /// ("Binding 1; 11:2" is 1 extra Binding, 2 from 11th level; TVCS-122). Null if it isn't in that form.</summary>
+    public static (string Kind, Func<int, int> CountAt)? ParseExtra(string? entry)
+    {
+        var xm = Regex.Match(entry ?? "", @"^(.*?)\s*\+?(\d+)\s*((?:;\s*\d+\s*:\s*\d+\s*)*)$");
+        if (!xm.Success || xm.Groups[1].Value.Trim().Length == 0) return null;
+        var spec = xm.Groups[2].Value + xm.Groups[3].Value;
+        return (xm.Groups[1].Value.Trim(),
+            lvl => Regex.Match(CharacterCalc.Scaled(spec, lvl), @"\d+") is { Success: true } n ? int.Parse(n.Value) : 0);
     }
 
     /// <summary>An Extra Picks kind names the feature by its option kind ("Eldritch Invocation") or its own name

@@ -129,7 +129,7 @@ public class FeatureEffects
     public bool UnarmedDex { get; set; }
     [Hint("Tick if the unarmed damage only applies without armor or a shield (Monk's Martial Arts).")]
     public bool UnarmedNeedsNoArmor { get; set; }
-    [Hint("Extra picks for a feature that picks class options, as kind and number, e.g. \"Eldritch Invocation 2\".")]
+    [Hint("Extra picks for a feature that picks class options, as kind and number, e.g. \"Eldritch Invocation 2\". The number can grow with level: \"Binding 1; 11:2\".")]
     public List<string> ExtraPicks { get; set; } = new();
 }
 
