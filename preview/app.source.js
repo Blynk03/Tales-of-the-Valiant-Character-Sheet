@@ -1618,16 +1618,17 @@ async function readFile(el) {
     try {
       const data = JSON.parse(await readText(file)); let n = 0, gone = 0;
       // A file is a newer copy of its book(s): entries of the same source it no longer has are removed (TVCS-123),
-      // except entries edited here and a removal of over half a book (more than 10), which are asked about.
+      // except entries edited here and removals from a book whose new file is under half its size here, which are asked about.
       const isBook = src => src && !/^homebrew$/i.test(src) && !/^core/i.test(src);
-      const sources = new Set(), ids = {};
-      KINDS.forEach(([k]) => { ids[k] = new Set(); (Array.isArray(data[k]) ? data[k] : []).forEach(en => { if (!en.id) en.id = uid().slice(0, 8); ids[k].add(en.id); if (isBook(en.source)) sources.add(en.source.toLowerCase()); }); });
+      const sources = new Set(), ids = {}, newCount = {};
+      KINDS.forEach(([k]) => { ids[k] = new Set(); (Array.isArray(data[k]) ? data[k] : []).forEach(en => { if (!en.id) en.id = uid().slice(0, 8); ids[k].add(en.id);
+        if (isBook(en.source)) { const s = en.source.toLowerCase(); sources.add(s); newCount[s] = (newCount[s] || 0) + 1; } }); });
       const stale = [];
       KINDS.forEach(([k]) => (S.user[k] || []).forEach(en => { if (sources.has(String(en.source || '').toLowerCase()) && !ids[k].has(en.id)) stale.push([k, en]); }));
       const bySource = {}; stale.forEach(x => (bySource[x[1].source.toLowerCase()] = bySource[x[1].source.toLowerCase()] || []).push(x));
       Object.entries(bySource).forEach(([src, list]) => {
         const had = KINDS.reduce((sum, [k]) => sum + (S.user[k] || []).filter(e => String(e.source || '').toLowerCase() === src).length, 0);
-        const large = list.length > 10 && list.length * 2 > had;
+        const large = list.length > 10 && (newCount[src] || 0) * 2 < had; // the new file is much smaller: likely partial
         list.forEach(([k, en]) => {
           if (en.edited) pending.push({ k, en, reason: 'you edited it' });
           else if (large) pending.push({ k, en, reason: `the new file has fewer than half of ${en.source}'s entries` });

@@ -318,7 +318,8 @@ public class ContentService
     /// copy of its book(s): entries of the same source that the file no longer has are removed, in every content kind, so
     /// dropped entries and the random-id copies older imports made don't linger. Homebrew and the built-in samples are never
     /// removed. Two cases are asked about instead (returned as Pending): entries the player edited on the Content page,
-    /// and a removal of more than half of a book's entries (more than 10), which more likely means a partial file.
+    /// and removals (more than 10) from a book whose new file has fewer than half the entries the library had for it,
+    /// which more likely means a partial file than a newer copy.
     /// Characters are unaffected: what they took was copied onto the sheet.
     /// </summary>
     public async Task<ImportResult> ImportAsync(string json, bool save = true)
@@ -327,6 +328,7 @@ public class ContentService
         int count = 0, removed = 0;
         var pending = new List<PendingRemoval>();
         var sources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var newCount = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var newIds = new Dictionary<string, HashSet<string>>();
         foreach (var kind in Kinds)
         {
@@ -335,7 +337,7 @@ public class ContentService
             {
                 if (string.IsNullOrWhiteSpace(entry.Id)) entry.Id = Guid.NewGuid().ToString("n")[..8];
                 ids.Add(entry.Id);
-                if (IsBookSource(entry.Source)) sources.Add(entry.Source);
+                if (IsBookSource(entry.Source)) { sources.Add(entry.Source); newCount[entry.Source] = newCount.GetValueOrDefault(entry.Source) + 1; }
             }
         }
         // Stale entries: same book, not in the new file.
@@ -345,7 +347,7 @@ public class ContentService
         foreach (var bySource in stale.GroupBy(s => s.Entry.Source ?? "", StringComparer.OrdinalIgnoreCase))
         {
             var had = Kinds.Sum(k => k.List(User).Cast<ContentEntry>().Count(e => string.Equals(e.Source, bySource.Key, StringComparison.OrdinalIgnoreCase)));
-            var large = bySource.Count() > 10 && bySource.Count() * 2 > had;
+            var large = bySource.Count() > 10 && newCount.GetValueOrDefault(bySource.Key) * 2 < had;
             foreach (var (kind, entry) in bySource)
             {
                 if (entry.Edited) pending.Add(new(kind, entry, "you edited it"));
