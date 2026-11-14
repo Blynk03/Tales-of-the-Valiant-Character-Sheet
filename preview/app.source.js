@@ -91,11 +91,13 @@ function hpBonusAt(spec, level) {
 const hpBonuses = (c, level) => activeEffects(c).filter(([, e]) => e.hpBonus)
   .map(([f, e]) => ({ source: ((f.picks || []).find(p => p.effects === e) || f).name, amount: hpBonusAt(e.hpBonus, level ?? c.level) })).filter(b => b.amount);
 /** Brings max HP in line with the bonuses: adds the change since the last sync, keeping hand edits (mirror of SyncHpBonus). */
-function syncHpBonus(c, newCharacter) {
-  const total = hpBonuses(c).reduce((s, b) => s + b.amount, 0), first = c.hpBonusApplied == null, delta = total - (c.hpBonusApplied || 0);
+function syncHpBonus(c, explain) {
+  const bonuses = hpBonuses(c), total = bonuses.reduce((s, b) => s + b.amount, 0), first = c.hpBonusApplied == null, delta = total - (c.hpBonusApplied || 0);
   if (!delta && !first) return false;
-  c.maxHp += delta; c.currentHp = Math.max(0, Math.min(Math.max(0, c.maxHp), c.currentHp + delta)); c.hpBonusApplied = total;
-  if (first && !newCharacter && total > 0) c.hpBonusNotice = `Max HP now includes +${total} from ${hpBonuses(c).map(b => b.source).join(', ')}. If you had already added this by hand, lower Max HP by ${total}.`;
+  c.maxHp += delta; const top = Math.max(0, c.maxHp);
+  c.currentHp = delta > 0 ? Math.min(c.currentHp + delta, top) : Math.max(0, Math.min(c.currentHp, top)); // losing a bonus doesn't wound
+  c.hpBonusApplied = total;
+  if (explain && delta > 0) c.hpBonusNotice = `Max HP rose by ${delta}: it now includes ${bonuses.map(b => `+${b.amount} ${b.source}`).join(', ')}. If you had already added any of this by hand, lower Max HP by that much.`;
   return true;
 }
 const unarmoredNoShield = c => !wornArmor(c) && !wornShield(c);
@@ -515,7 +517,7 @@ function buildCharacter(w) {
   const t = find('talents', w.talent); if (t && !c.talents.some(x => x.name === t.name)) addTalent(c, t);
   c.otherProficiencies = other.join('; ');
   c.features.forEach(f => addAutoPicks(c, f));
-  syncHpBonus(c, true); // hit point bonuses from the lineage, class or talent (TVCS-121)
+  syncHpBonus(c); // hit point bonuses from the lineage, class or talent (TVCS-121)
   return c;
 }
 const levelDef = (cls, n) => cls && cls.levels.find(l => l.level === n);
@@ -1228,7 +1230,10 @@ function levelModal(c) {
       <section><h3 class="box-title text-left">Hit points</h3><div class="grid sm:grid-cols-2 gap-2">
         <button class="choice ${!lu.roll ? 'selected' : ''}" data-act="luAvg"><b>Take the average</b><div class="muted text-sm">${hitAvg(c.hitDie)} ${sg(M(c, 'CON'))} CON</div></button>
         <button class="choice ${lu.roll ? 'selected' : ''}" data-act="luRoll"><b>Roll d${c.hitDie}</b><div class="muted text-sm">${lu.rolled != null ? `Rolled ${lu.rolled} ${sg(M(c, 'CON'))} CON (click to reroll)` : 'Click to roll'}</div></button></div>
-        ${(() => { const bg = hpBonuses(c, c.level + 1).reduce((s, b) => s + b.amount, 0) - hpBonuses(c).reduce((s, b) => s + b.amount, 0);
+        ${(() => { const n2 = c.level + 1, gainedFx = g.flatMap(f => [f.effects, ((f.options || []).find(o => o.name === f.chosen) || {}).effects]);
+          const talentFx = [lu.talent, lu.mode === 'talent' ? lu.impTalent : ''].map(id => (find('talents', id) || {}).effects);
+          const bg = hpBonuses(c, n2).reduce((s, b) => s + b.amount, 0) + gainedFx.concat(talentFx).reduce((s, e) => s + (e && e.hpBonus ? hpBonusAt(e.hpBonus, n2) : 0), 0)
+            - hpBonuses(c).reduce((s, b) => s + b.amount, 0);
           return `<p class="mt-1.5">Max HP <span class="num">${c.maxHp}</span> → <span class="num" style="color:var(--good)">${c.maxHp + hpGain(c, lu) + bg}</span>${bg > 0 ? `<span class="text-sm muted"> (including +${bg} from hit point bonuses)</span>` : ''}</p></section>`; })()}
       ${ns ? `<section><h3 class="box-title text-left">Choose your subclass</h3>${subs.length ? '' : `<p class="muted text-sm">No subclasses for ${esc(c.className)} in your content yet. You can add one in Content, or continue without.</p>`}
         <div class="grid sm:grid-cols-2 gap-2">${subs.map(x => choice(lu.sub === x.id, 'luSub', x.id, `<b>${esc(x.name)}</b><div class="muted text-sm">${esc(x.description)}</div>`)).join('')}</div></section>` : ''}
@@ -1387,7 +1392,7 @@ function bindChange(el) {
 function cur() { return C(); }
 const A = {
   go(r) { if (r === 'list') { S.route = 'list'; } else S.route = r; S.notice = ''; },
-  open(id) { S.charId = id; S.route = 'sheet'; S.tab = 'main'; S.notice = ''; S.castMsg = ''; const c = C(); if (c && (refreshFeatureRules(c) | syncHpBonus(c))) persist(); },
+  open(id) { S.charId = id; S.route = 'sheet'; S.tab = 'main'; S.notice = ''; S.castMsg = ''; const c = C(); if (c && (refreshFeatureRules(c) | syncHpBonus(c, true))) persist(); },
   dismissHp() { cur().hpBonusNotice = ''; save(); },
   startCreate() { S.wiz = newWizard(); S.route = 'create'; },
   dupChar(id) { const c = clone(S.chars.find(x => x.id === id)); c.id = uid(); c.name += ' (copy)'; c.updated = new Date().toISOString(); S.chars.push(c); persist(); },
@@ -1613,33 +1618,33 @@ async function readFile(el) {
     render(); return;
   }
   S.set.msg = `Importing ${files.length} file${files.length > 1 ? 's' : ''}…`; render();
-  const lines = [], pending = []; let total = 0, removed = 0;
+  const lines = [], stale = [], batchIds = new Set(); let total = 0, removed = 0;
+  // Removals are decided once every file is in (TVCS-123), so two files of one book picked together keep each other's entries.
+  const coreSources = new Set(KINDS.flatMap(([k]) => (SEED[k] || []).map(e => String(e.source || '').toLowerCase())));
+  const isBook = src => src && !/^homebrew$/i.test(src) && !coreSources.has(String(src).toLowerCase());
   for (const file of files) {
     try {
-      const data = JSON.parse(await readText(file)); let n = 0, gone = 0;
-      // A file is a newer copy of its book(s): entries of the same source it no longer has are removed (TVCS-123),
-      // except entries edited here and removals from a book whose new file is under half its size here, which are asked about.
-      const isBook = src => src && !/^homebrew$/i.test(src) && !/^core/i.test(src);
-      const sources = new Set(), ids = {}, newCount = {};
-      KINDS.forEach(([k]) => { ids[k] = new Set(); (Array.isArray(data[k]) ? data[k] : []).forEach(en => { if (!en.id) en.id = uid().slice(0, 8); ids[k].add(en.id);
-        if (isBook(en.source)) { const s = en.source.toLowerCase(); sources.add(s); newCount[s] = (newCount[s] || 0) + 1; } }); });
-      const stale = [];
-      KINDS.forEach(([k]) => (S.user[k] || []).forEach(en => { if (sources.has(String(en.source || '').toLowerCase()) && !ids[k].has(en.id)) stale.push([k, en]); }));
-      const bySource = {}; stale.forEach(x => (bySource[x[1].source.toLowerCase()] = bySource[x[1].source.toLowerCase()] || []).push(x));
-      Object.entries(bySource).forEach(([src, list]) => {
-        const had = KINDS.reduce((sum, [k]) => sum + (S.user[k] || []).filter(e => String(e.source || '').toLowerCase() === src).length, 0);
-        const large = list.length > 10 && (newCount[src] || 0) * 2 < had; // the new file is much smaller: likely partial
-        list.forEach(([k, en]) => {
-          if (en.edited) pending.push({ k, en, reason: 'you edited it' });
-          else if (large) pending.push({ k, en, reason: `the new file has fewer than half of ${en.source}'s entries` });
-          else { S.user[k] = S.user[k].filter(x => x !== en); gone++; }
-        });
-      });
+      const data = JSON.parse(await readText(file)); let n = 0;
+      // A book's file (one book's entries) is a newer copy of it: that book's entries it no longer has are stale.
+      // Files of several books (a library export), homebrew and samples mark nothing stale.
+      const books = {}, ids = new Set();
+      KINDS.forEach(([k]) => (Array.isArray(data[k]) ? data[k] : []).forEach(en => { if (!en.id) en.id = uid().slice(0, 8); ids.add(k + '\u0001' + en.id);
+        if (isBook(en.source)) { const b = en.source.toLowerCase(); books[b] = (books[b] || 0) + 1; } }));
+      const bookNames = Object.keys(books);
+      if (bookNames.length === 1) {
+        const book = bookNames[0], mine = KINDS.flatMap(([k]) => (S.user[k] || []).filter(e => String(e.source || '').toLowerCase() === book).map(e => [k, e]));
+        const gone = mine.filter(([k, e]) => !ids.has(k + '\u0001' + e.id)), partial = gone.length > 10 && books[book] * 2 < mine.length;
+        gone.forEach(([k, en]) => stale.push({ k, en, reason: en.edited ? 'you edited it' : partial ? `the new file has fewer than half of ${en.source}'s entries` : null }));
+      }
+      ids.forEach(x => batchIds.add(x));
       KINDS.forEach(([k]) => (Array.isArray(data[k]) ? data[k] : []).forEach(en => { S.user[k] = (S.user[k] || []).filter(x => x.id !== en.id); S.user[k].push(en); n++; }));
       if (!n) throw new Error('it has no content entries');
-      total += n; removed += gone; lines.push(`${file.name}: ${n} entries` + (gone ? `, ${gone} old ones removed` : ''));
+      total += n; lines.push(`${file.name}: ${n} entries`);
     } catch (err) { lines.push(`${file.name}: couldn't import (${err instanceof SyntaxError ? "not a JSON file" : err.message})`); }
   }
+  const pending = [];
+  stale.forEach(x => { if (batchIds.has(x.k + '\u0001' + x.en.id) || !(S.user[x.k] || []).includes(x.en)) return; // brought back, or gone already
+    if (x.reason) pending.push(x); else { S.user[x.k] = S.user[x.k].filter(e => e !== x.en); removed++; } });
   if (total) persist(true);
   const summary = () => (files.length === 1 && total ? `Imported ${total} entries.` : (files.length > 1 ? `Imported ${total} entries from ${files.length} files. ` : '') + lines.join(' · '))
     + (removed ? ` Removed ${removed} old entr${removed === 1 ? 'y' : 'ies'} the new files no longer have.` : '');
@@ -1648,7 +1653,7 @@ async function readFile(el) {
     const names = pending.slice(0, 8).map(p => `${p.en.name} (${p.reason})`).join(', ') + (pending.length > 8 ? ` and ${pending.length - 8} more` : '');
     S.modal = { confirm: `${pending.length} entr${pending.length === 1 ? "y isn't" : "ies aren't"} in the new book files: ${names}. Remove ${pending.length === 1 ? 'it' : 'them'} from your library? Characters keep what they already have.`,
       yes: 'Remove', danger: true,
-      then() { pending.forEach(p => { S.user[p.k] = (S.user[p.k] || []).filter(x => x !== p.en); }); removed += pending.length; persist(true); S.set.msg = summary(); } };
+      then() { pending.forEach(p => { const before = (S.user[p.k] || []).length; S.user[p.k] = (S.user[p.k] || []).filter(x => x !== p.en); removed += before - S.user[p.k].length; }); persist(true); S.set.msg = summary(); } };
   }
   render();
 }

@@ -152,7 +152,7 @@ public static class CharacterBuilder
 
         c.OtherProficiencies = string.Join("; ", other);
         foreach (var f in c.Features) AddAutoPicks(c, f, content);
-        c.SyncHpBonus(newCharacter: true); // hit point bonuses from the lineage, class or talent (TVCS-121)
+        c.SyncHpBonus(); // hit point bonuses from the lineage, class or talent (TVCS-121)
         return c;
     }
 

@@ -140,22 +140,25 @@ public static class CharacterCalc
 
     /// <summary>
     /// Brings <see cref="Character.MaxHp"/> in line with the character's hit point bonuses (TVCS-121): adds the change since
-    /// the last sync, so hit dice, CON and any change the player made by hand are kept. Current HP moves by the same
-    /// amount, never below 0 or above the maximum. For a character from before these bonuses, the first sync also leaves a
-    /// note in case the player had already added a bonus by hand. Returns true if anything changed.
+    /// the last sync, so hit dice, CON and any change the player made by hand are kept. A rise raises current HP too; a
+    /// drop only keeps current HP within the new maximum (losing a bonus doesn't wound). With <paramref name="explain"/>
+    /// (opening a sheet, when a rise can only come from the content gaining a bonus, or from a character made before
+    /// bonuses existed), a rise leaves a note in case the player had already added it by hand. Returns true if anything
+    /// changed.
     /// </summary>
-    public static bool SyncHpBonus(this Character c, bool newCharacter = false)
+    public static bool SyncHpBonus(this Character c, bool explain = false)
     {
-        var total = c.HpBonuses().Sum(b => b.Amount);
+        var bonuses = c.HpBonuses();
+        var total = bonuses.Sum(b => b.Amount);
         var first = c.HpBonusApplied is null;
         var delta = total - (c.HpBonusApplied ?? 0);
         if (delta == 0 && !first) return false;
         c.MaxHp += delta;
-        c.CurrentHp = Math.Clamp(c.CurrentHp + delta, 0, Math.Max(0, c.MaxHp));
+        c.CurrentHp = delta > 0 ? Math.Min(c.CurrentHp + delta, Math.Max(0, c.MaxHp)) : Math.Clamp(c.CurrentHp, 0, Math.Max(0, c.MaxHp));
         c.HpBonusApplied = total;
-        if (first && !newCharacter && total > 0)
-            c.HpBonusNotice = $"Max HP now includes +{total} from {string.Join(", ", c.HpBonuses().Select(b => b.Source))}. " +
-                              $"If you had already added this by hand, lower Max HP by {total}.";
+        if (explain && delta > 0)
+            c.HpBonusNotice = $"Max HP rose by {delta}: it now includes {string.Join(", ", bonuses.Select(b => $"+{b.Amount} {b.Source}"))}. " +
+                              $"If you had already added any of this by hand, lower Max HP by that much.";
         return true;
     }
 

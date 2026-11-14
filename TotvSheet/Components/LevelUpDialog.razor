@@ -31,7 +31,7 @@
                         <div class="muted text-sm">@(choices.RolledHp is int r ? $"Rolled {r} {Rules.Signed(C.Mod(Ability.CON))} CON (click to reroll)" : "Click to roll")</div>
                     </button>
                 </div>
-                @{ var bonusGain = C.HpBonuses(newLevel).Sum(b => b.Amount) - C.HpBonuses().Sum(b => b.Amount); }
+                @{ var bonusGain = ProjectedHpBonus(); }
                 <p class="mt-1.5">Max HP <span class="num">@C.MaxHp</span> → <span class="num" style="color:var(--good)">@(C.MaxHp + CharacterBuilder.HpGain(C, choices) + bonusGain)</span>
                     @if (bonusGain > 0) { <span class="text-sm muted"> (including +@bonusGain from hit point bonuses)</span> }</p>
             </section>
@@ -227,6 +227,22 @@
         C.Features.Where(f => f.PickKind.Length > 0)
             .Select(f => (f.Name, From: ClassOptionRules.CountAt(C, f, C.Level), To: ClassOptionRules.CountAt(C, f, newLevel)))
             .Where(x => x.To > x.From);
+
+    /// <summary>How much the hit point bonuses grow with this level up (TVCS-121): per-level growth of what the character
+    /// has, plus the bonuses of features gained now and of a talent taken now, at the new level.</summary>
+    private int ProjectedHpBonus()
+    {
+        var now = C.HpBonuses().Sum(b => b.Amount);
+        var next = C.HpBonuses(newLevel).Sum(b => b.Amount);
+        foreach (var f in Gained())
+        {
+            next += CharacterCalc.HpBonusAt(f.Effects?.HpBonus, newLevel);
+            next += CharacterCalc.HpBonusAt(f.Options.FirstOrDefault(o => o.Name == f.Chosen)?.Effects?.HpBonus, newLevel);
+        }
+        foreach (var t in new[] { Content.Talent(talentId), choices.IncreaseMode == AbilityIncreaseMode.PlusOneTalent ? Content.Talent(improvementTalentId) : null })
+            next += CharacterCalc.HpBonusAt(t?.Effects?.HpBonus, newLevel);
+        return next - now;
+    }
 
     private List<Feature> Gained() =>
         CharacterBuilder.FeaturesGained(C, cls, needsSubclass ? choices.Subclass : null, Content, newLevel);

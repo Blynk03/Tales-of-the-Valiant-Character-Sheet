@@ -302,7 +302,7 @@
         importing = true;
         var lines = new List<string>();
         int total = 0, removed = 0, count = Math.Max(1, e.FileCount);
-        var pending = new List<ContentService.PendingRemoval>();
+        var batch = new ContentService.ImportBatch(); // removals are decided once all files are in (TVCS-123)
         try
         {
             for (var i = 0; i < count; i++)
@@ -313,10 +313,10 @@
                 await Progress($"Adding {file.Name}" + (count > 1 ? $" ({i + 1} of {count})…" : "…"));
                 try
                 {
-                    var r = await Content.ImportAsync(file.Text, save: false);
-                    if (r.Count == 0) throw new InvalidDataException("it has no content entries");
-                    total += r.Count; removed += r.Removed; pending.AddRange(r.Pending);
-                    lines.Add($"{file.Name}: {r.Count} entries" + (r.Removed > 0 ? $", {r.Removed} old ones removed" : ""));
+                    var n = Content.ImportFile(file.Text, batch);
+                    if (n == 0) throw new InvalidDataException("it has no content entries");
+                    total += n;
+                    lines.Add($"{file.Name}: {n} entries");
                 }
                 catch (JsonException)
                 {
@@ -330,6 +330,8 @@
                 GC.Collect(); // let the next file reuse this one's memory rather than growing the app's heap
             }
             // Entries the new files dropped but that the player edited, or a suspiciously large removal: ask (TVCS-123).
+            var (removedNow, pending) = Content.FinishImport(batch);
+            removed += removedNow;
             var kept = 0;
             if (pending.Count > 0)
             {
@@ -337,7 +339,7 @@
                 if (await JS.InvokeAsync<bool>("totv.confirm",
                         $"{pending.Count} entr{(pending.Count == 1 ? "y isn't" : "ies aren't")} in the new book files: {names}. Remove {(pending.Count == 1 ? "it" : "them")} from your library? Characters keep what they already have."))
                 {
-                    Content.Remove(pending); removed += pending.Count;
+                    removed += Content.Remove(pending);
                 }
                 else kept = pending.Count;
             }

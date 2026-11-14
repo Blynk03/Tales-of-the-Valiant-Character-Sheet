@@ -310,51 +310,52 @@ public class ContentService
     /// <summary>An entry the import wants to remove but asks about first.</summary>
     public record PendingRemoval(ContentKind Kind, ContentEntry Entry, string Reason);
 
-    /// <summary>What an import did: entries added or replaced, entries removed, and removals to ask the player about.</summary>
-    public record ImportResult(int Count, int Removed, List<PendingRemoval> Pending);
+    /// <summary>What a batch of imported files did: entries removed, and removals to ask the player about.</summary>
+    public record ImportResult(int Removed, List<PendingRemoval> Pending);
+
+    /// <summary>One import of one or more files (TVCS-123). Removals are decided once, after every file is merged, so two
+    /// files of the same book picked together never remove each other's entries.</summary>
+    public class ImportBatch
+    {
+        internal readonly HashSet<string> Ids = new();
+        internal readonly List<(ContentKind Kind, ContentEntry Entry, string? Ask)> Stale = new();
+    }
 
     /// <summary>
-    /// Merges a content file into the user's content (TVCS-123). Entries are added or replaced by id. A file is a newer
-    /// copy of its book(s): entries of the same source that the file no longer has are removed, in every content kind, so
-    /// dropped entries and the random-id copies older imports made don't linger. Homebrew and the built-in samples are never
-    /// removed. Two cases are asked about instead (returned as Pending): entries the player edited on the Content page,
-    /// and removals (more than 10) from a book whose new file has fewer than half the entries the library had for it,
-    /// which more likely means a partial file than a newer copy.
-    /// Characters are unaffected: what they took was copied onto the sheet.
+    /// Merges one content file into the user's content (TVCS-123), adding or replacing entries by id; returns how many.
+    /// A book's file (all its entries from one book, as in valiant-sheet-content.zip) is a newer copy of that book: the
+    /// entries of that source it no longer has, in every content kind, are noted in <paramref name="batch"/> as stale,
+    /// which includes random-id copies older imports made. Homebrew, the built-in samples and files holding several books
+    /// (a library export) never mark anything stale. <see cref="FinishImport"/> then removes them, except two cases that are
+    /// asked about: entries the player edited on the Content page, and a book whose new file has fewer than half the
+    /// entries the library had for it (likely a partial file, not a newer copy). Characters are unaffected: what they took
+    /// was copied onto the sheet.
     /// </summary>
-    public async Task<ImportResult> ImportAsync(string json, bool save = true)
+    public int ImportFile(string json, ImportBatch batch)
     {
         var incoming = Json.Deserialize<ContentLibrary>(json) ?? new();
-        int count = 0, removed = 0;
-        var pending = new List<PendingRemoval>();
-        var sources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var newCount = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var newIds = new Dictionary<string, HashSet<string>>();
+        var books = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var newIds = new HashSet<string>();
         foreach (var kind in Kinds)
-        {
-            var ids = newIds[kind.Key] = new HashSet<string>();
             foreach (ContentEntry entry in kind.List(incoming))
             {
                 if (string.IsNullOrWhiteSpace(entry.Id)) entry.Id = Guid.NewGuid().ToString("n")[..8];
-                ids.Add(entry.Id);
-                if (IsBookSource(entry.Source)) { sources.Add(entry.Source); newCount[entry.Source] = newCount.GetValueOrDefault(entry.Source) + 1; }
+                newIds.Add(Key(kind, entry.Id));
+                if (IsBookSource(entry.Source)) books[entry.Source] = books.GetValueOrDefault(entry.Source) + 1;
             }
-        }
-        // Stale entries: same book, not in the new file.
-        var stale = Kinds.SelectMany(k => k.List(User).Cast<ContentEntry>()
-                .Where(e => sources.Contains(e.Source ?? "") && !newIds[k.Key].Contains(e.Id)).Select(e => (Kind: k, Entry: e)))
-            .ToList();
-        foreach (var bySource in stale.GroupBy(s => s.Entry.Source ?? "", StringComparer.OrdinalIgnoreCase))
+        if (books.Count == 1)
         {
-            var had = Kinds.Sum(k => k.List(User).Cast<ContentEntry>().Count(e => string.Equals(e.Source, bySource.Key, StringComparison.OrdinalIgnoreCase)));
-            var large = bySource.Count() > 10 && newCount.GetValueOrDefault(bySource.Key) * 2 < had;
-            foreach (var (kind, entry) in bySource)
-            {
-                if (entry.Edited) pending.Add(new(kind, entry, "you edited it"));
-                else if (large) pending.Add(new(kind, entry, $"the new file has fewer than half of {bySource.Key}'s entries"));
-                else { kind.List(User).Remove(entry); removed++; }
-            }
+            var (book, newCount) = books.First();
+            var stale = Kinds.SelectMany(k => k.List(User).Cast<ContentEntry>()
+                    .Where(e => string.Equals(e.Source, book, StringComparison.OrdinalIgnoreCase) && !newIds.Contains(Key(k, e.Id)))
+                    .Select(e => (Kind: k, Entry: e))).ToList();
+            var had = Kinds.Sum(k => k.List(User).Cast<ContentEntry>().Count(e => string.Equals(e.Source, book, StringComparison.OrdinalIgnoreCase)));
+            var partial = stale.Count > 10 && newCount * 2 < had;
+            foreach (var (kind, entry) in stale)
+                batch.Stale.Add((kind, entry, entry.Edited ? "you edited it" : partial ? $"the new file has fewer than half of {book}'s entries" : null));
         }
+        batch.Ids.UnionWith(newIds);
+        var count = 0;
         foreach (var kind in Kinds)
         {
             var target = kind.List(User);
@@ -366,18 +367,51 @@ public class ContentService
                 count++;
             }
         }
-        if (save) await SaveAsync();
-        return new(count, removed, pending);
+        return count;
     }
 
-    /// <summary>Removes entries an import asked about, once the player agrees (TVCS-123). Doesn't save.</summary>
-    public void Remove(IEnumerable<PendingRemoval> entries)
+    /// <summary>Removes the batch's stale entries that no file in it brought back, and returns the ones to ask about. Doesn't save.</summary>
+    public ImportResult FinishImport(ImportBatch batch)
     {
-        foreach (var p in entries) p.Kind.List(User).Remove(p.Entry);
+        var removed = 0;
+        var pending = new List<PendingRemoval>();
+        foreach (var (kind, entry, ask) in batch.Stale)
+        {
+            if (batch.Ids.Contains(Key(kind, entry.Id)) || !kind.List(User).Contains(entry)) continue; // re-added or gone already
+            if (ask is not null) pending.Add(new(kind, entry, ask));
+            else { kind.List(User).Remove(entry); removed++; }
+        }
+        return new(removed, pending);
     }
 
-    /// <summary>A book's source: not homebrew and not the built-in samples.</summary>
-    private static bool IsBookSource(string? source) =>
+    /// <summary>Merges one content file and saves: a batch of one (used where there is no confirm step).</summary>
+    public async Task<int> ImportAsync(string json, bool save = true)
+    {
+        var batch = new ImportBatch();
+        var n = ImportFile(json, batch);
+        FinishImport(batch);
+        if (save) await SaveAsync();
+        return n;
+    }
+
+    /// <summary>Removes entries an import asked about, once the player agrees (TVCS-123). Returns how many. Doesn't save.</summary>
+    public int Remove(IEnumerable<PendingRemoval> entries)
+    {
+        var n = 0;
+        foreach (var p in entries)
+            if (p.Kind.List(User).Contains(p.Entry)) { p.Kind.List(User).Remove(p.Entry); n++; }
+        return n;
+    }
+
+    private static string Key(ContentKind kind, string id) => kind.Key + "\u0001" + id;
+
+    /// <summary>A book's source: not homebrew and not one of the built-in samples' sources.</summary>
+    private bool IsBookSource(string? source) =>
         !string.IsNullOrWhiteSpace(source) && !source.Equals(HomebrewSource, StringComparison.OrdinalIgnoreCase)
-        && !source.StartsWith("Core", StringComparison.OrdinalIgnoreCase);
+        && !CoreSources.Contains(source);
+
+    private HashSet<string>? _coreSources;
+    private HashSet<string> CoreSources => _coreSources ??= Kinds
+        .SelectMany(k => k.List(Core).Cast<ContentEntry>().Select(e => e.Source ?? ""))
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
 }

@@ -115,7 +115,7 @@ else
         // Characters made before their content had rules for unarmored AC, speed, unarmed strikes or "choose one"
         // options pick them up here (TVCS-108/109/110).
         if (C is not null && (CharacterBuilder.RefreshFeatureRules(C, Content) | CharacterBuilder.FixWeaponProficiency(C, Content)
-                              | C.SyncHpBonus()))
+                              | C.SyncHpBonus(explain: true)))
             await Characters.SaveAsync(C);
         loaded = true;
     }
