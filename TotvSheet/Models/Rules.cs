@@ -209,15 +209,18 @@ public static class CharacterCalc
             .Select(x => (Feet: System.Text.RegularExpressions.Regex.Match(Scaled(x.Effects.SpeedBonus, c.Level), @"-?\d+") is { Success: true } m ? int.Parse(m.Value) : 0, Source: x.Feature.Name))
             .Where(x => x.Feet != 0);
 
-    /// <summary>Other speeds from features and picked options, as text: "Fly 40 ft." ("Fly" = walking speed, "Burrow 20" = fixed).</summary>
+    /// <summary>Other speeds from features and picked options, as text: "Fly 40 ft." ("Fly" = walking speed, "Burrow 20" = fixed).
+    /// "Swim +5" adds to the best Swim speed from other entries; increases add together, and an increase alone grants nothing.</summary>
     public static IEnumerable<string> ExtraSpeeds(this Character c)
     {
         var walk = c.WalkSpeed();
         return c.ActiveEffects().SelectMany(x => x.Effects.ExtraSpeeds).Where(s => !string.IsNullOrWhiteSpace(s))
-            .Select(s => System.Text.RegularExpressions.Regex.Match(s.Trim(), @"^(.*?)(?:\s+(\d+)(?:\s*ft\.?)?)?$"))
-            .Select(m => (Name: m.Groups[1].Value, Feet: m.Groups[2].Success ? int.Parse(m.Groups[2].Value) : walk))
+            .Select(s => System.Text.RegularExpressions.Regex.Match(s.Trim(), @"^(.*?)(?:\s+(\+)?\s*(\d+)(?:\s*ft\.?)?)?$"))
+            .Select(m => (Name: m.Groups[1].Value, Plus: m.Groups[2].Success, Feet: m.Groups[3].Success ? int.Parse(m.Groups[3].Value) : walk))
             .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(g => g.Max(x => x.Feet) is int ft ? $"{g.Key} {ft} ft." : g.Key);
+            .Where(g => g.Any(x => !x.Plus))
+            .Select(g => (Name: g.First(x => !x.Plus).Name, Feet: g.Where(x => !x.Plus).Max(x => x.Feet) + g.Where(x => x.Plus).Sum(x => x.Feet ?? 0)))
+            .Select(x => x.Feet is int ft ? $"{x.Name} {ft} ft." : x.Name);
     }
 
     /// <summary>The Unarmed Strike attack row, if any feature improves unarmed strikes; null otherwise.

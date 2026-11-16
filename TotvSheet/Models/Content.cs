@@ -127,7 +127,7 @@ public class FeatureEffects
     public bool SpeedBonusUnarmored { get; set; }
     [Hint("Tick if the speed bonus doesn't apply in heavy armor (Barbarian's Fast Movement).")]
     public bool SpeedBonusNoHeavyArmor { get; set; }
-    [Hint("Other speeds: a name alone is equal to your walking speed (Fly, Climb, Swim); a name and number is fixed (Burrow 20).")]
+    [Hint("Other speeds: a name alone is equal to your walking speed (Fly, Climb, Swim); a name and number is fixed (Burrow 20); a plus sign adds to that speed from other sources (Swim +5).")]
     public List<string> ExtraSpeeds { get; set; } = new();
     [Hint("Unarmed strike damage, by level, e.g. \"1d4; 5:1d6; 11:1d8; 17:1d10\". Adds an Unarmed Strike row to Attacks.")]
     public string UnarmedDamage { get; set; } = "";

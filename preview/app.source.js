@@ -118,14 +118,17 @@ function scaled(spec, level) {
 }
 const speedBonuses = c => activeEffects(c).filter(([, e]) => (!e.speedBonusUnarmored || unarmoredNoShield(c)) && (!e.speedBonusNoHeavyArmor || (wornArmor(c) || {}).category !== 'Heavy')).map(([f, e]) => { const m = /-?\d+/.exec(scaled(e.speedBonus, c.level)); return { feet: m ? +m[0] : 0, source: f.name }; }).filter(b => b.feet);
 function walkSpeed(c) { const m = /\d+/.exec(c.speed || ''); return m ? +m[0] + speedBonuses(c).reduce((s, b) => s + b.feet, 0) : null; }
-/** Other speeds as text, e.g. "Fly 40 ft." ("Fly" = walking speed, "Burrow 20" = fixed). */
+/** Other speeds as text, e.g. "Fly 40 ft." ("Fly" = walking speed, "Burrow 20" = fixed, "Swim +5" adds to the best Swim from other entries). */
 function extraSpeeds(c) {
   const walk = walkSpeed(c), by = new Map();
   activeEffects(c).flatMap(([, e]) => e.extraSpeeds || []).map(s => String(s).trim()).filter(Boolean).forEach(s => {
-    const m = /^(.*?)(?:\s+(\d+)(?:\s*ft\.?)?)?$/.exec(s), name = m[1], ft = m[2] ? +m[2] : walk, k = name.toLowerCase();
-    if (!by.has(k) || (ft != null && ft > by.get(k).ft)) by.set(k, { name, ft });
+    const m = /^(.*?)(?:\s+(\+)?\s*(\d+)(?:\s*ft\.?)?)?$/.exec(s), name = m[1], plus = !!m[2], ft = m[3] ? +m[3] : walk, k = name.toLowerCase();
+    const x = by.get(k) || { name: null, ft: null, base: false, add: 0 };
+    if (plus) x.add += ft || 0;
+    else { if (!x.base) x.name = name; x.base = true; if (ft != null && (x.ft == null || ft > x.ft)) x.ft = ft; }
+    by.set(k, x);
   });
-  return [...by.values()].map(x => x.ft != null ? `${x.name} ${x.ft} ft.` : x.name);
+  return [...by.values()].filter(x => x.base).map(x => x.ft != null ? `${x.name} ${x.ft + x.add} ft.` : x.name);
 }
 const dieSize = d => { const m = /(\d*)d(\d+)/.exec(d); return m ? (+m[1] || 1) * +m[2] : 0; };
 /** The Unarmed Strike attack row when a feature improves unarmed strikes; 1 + STR when that feature needs no armor and armor is worn. */
@@ -670,7 +673,7 @@ function render() {
 // "Report a problem" (TVCS-106): opens the project's GitHub issue form with the version, page and device filled in.
 // Set REPORT_URL to '' to hide the link; {version}, {page} and {device} placeholders are filled in if present.
 const REPORT_URL = 'https://github.com/Blynk03/Tales-of-the-Valiant-Character-Sheet/issues/new?template=problem-report.yml';
-const PREVIEW_VERSION = 'preview v26';
+const PREVIEW_VERSION = 'preview v27';
 function deviceInfo() {
   const ua = navigator.userAgent;
   const m = (re) => { const r = ua.match(re); return r ? r[1] : null; };
