@@ -122,7 +122,7 @@ function walkSpeed(c) { const m = /\d+/.exec(c.speed || ''); return m ? +m[0] + 
 function extraSpeeds(c) {
   const walk = walkSpeed(c), by = new Map();
   activeEffects(c).flatMap(([, e]) => e.extraSpeeds || []).map(s => String(s).trim()).filter(Boolean).forEach(s => {
-    const m = /^(.*?)(?:\s+(\+)?\s*(\d+)(?:\s*ft\.?)?)?$/.exec(s), name = m[1], plus = !!m[2], ft = m[3] ? +m[3] : walk, k = name.toLowerCase();
+    const m = /^(.*?)(?:(?:\s*(\+)\s*|\s+)([0-9]+)(?:\s*ft\.?)?)?$/.exec(s), name = m[1], plus = !!m[2], ft = m[3] ? +m[3] : walk, k = name.toLowerCase();
     const x = by.get(k) || { name: null, ft: null, base: false, add: 0 };
     if (plus) x.add += ft || 0;
     else { if (!x.base) x.name = name; x.base = true; if (ft != null && (x.ft == null || ft > x.ft)) x.ft = ft; }

@@ -215,8 +215,8 @@ public static class CharacterCalc
     {
         var walk = c.WalkSpeed();
         return c.ActiveEffects().SelectMany(x => x.Effects.ExtraSpeeds).Where(s => !string.IsNullOrWhiteSpace(s))
-            .Select(s => System.Text.RegularExpressions.Regex.Match(s.Trim(), @"^(.*?)(?:\s+(\+)?\s*(\d+)(?:\s*ft\.?)?)?$"))
-            .Select(m => (Name: m.Groups[1].Value, Plus: m.Groups[2].Success, Feet: m.Groups[3].Success ? int.Parse(m.Groups[3].Value) : walk))
+            .Select(s => System.Text.RegularExpressions.Regex.Match(s.Trim(), @"^(.*?)(?:(?:\s*(\+)\s*|\s+)([0-9]+)(?:\s*ft\.?)?)?$"))
+            .Select(m => (Name: m.Groups[1].Value, Plus: m.Groups[2].Success, Feet: m.Groups[3].Success && int.TryParse(m.Groups[3].Value, out var n) ? n : walk))
             .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
             .Where(g => g.Any(x => !x.Plus))
             .Select(g => (Name: g.First(x => !x.Plus).Name, Feet: g.Where(x => !x.Plus).Max(x => x.Feet) + g.Where(x => x.Plus).Sum(x => x.Feet ?? 0)))
