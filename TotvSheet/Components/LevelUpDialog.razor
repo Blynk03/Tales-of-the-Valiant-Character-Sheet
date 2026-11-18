@@ -123,6 +123,10 @@
                     @if (Content.Talent(talentId) is { } selected)
                     {
                         <p class="text-sm muted mt-1">@selected.Description @(string.IsNullOrEmpty(selected.Prerequisite) ? "" : $"Prerequisite: {selected.Prerequisite}.")</p>
+                        @if (Grants.AsksChoice(selected.Effects))
+                        {
+                            <p class="text-sm mt-1">Make its choice in the Talents box after levelling up.</p>
+                        }
                     }
                 </section>
             }
@@ -151,7 +155,7 @@
                     @foreach (var f in Gained())
                     {
                         <li><span class="font-semibold">@f.Name</span> <span class="chip">@f.Source</span> <span class="text-sm muted">@f.Description</span>
-                            @if (f.Options.Count > 0 || (f.PickKind.Length > 0 && f.PickCount.Length > 0))
+                            @if (f.Options.Count > 0 || (f.PickKind.Length > 0 && f.PickCount.Length > 0) || Grants.AsksChoice(f.Effects))
                             {
                                 <span class="text-sm"> Make your choice on the Features tab after levelling up.</span>
                             }

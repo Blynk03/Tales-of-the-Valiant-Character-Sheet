@@ -11,19 +11,31 @@
     </div>
 
     <div class="flex items-center gap-2 mt-2 pt-1.5" style="border-top:1px solid var(--ink-faint)">
-        <button type="button" class="pip @(C.SaveProficiencies[(int)A] ? "on" : "")" title="Toggle save proficiency" @onclick="ToggleSave"></button>
+        @{ var saveFrom = C.SaveSources(A); var own = C.SaveProficiencies[(int)A]; }
+        <button type="button" class="pip @(own || saveFrom.Length > 0 ? "on" : "") @(saveFrom.Length > 0 && !own ? "granted" : "")"
+                title="@SaveTitle(own, saveFrom)" aria-pressed="@(own ? "true" : "false")" @onclick="ToggleSave"></button>
         <button type="button" class="roll num" title="Roll save" @onclick="RollSave">@Rules.Signed(C.SaveBonus(A))</button>
         <span class="lbl">Save</span>
+        @if (saveFrom.Length > 0)
+        {
+            <span class="grant-src" title="@($"Proficient from {saveFrom}")">@saveFrom</span>
+        }
     </div>
 
     @foreach (var skill in Rules.Skills.Where(s => s.Ability == A))
     {
         var name = skill.Name;
         var prof = C.SkillProf(name);
+        var ownProf = C.OwnSkillProf(name);
+        var from = C.SkillSources(name);
         <div class="skill-row">
-            <button type="button" class="pip @PipClass(prof)" title="@($"{name}: {prof} (click to change)")" @onclick="() => CycleSkill(name)"></button>
+            <button type="button" class="pip @PipClass(prof) @(prof > ownProf ? "granted" : "")" title="@SkillTitle(name, prof, ownProf, from)" @onclick="() => CycleSkill(name)"></button>
             <button type="button" class="roll num bonus" title="Roll @name" @onclick="() => RollSkill(name)">@Rules.Signed(C.SkillBonus(name))</button>
             <span>@name</span>
+            @if (from.Length > 0)
+            {
+                <span class="grant-src" title="@($"From {from}")">@from</span>
+            }
         </div>
     }
 </Box>
@@ -52,9 +64,18 @@
         await Save();
     }
 
+    private static string SaveTitle(bool own, string from) =>
+        from.Length == 0 ? "Toggle save proficiency"
+            : $"Proficient from {from}. Your own mark is {(own ? "on" : "off")} (click to change it)";
+
+    private static string SkillTitle(string name, ProfLevel prof, ProfLevel own, string from) =>
+        from.Length == 0 ? $"{name}: {prof} (click to change)"
+            : $"{name}: {prof}, from {from}. Your own mark: {own} (click to change it)";
+
+    // Clicking changes only the player's own mark; proficiency from content stays while its source does (TVCS-126/127).
     private async Task CycleSkill(string name)
     {
-        var next = (ProfLevel)(((int)C.SkillProf(name) + 1) % 3);
+        var next = (ProfLevel)(((int)C.OwnSkillProf(name) + 1) % 3);
         if (next == ProfLevel.None) C.Skills.Remove(name);
         else C.Skills[name] = next;
         await Save();

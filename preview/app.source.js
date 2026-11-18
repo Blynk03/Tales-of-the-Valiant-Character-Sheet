@@ -62,8 +62,8 @@ const idb = (() => {
 // ---------- derived values (mirror of Models/Rules.cs) ----------
 const M = (c, a) => mod(c.scores[ABIL.indexOf(a)]);
 const P = c => profFor(c.level);
-const saveB = (c, a) => M(c, a) + (c.saveProficiencies[ABIL.indexOf(a)] ? P(c) : 0);
-const skP = (c, s) => c.skills[s] || 'None';
+const saveB = (c, a) => M(c, a) + (isSaveProf(c, a) ? P(c) : 0);
+const skP = (c, s) => skillLevels(c)[s] || 'None'; // own marks and content grants (TVCS-127)
 const skMult = p => p === 'Expertise' ? 2 : p === 'Proficient' ? 1 : 0;
 const skB = (c, s) => M(c, SKILLS.find(x => x[0] === s)[1]) + P(c) * skMult(skP(c, s));
 const passive = (c, s) => 10 + skB(c, s);
@@ -81,6 +81,120 @@ function activeEffects(c) {
   });
   (c.talents || []).forEach(t => { if (t.effects) out.push([{ name: t.name, source: 'Talent', picks: [] }, t.effects]); }); // talents (TVCS-121)
   return out;
+}
+// ---------- saving throws and skills granted by content (TVCS-126/127), mirror of Models/Grants.cs ----------
+// Worked out from the character's features each time; c.saveProficiencies and c.skills keep only the player's own marks.
+const PROF_RANK = { None: 0, Proficient: 1, Expertise: 2 };
+const KINDS_G = ['Save', 'Skill', 'Expertise'];
+function grantSourcesOf(f) {
+  const key = `${f.source}|${f.name}`, out = [];
+  if (f.effects) out.push({ key, label: f.name, e: f.effects });
+  const o = (f.options || []).find(o => o.name === f.chosen);
+  if (o && o.effects) out.push({ key: `${key}|${o.name}`, label: f.name, e: o.effects });
+  if (f.pickKind) (f.picks || []).forEach(p => { if (p.effects) out.push({ key: `${key}|pick:${p.name}`, label: p.name, e: p.effects }); });
+  return out;
+}
+/** A talent's rules; a talent taken more than once gets its own key per copy ("Talent|Hard Target", then "…|2"). */
+function grantSourcesOfTalent(c, t) {
+  if (!t.effects) return [];
+  const copy = c.talents.slice(0, c.talents.indexOf(t)).filter(x => x.name === t.name).length + 1;
+  return [{ key: copy === 1 ? `Talent|${t.name}` : `Talent|${t.name}|${copy}`, label: t.name, e: t.effects }];
+}
+const grantSources = c => (c.features || []).flatMap(grantSourcesOf).concat((c.talents || []).flatMap(t => grantSourcesOfTalent(c, t)));
+/** Skill names from skill names and ability codes ("WIS" = every Wisdom skill); empty = every skill. */
+function skillsFrom(list) {
+  const xs = (list || []).map(x => String(x || '').trim()).filter(Boolean);
+  if (!xs.length) return SKILLS.map(s => s[0]);
+  const out = [];
+  xs.forEach(x => { const a = x.length === 3 && ABIL.find(a => a.toLowerCase() === x.toLowerCase());
+    if (a) SKILLS.filter(s => s[1] === a).forEach(s => out.push(s[0])); else SKILLS.forEach(s => { if (s[0].toLowerCase() === x.toLowerCase()) out.push(s[0]); }); });
+  return [...new Set(out)];
+}
+const countOf = (e, kind) => (kind === 'Save' ? e.saveChoices : kind === 'Skill' ? e.skillChoices : e.expertiseChoices) || 0;
+function choiceOptions(c, e, kind) {
+  if (kind === 'Save') return [...new Set((e.saveChoiceFrom || []).length ? e.saveChoiceFrom : ABIL)];
+  if (kind === 'Skill') return skillsFrom(e.skillChoiceFrom);
+  const lv = skillLevels(c, false); return SKILLS.map(s => s[0]).filter(s => PROF_RANK[lv[s] || 'None'] >= 1);
+}
+const storeKey = ch => `${ch.source.key}#${ch.kind}`;
+const choicesOf = (c, s, only) => KINDS_G.filter(k => (!only || only === k) && countOf(s.e, k) > 0).map(kind => ({ source: s, kind, count: countOf(s.e, kind), options: choiceOptions(c, s.e, kind) }));
+const grantChoiceList = c => grantSources(c).flatMap(s => choicesOf(c, s));
+const picked = (c, ch) => [...new Set(((c.grantChoices || {})[storeKey(ch)] || []).filter(x => ch.options.includes(x)))].slice(0, ch.count);
+const missingOf = (c, ch) => ch.source.e.choicesOptional ? 0 : Math.max(0, Math.min(ch.count, ch.options.length) - picked(c, ch).length);
+const pendingChoices = c => grantChoiceList(c).filter(ch => missingOf(c, ch) > 0);
+function saveGrants(c) {
+  const out = [];
+  grantSources(c).forEach(s => { [...new Set(s.e.saveProficiencies || [])].forEach(a => out.push({ item: a, source: s.label, level: 'Proficient', chosen: false }));
+    choicesOf(c, s, 'Save').forEach(ch => picked(c, ch).forEach(a => out.push({ item: a, source: s.label, level: 'Proficient', chosen: true }))); });
+  return out;
+}
+const isSaveProf = (c, a) => !!c.saveProficiencies[ABIL.indexOf(a)] || saveGrants(c).some(g => g.item === a);
+function skillGrantsCore(c, withExp) {
+  const out = [], sources = grantSources(c), prof = new Set(Object.keys(c.skills).filter(k => PROF_RANK[c.skills[k]] >= 1));
+  const granted = s => ((s.e.skillProficiencies || []).length ? skillsFrom(s.e.skillProficiencies) : []).map(x => [x, false])
+    .concat(choicesOf(c, s, 'Skill').flatMap(ch => picked(c, ch)).map(x => [x, true]));
+  sources.filter(s => !s.e.expertiseIfProficient).forEach(s => granted(s).forEach(([sk, ch]) => { out.push({ item: sk, source: s.label, level: ch && s.e.chosenSkillsExpertise ? 'Expertise' : 'Proficient', chosen: ch }); prof.add(sk); }));
+  sources.filter(s => s.e.expertiseIfProficient).forEach(s => { const before = new Set(prof);
+    granted(s).forEach(([sk, ch]) => { out.push({ item: sk, source: s.label, level: before.has(sk) ? 'Expertise' : 'Proficient', chosen: ch }); prof.add(sk); }); });
+  sources.forEach(s => {
+    if ((s.e.skillExpertise || []).length) skillsFrom(s.e.skillExpertise).forEach(sk => out.push({ item: sk, source: s.label, level: 'Expertise', chosen: false }));
+    if (withExp) choicesOf(c, s, 'Expertise').forEach(ch => picked(c, ch).forEach(sk => out.push({ item: sk, source: s.label, level: 'Expertise', chosen: true })));
+  });
+  return out;
+}
+const skillGrants = c => skillGrantsCore(c, true);
+function skillLevels(c, withExp = true) {
+  const lv = Object.assign({}, c.skills);
+  skillGrantsCore(c, withExp).forEach(g => { if (PROF_RANK[g.level] > PROF_RANK[lv[g.item] || 'None']) lv[g.item] = g.level; });
+  return lv;
+}
+const ownSkP = (c, s) => c.skills[s] || 'None';
+const saveSources = (c, a) => [...new Set(saveGrants(c).filter(g => g.item === a).map(g => g.source))].join(', ');
+const skillSources = (c, s) => [...new Set(skillGrants(c).filter(g => g.item === s).map(g => g.level === 'Expertise' ? `${g.source} (expertise)` : g.source))].join(', ');
+/** Picks that add nothing: taking the pick away wouldn't change the save or skill. */
+function duplicateNotes(c) {
+  const notes = [];
+  grantChoiceList(c).forEach(ch => picked(c, ch).forEach(pick => {
+    const val = () => ch.kind === 'Save' ? isSaveProf(c, pick) : skP(c, pick);
+    const before = val(), k = storeKey(ch), saved = c.grantChoices[k];
+    c.grantChoices[k] = saved.filter(x => x !== pick); const without = val(); c.grantChoices[k] = saved;
+    if (before === without) notes.push(ch.kind === 'Save' ? `The ${pick} save from ${ch.source.label} adds nothing: you're already proficient.`
+      : ch.kind === 'Skill' ? `${pick} from ${ch.source.label} adds nothing: you're already proficient.` : `${pick} expertise from ${ch.source.label} adds nothing: you already have expertise.`);
+  }));
+  return [...new Set(notes)];
+}
+/** One-time check for an older character: a hand-marked skill that an "expertise if already proficient" grant now raises. */
+function reviewGrants(c) {
+  if (c.grantsReviewed) return false;
+  c.grantsReviewed = true;
+  const raised = [...new Set(skillGrants(c).filter(g => g.level === 'Expertise' && ownSkP(c, g.item) === 'Proficient' && grantSources(c).some(s => s.label === g.source && s.e.expertiseIfProficient)).map(g => `${g.item} (${g.source})`))];
+  if (raised.length) c.grantNotice = `Now shown with expertise: ${raised.join(', ')}. These give expertise when you're already proficient. If you had only marked the skill because of that feature or talent, tap its dot to clear your own mark.`;
+  return true;
+}
+const kindLabel = k => k === 'Save' ? 'saving throw' : k === 'Skill' ? 'skill' : 'skill for expertise';
+const asksChoice = e => !!e && ((e.saveChoices || 0) > 0 || (e.skillChoices || 0) > 0 || (e.expertiseChoices || 0) > 0);
+/** The choice picker for some sources: act is the action that toggles a pick (data-a = store key + option). */
+function grantChoicesHtml(c, sources, act) {
+  const has = (ch, o) => ch.kind === 'Save' ? isSaveProf(c, o) : ch.kind === 'Skill' && !ch.source.e.chosenSkillsExpertise ? PROF_RANK[skP(c, o)] >= 1 : skP(c, o) === 'Expertise';
+  const note = ch => ch.kind === 'Skill' && ch.source.e.chosenSkillsExpertise ? 'You already have expertise in this' : ch.kind === 'Skill' && ch.source.e.expertiseIfProficient ? "You're already proficient, so this gives expertise" : ch.kind === 'Expertise' ? 'You already have expertise in this' : "You're already proficient in this";
+  const html = sources.flatMap(s => choicesOf(c, s)).map(ch => {
+    const pk = picked(c, ch), miss = missingOf(c, ch), k = storeKey(ch);
+    return `<div class="mt-1.5" role="group" aria-label="${esc(ch.source.label)}: choose ${ch.count} ${kindLabel(ch.kind)}"><div class="lbl ${miss ? 'needs-pick-text' : ''}">${esc(ch.source.label)}: choose ${ch.count} ${kindLabel(ch.kind)}${ch.count === 1 || ch.kind === 'Expertise' ? '' : 's'}${ch.kind === 'Skill' && ch.source.e.chosenSkillsExpertise ? '<span class="muted"> (with expertise)</span>' : ch.kind === 'Skill' && ch.source.e.expertiseIfProficient ? '<span class="muted"> (expertise if you\'re already proficient)</span>' : ''}${ch.source.e.choicesOptional ? '<span class="muted"> (optional: the rest can be tools)</span>' : ''}</div>
+      ${ch.options.length ? '' : `<p class="muted text-sm">${ch.kind === 'Expertise' ? "You aren't proficient in any skills yet." : 'Nothing to choose from.'}</p>`}
+      <div class="flex flex-wrap gap-1 mt-0.5">${ch.options.map(o => { const on = pk.includes(o), hv = !on && has(ch, o);
+        return `<button class="btn btn-sm ${on ? 'btn-primary' : ''}" aria-pressed="${on}" data-act="${act}" data-a="${esc(k + '~~' + o)}" ${!on && pk.length >= ch.count ? 'disabled' : ''} title="${hv ? note(ch) : ''}">${esc(o)}${hv ? ' ✓' : ''}</button>`; }).join('')}</div>
+      ${miss ? `<p class="text-xs needs-pick-text mt-0.5">${pk.length} of ${Math.min(ch.count, ch.options.length)} chosen. ✓ = you already have it.</p>` : ''}</div>`;
+  }).join('');
+  const notes = duplicateNotes(c).filter(n => sources.some(s => n.includes(`from ${s.label} adds`)));
+  return html + notes.map(n => `<p class="text-xs mt-1" style="color:var(--danger)">${esc(n)} If the rules let you, choose another.</p>`).join('');
+}
+/** Toggles one pick of a choice on a character (data-a from grantChoicesHtml). */
+function toggleGrantPick(c, a) {
+  const [k, o] = String(a).split('~~'), ch = grantChoiceList(c).find(x => storeKey(x) === k); if (!ch) return;
+  const pk = picked(c, ch), i = pk.indexOf(o);
+  if (i >= 0) pk.splice(i, 1); else if (pk.length < ch.count) pk.push(o);
+  c.grantChoices = c.grantChoices || {};
+  if (pk.length) c.grantChoices[k] = pk; else delete c.grantChoices[k];
 }
 /** A hit point bonus at a level: "1/level", "2/level", "1/level-2", "5", or level-scaled "5; 11:10" (TVCS-121). */
 function hpBonusAt(spec, level) {
@@ -230,7 +344,7 @@ function allSources() {
 function newChar() {
   return { id: uid(), updated: new Date().toISOString(), name: '', playerName: '', level: 1, experience: 0,
     lineageId: '', lineageName: '', heritageId: '', heritageName: '', backgroundId: '', backgroundName: '', classId: '', className: '', subclassId: '', subclassName: '',
-    scores: [10,10,10,10,10,10], saveProficiencies: [false,false,false,false,false,false], skills: {}, luck: 0, luckGainedThisTurn: false,
+    scores: [10,10,10,10,10,10], saveProficiencies: [false,false,false,false,false,false], skills: {}, grantChoices: {}, luck: 0, luckGainedThisTurn: false,
     speed: '30 ft.', initiativeBonus: 0, maxHp: 0, currentHp: 0, tempHp: 0, hitDie: 8, hitDiceUsed: 0, deathSuccesses: 0, deathFailures: 0, exhaustion: 0, conditions: '',
     lightArmor: false, mediumArmor: false, heavyArmor: false, shields: false, simpleWeapons: false, martialWeapons: false, languages: '', otherProficiencies: '',
     talents: [], features: [], actionsRef: DEFAULT_ACTIONS, bonusActionsRef: 'Offhand attack (light weapon), class features', reactionsRef: 'Opportunity Attack, readied action',
@@ -520,6 +634,7 @@ function buildCharacter(w) {
   const t = find('talents', w.talent); if (t && !c.talents.some(x => x.name === t.name)) addTalent(c, t);
   c.otherProficiencies = other.join('; ');
   c.features.forEach(f => addAutoPicks(c, f));
+  c.grantChoices = deepCopy(w.grantChoices || {}); c.grantsReviewed = true; // saving throw and skill choices (TVCS-126/127)
   syncHpBonus(c); // hit point bonuses from the lineage, class or talent (TVCS-121)
   return c;
 }
@@ -673,7 +788,7 @@ function render() {
 // "Report a problem" (TVCS-106): opens the project's GitHub issue form with the version, page and device filled in.
 // Set REPORT_URL to '' to hide the link; {version}, {page} and {device} placeholders are filled in if present.
 const REPORT_URL = 'https://github.com/Blynk03/Tales-of-the-Valiant-Character-Sheet/issues/new?template=problem-report.yml';
-const PREVIEW_VERSION = 'preview v27';
+const PREVIEW_VERSION = 'preview v28';
 function deviceInfo() {
   const ua = navigator.userAgent;
   const m = (re) => { const r = ua.match(re); return r ? r[1] : null; };
@@ -769,20 +884,23 @@ function sheetView(c) {
       <div class="flex gap-1.5"><button class="btn btn-sm" data-act="shortRest">Short rest</button><button class="btn btn-sm" data-act="longRest">Long rest</button></div>
     </div>
     ${S.notice ? `<p class="text-sm mb-2" style="color:var(--good)">${esc(S.notice)}</p>` : ''}
+    ${c.grantNotice ? `<div class="text-sm mb-2 flex items-start gap-1 needs-pick-text" role="status"><span class="flex-1">${esc(c.grantNotice)}</span><button class="icon-btn" data-act="dismissGrant" title="Dismiss" aria-label="Dismiss the skill note">✕</button></div>` : ''}
+    ${(() => { const pend = pendingChoices(c); return pend.length ? `<p class="text-sm mb-2 needs-pick-text" role="status">Choices to make: ${pend.map(p => { const t = p.source.key.startsWith('Talent|'), n = missingOf(c, p);
+      return `<button class="link" data-act="tab" data-a="${t ? 'main' : 'features'}">${esc(p.source.label)}: ${n} ${kindLabel(p.kind)}${n === 1 || p.kind === 'Expertise' ? '' : 's'}</button><span class="muted"> (${t ? 'Talents box, Main tab' : 'Features tab'})</span>`; }).join('; ')}</p>` : ''; })()}
     ${content}${tray(c)}`;
 }
 
 function abilityBlock(c, a) {
-  const i = ABIL.indexOf(a);
+  const i = ABIL.indexOf(a), sFrom = saveSources(c, a);
   const skills = SKILLS.filter(s => s[1] === a).map(([name]) => {
-    const p = skP(c, name);
-    return `<div class="skill-row"><button class="pip ${p === 'Proficient' ? 'on' : p === 'Expertise' ? 'exp' : ''}" data-act="cycleSkill" data-a="${esc(name)}" title="${esc(name)}: ${p} (click to change)"></button>
-      <button class="roll num bonus" data-act="rollSkill" data-a="${esc(name)}" title="Roll ${esc(name)}">${sg(skB(c, name))}</button><span>${esc(name)}</span></div>`;
+    const p = skP(c, name), own = ownSkP(c, name), from = skillSources(c, name);
+    return `<div class="skill-row"><button class="pip ${p === 'Proficient' ? 'on' : p === 'Expertise' ? 'exp' : ''} ${PROF_RANK[p] > PROF_RANK[own] ? 'granted' : ''}" data-act="cycleSkill" data-a="${esc(name)}" title="${esc(from ? `${name}: ${p}, from ${from}. Your own mark: ${own} (click to change it)` : `${name}: ${p} (click to change)`)}"></button>
+      <button class="roll num bonus" data-act="rollSkill" data-a="${esc(name)}" title="Roll ${esc(name)}">${sg(skB(c, name))}</button><span>${esc(name)}</span>${from ? `<span class="grant-src" title="From ${esc(from)}">${esc(from)}</span>` : ''}</div>`;
   }).join('');
   return box(ABN[a], `<div class="flex justify-center"><button class="mod-circle num" data-act="rollCheck" data-a="${a}" title="Roll ${ABN[a]} check">${sg(M(c, a))}</button>
     <div class="score-circle" title="Ability score"><input type="number" min="1" max="30" data-f="c.scores.${i}" data-t="n" value="${c.scores[i]}" aria-label="${a} score"></div></div>
-    <div class="flex items-center gap-2 mt-2 pt-1.5" style="border-top:1px solid var(--ink-faint)"><button class="pip ${c.saveProficiencies[i] ? 'on' : ''}" data-act="toggleSave" data-a="${i}" title="Toggle save proficiency"></button>
-    <button class="roll num" data-act="rollSave" data-a="${a}" title="Roll save">${sg(saveB(c, a))}</button><span class="lbl">Save</span></div>${skills}`);
+    <div class="flex items-center gap-2 mt-2 pt-1.5" style="border-top:1px solid var(--ink-faint)"><button class="pip ${c.saveProficiencies[i] || sFrom ? 'on' : ''} ${sFrom && !c.saveProficiencies[i] ? 'granted' : ''}" data-act="toggleSave" data-a="${i}" aria-pressed="${!!c.saveProficiencies[i]}" title="${esc(sFrom ? `Proficient from ${sFrom}. Your own mark is ${c.saveProficiencies[i] ? 'on' : 'off'} (click to change it)` : 'Toggle save proficiency')}"></button>
+    <button class="roll num" data-act="rollSave" data-a="${a}" title="Roll save">${sg(saveB(c, a))}</button><span class="lbl">Save</span>${sFrom ? `<span class="grant-src" title="Proficient from ${esc(sFrom)}">${esc(sFrom)}</span>` : ''}</div>${skills}`);
 }
 const profToggle = (f, v, label) => `<label class="flex items-center gap-2 cursor-pointer select-none"><button class="pip ${v ? 'on' : ''}" data-act="toggle" data-a="${f}" aria-pressed="${v}"></button><span>${label}</span></label>`;
 
@@ -844,7 +962,7 @@ function mainTab(c) {
         ${box('Exhaustion', `<div class="flex justify-center">${pips('setEx', 6, c.exhaustion, '', true, 'Exhaustion')}</div><div class="box-title mt-3">Conditions</div>${area('c.conditions', c.conditions, 2, 'placeholder="e.g. Poisoned, Prone"')}`)}
       </div>
       ${box('Talents', c.talents.map((t, i) => `<div class="py-1.5" style="border-bottom:1px solid var(--ink-faint)"><div class="flex items-center gap-2"><span class="font-semibold">${esc(t.name)}</span><span class="chip">${esc(t.category)}</span>
-        <button class="icon-btn ml-auto" data-act="rm" data-a="talents.${i}" title="Remove talent">✕</button></div><div class="text-sm muted">${esc(t.description)}</div></div>`).join('') +
+        <button class="icon-btn ml-auto" data-act="rm" data-a="talents.${i}" title="Remove talent">✕</button></div><div class="text-sm muted">${esc(t.description)}</div>${grantChoicesHtml(c, grantSourcesOfTalent(c, t), 'grantPick')}</div>`).join('') +
         `<div class="flex gap-1.5 mt-2"><select class="select" data-pick="talent" aria-label="Add talent"><option value="">Add a talent…</option>${talentOpts}</select><button class="btn btn-sm" data-act="addTalent">Add</button></div>`)}
     </div>
     ${box('Actions Quick Reference', `<div class="grid sm:grid-cols-3 gap-2"><div><div class="lbl text-center">Actions</div>${area('c.actionsRef', c.actionsRef, 4)}</div><div><div class="lbl text-center">Bonus Actions</div>${area('c.bonusActionsRef', c.bonusActionsRef, 4)}</div><div><div class="lbl text-center">Reactions</div>${area('c.reactionsRef', c.reactionsRef, 4)}</div></div>`)}
@@ -860,6 +978,7 @@ function featuresTab(c) {
     ${area(`c.features.${i}.description`, f.description, 2, 'style="min-height:3rem" aria-label="Description"')}
     ${(f.options || []).length ? (() => { const pk = f.options.find(o => o.name === f.chosen); return `<label class="lbl block mt-1.5">Your choice <select class="select text-sm ${pk ? '' : 'needs-pick'}" data-f="c.features.${i}.chosen" data-t="s" aria-label="${esc(f.name)} choice"><option value="">Choose one…</option>${f.options.map(o => `<option value="${esc(o.name)}" ${o.name === f.chosen ? 'selected' : ''}>${esc(o.name)}${o.source ? ' (' + esc(o.source) + ')' : ''}</option>`).join('')}</select></label>${pk && pk.description ? `<p class="text-sm mt-1">${esc(pk.description)}</p>` : ''}`; })() : ''}
     ${f.pickKind ? featurePicks(c, f, i) : ''}
+    ${grantChoicesHtml(c, grantSourcesOf(f), 'grantPick')}
     ${usesMax(c, f) > 0 ? `<div class="flex items-center gap-2 mt-1"><span class="lbl">Used</span>${pips('setUses:' + i, usesMax(c, f), f.usesSpent, '', false, 'Use')}<span class="muted text-xs ml-auto">${esc(f.recharge)}</span></div>` : ''}</div>`).join('');
   const weapons = c.weapons.map((w, i) => `<tr><td>${inp(`c.weapons.${i}.name`, w.name, 'font-semibold', 'aria-label="Name"')}</td><td>${inp(`c.weapons.${i}.damage`, w.damage, 'num w-16', 'aria-label="Damage dice"')}</td>
     <td>${inp(`c.weapons.${i}.damageType`, w.damageType, 'w-24', 'aria-label="Damage type"')}</td><td>${inp(`c.weapons.${i}.range`, w.range, 'w-20', 'aria-label="Range"')}</td>
@@ -1079,12 +1198,16 @@ function tray(c) {
 
 // ---------- creation wizard ----------
 const STEPS = ['Name', 'Lineage', 'Heritage', 'Background', 'Class', 'Abilities', 'Equipment', 'Talent', 'Review'];
-function newWizard() { return { step: 0, name: '', playerName: '', lineage: '', heritage: '', background: '', cls: '', skills: [], method: 'standard', pool: STD.slice(), assign: [0, 1, 2, 3, 4, 5], base: STD.slice(), plus2: null, plus1: null, items: [], gold: false, talent: '', rolls: [], bgSkills: [], bgTalent: '', herSkills: [], herLangs: [], traitChoices: {} }; }
+function newWizard() { return { step: 0, name: '', playerName: '', lineage: '', heritage: '', background: '', cls: '', skills: [], method: 'standard', pool: STD.slice(), assign: [0, 1, 2, 3, 4, 5], base: STD.slice(), plus2: null, plus1: null, items: [], gold: false, talent: '', rolls: [], bgSkills: [], bgTalent: '', herSkills: [], herLangs: [], traitChoices: {}, grantChoices: {} }; }
 /** Skills granted before the class step: heritage (fixed + picked) and, optionally, the background's. */
 function ownedSkills(w, includeBg) {
   const her = find('heritages', w.heritage), bg = find('backgrounds', w.background);
   const set = new Set((w.herSkills || []).concat((her && her.skillProficiencies) || []));
   if (bg) { bg.skillProficiencies.forEach(x => set.add(x)); if (includeBg) (w.bgSkills || []).forEach(x => set.add(x)); }
+  // Skills lineage and heritage traits (or their chosen options) grant outright (TVCS-127).
+  const lin = find('lineages', w.lineage), tc = Object.values(w.traitChoices || {});
+  ((lin && lin.traits) || []).concat((her && her.traits) || []).filter(t => (t.level || 1) <= 1).forEach(t => [t.effects].concat((t.options || []).filter(o => tc.includes(o.name)).map(o => o.effects))
+    .forEach(e => { if (e && (e.skillProficiencies || []).length && !e.expertiseIfProficient) skillsFrom(e.skillProficiencies).forEach(x => set.add(x)); }));
   return set;
 }
 function skillsNeeded(w) { const cls = find('classes', w.cls); if (!cls) return 0; const owned = ownedSkills(w, true); return Math.min(cls.skillChoices, cls.skillOptions.filter(s => !owned.has(s)).length); }
@@ -1187,13 +1310,14 @@ function createView() {
     inner = `<h2 class="box-title text-left">Talent</h2>${bts.map(bt => `<p class="mb-2">Your background grants <b>${esc(bt.name)}</b>. <span class="muted text-sm">${esc(bt.description)}</span></p>`).join('')}<p class="muted text-sm mb-2">Pick an additional talent if your lineage or GM grants one, or skip this step.</p>
       <div class="grid sm:grid-cols-2 gap-2">${lib('talents').map(t => choice(w.talent === t.id, 'wTalent', t.id, `<div class="flex items-center gap-2"><b>${esc(t.name)}</b><span class="chip ml-auto">${esc(t.category)}</span></div><div class="text-sm muted">${esc(t.description)}</div>${t.prerequisite ? `<div class="text-xs mt-0.5">Prerequisite: ${esc(t.prerequisite)}</div>` : ''}`)).join('')}</div>`;
   } else {
-    const p = buildCharacter(w);
-    const probs = [!w.lineage && 'No lineage chosen.', !w.heritage && 'No heritage chosen.', !w.background && 'No background chosen.', !w.cls && 'No class chosen.', w.bgSkills.length < bgSkillsNeeded(w) && 'Background skills not chosen.', needsBgTalent(w) && 'Background talent not chosen.', w.herSkills.length < herSkillsNeeded(w) && 'Heritage skills not chosen.', w.method === 'roll' && !rolledOk(w) && 'Rolled score bonus not chosen.'].filter(Boolean);
+    const p = buildCharacter(w); w.grantChoices = w.grantChoices || {}; p.grantChoices = w.grantChoices; // picks below are kept in the wizard
+    const probs = [!w.lineage && 'No lineage chosen.', !w.heritage && 'No heritage chosen.', !w.background && 'No background chosen.', !w.cls && 'No class chosen.', w.bgSkills.length < bgSkillsNeeded(w) && 'Background skills not chosen.', needsBgTalent(w) && 'Background talent not chosen.', w.herSkills.length < herSkillsNeeded(w) && 'Heritage skills not chosen.', w.method === 'roll' && !rolledOk(w) && 'Rolled score bonus not chosen.'].concat(w.lineage && w.cls ? pendingChoices(p).map(x => `${x.source.label}: choose ${kindLabel(x.kind)}.`) : []).filter(Boolean);
     inner = `<h2 class="box-title text-left">Review</h2><div class="grid sm:grid-cols-2 gap-4"><div><div class="display font-extrabold text-2xl" style="color:var(--ink)">${esc(p.name)}</div><div>${esc(p.className)} 1 · ${esc(p.lineageName)} · ${esc(p.heritageName)} · ${esc(p.backgroundName)}</div>
       <div class="grid grid-cols-6 gap-1 mt-3 text-center">${ABIL.map((a, i) => `<div class="field-box" style="padding:.25rem"><div class="lbl">${a}</div><div class="num">${p.scores[i]}</div><div class="text-xs muted">${sg(mod(p.scores[i]))}</div></div>`).join('')}</div>
       <div class="flex gap-4 mt-3"><span>HP <b class="num">${p.maxHp}</b></span><span>AC <b class="num">${ac(p, !!wornShield(p))}</b></span><span>Speed <b class="num">${esc(p.speed)}</b></span></div></div>
-      <div class="text-sm" style="display:grid;gap:.25rem"><div><span class="lbl">Skills</span> ${Object.keys(p.skills).sort().map(esc).join(', ')}</div><div><span class="lbl">Features</span> ${p.features.map(f => esc(f.name)).join(', ')}</div>
+      <div class="text-sm" style="display:grid;gap:.25rem"><div><span class="lbl">Skills</span> ${Object.entries(skillLevels(p)).filter(([, v]) => v !== 'None').map(([k, v]) => v === 'Expertise' ? `${k} (expertise)` : k).sort().map(esc).join(', ')}</div><div><span class="lbl">Saves</span> ${ABIL.filter(a => isSaveProf(p, a)).join(', ')}</div><div><span class="lbl">Features</span> ${p.features.map(f => esc(f.name)).join(', ')}</div>
       <div><span class="lbl">Talents</span> ${p.talents.length ? p.talents.map(t => esc(t.name)).join(', ') : '—'}</div><div><span class="lbl">Equipment</span> ${p.weapons.map(x => x.name).concat(p.armor.map(x => x.name), p.gear.map(x => x.name)).map(esc).join(', ')}</div><div><span class="lbl">Languages</span> ${esc(p.languages)}</div></div></div>
+      ${grantChoiceList(p).length ? `<h3 class="box-title text-left mt-5">Proficiency choices</h3>${grantChoicesHtml(p, grantSources(p), 'wGrantPick')}` : ''}
       ${probs.length ? `<ul class="mt-4 text-sm" style="color:var(--danger)">${probs.map(x => `<li>• ${x}</li>`).join('')}</ul>` : ''}`;
     w._ok = !probs.length;
   }
@@ -1244,12 +1368,12 @@ function levelModal(c) {
         <div class="grid grid-cols-3 sm:grid-cols-6 gap-1.5">${ABIL.map((a, i) => { const picked = lu.a === a || lu.b === a; const add = lu.mode === 'two' && lu.a === a ? 2 : picked ? 1 : 0; return `<button class="choice text-center ${picked ? 'selected' : ''}" data-act="luAb" data-a="${a}" ${c.scores[i] >= 20 ? 'disabled' : ''}><div class="lbl">${a}</div><div class="num text-lg">${c.scores[i]}${add ? ' → ' + Math.min(20, c.scores[i] + add) : ''}</div></button>`; }).join('')}</div>
         ${lu.mode === 'talent' ? `<label class="lbl" style="display:block;margin-top:.75rem">Talent (${catText})</label>${talentSelect('impTalent', lu.impTalent, lu.talent)}${it ? `<p class="text-sm muted mt-1">${esc(it.description)}${it.prerequisite ? ' Prerequisite: ' + esc(it.prerequisite) + '.' : ''}</p>` : ''}` : ''}</section>` : ''}
       ${d && d.grantsTalent ? `<section><h3 class="box-title text-left">Choose a talent</h3>${talentSelect('talent', lu.talent, lu.impTalent)}
-        ${t ? `<p class="text-sm muted mt-1">${esc(t.description)}${t.prerequisite ? ' Prerequisite: ' + esc(t.prerequisite) + '.' : ''}</p>` : ''}</section>` : ''}
+        ${t ? `<p class="text-sm muted mt-1">${esc(t.description)}${t.prerequisite ? ' Prerequisite: ' + esc(t.prerequisite) + '.' : ''}</p>${asksChoice(t.effects) ? '<p class="text-sm mt-1">Make its choice in the Talents box after levelling up.</p>' : ''}` : ''}</section>` : ''}
       <section class="gain"><h3 class="box-title text-left">What you gain</h3><ul style="display:grid;gap:.3rem">
         ${profFor(n) !== P(c) ? `<li>Proficiency bonus <span class="num">${sg(P(c))}</span> → <span class="num" style="color:var(--good)">${sg(profFor(n))}</span></li>` : ''}
         <li>Hit dice <span class="num">${c.level}</span> → <span class="num">${n}</span> (d${c.hitDie})</li>${slots ? `<li>Spell slots: ${slots}</li>` : ''}${rc.map(x => `<li><b>${esc(x.name)}</b> uses <span class="num">${x.from}</span> → <span class="num" style="color:var(--good)">${x.to}</span></li>`).join('')}
         ${c.features.filter(f => f.pickKind && pickCountAt(c, f, n) > pickCountAt(c, f, c.level)).map(f => `<li><b>${esc(f.name)}</b> <span class="num">${pickCountAt(c, f, c.level)}</span> → <span class="num" style="color:var(--good)">${pickCountAt(c, f, n)}</span>. Choose the new one on the Features tab.</li>`).join('')}
-        ${g.map(f => `<li><b>${esc(f.name)}</b> <span class="chip">${esc(f.source)}</span> <span class="text-sm muted">${esc(f.description)}</span>${(f.options || []).length || (f.pickKind && f.pickCount) ? '<span class="text-sm"> Make your choice on the Features tab after levelling up.</span>' : ''}</li>`).join('') || '<li class="muted text-sm">No new features at this level.</li>'}</ul></section>
+        ${g.map(f => `<li><b>${esc(f.name)}</b> <span class="chip">${esc(f.source)}</span> <span class="text-sm muted">${esc(f.description)}</span>${(f.options || []).length || (f.pickKind && f.pickCount) || asksChoice(f.effects) ? '<span class="text-sm"> Make your choice on the Features tab after levelling up.</span>' : ''}</li>`).join('') || '<li class="muted text-sm">No new features at this level.</li>'}</ul></section>
     </div>
     <div class="modal-foot">${missing ? `<span class="text-sm muted">${missing}</span>` : ''}<button class="btn ml-auto" data-act="closeModal">Cancel</button><button class="btn btn-primary" data-act="luApply" ${missing ? 'disabled' : ''}>Level up</button></div>
   </div></div>`;
@@ -1275,7 +1399,7 @@ const BLANK = {
   classOptions: () => ({ id: '', name: 'New class option', source: 'Homebrew', description: '', classId: '', kind: 'Eldritch Invocation', level: 0, prerequisite: '', repeatable: false, autoPick: false }),
   magicItems: () => ({ id: '', name: 'New magic item', source: 'Homebrew', description: '', itemType: 'Wondrous Item', rarity: 'Uncommon', requiresAttunement: false, attunement: '', price: '' })
 };
-const HINTS = { hpBonus: 'Raises maximum hit points: a number, or a number per level with an optional adjustment, e.g. "1/level" (Dwarven Toughness), "2/level", "1/level-2" (+1 at 3rd level and +1 each level after) or "5". Can grow with level: "5; 11:10".', autoPick: "Tick if characters know it automatically (e.g. a class's own martial actions): it is added when they gain the feature.", extraPicks: 'Extra picks for a feature that picks class options, as kind and number, e.g. "Eldritch Invocation 2". The number can grow with level: "Binding 1; 11:2".', pickKind: 'For a feature that picks several class options (e.g. Eldritch Invocations): the kind to pick from, exactly as on the Class Options list. Several kinds can be separated by commas.', pickCount: 'How many to pick, by level, e.g. "2; 5:3; 7:4". Used with Pick Kind. Blank for no limit (e.g. martial actions you know).', kind: 'e.g. Eldritch Invocation. Must match the Pick Kind of the feature that picks it.', milestones: 'Benefits by rank: Least (levels 1-4), Lesser (5-10), Greater (11-16), Superior (17-20).', rank: 'Least, Lesser, Greater or Superior.', extends: 'Optional: the id of an entry this one expands (e.g. syderean). Its new traits and choose-one options are added to that entry, which is then listed once.', itemType: 'e.g. Wondrous Item, Weapon (longsword), Armor (plate), Armor (shield), Ring, Potion.', rarity: 'Common, Uncommon, Rare, Very Rare, Legendary, Fabled, Artifact or Varies.', attunement: "Who can attune, if limited, e.g. 'by a spellcaster'. Blank if anyone can.", id: 'Unique key. Reusing a built-in id overrides that entry.', source: "Book or homebrew label, e.g. 'Player's Guide', 'Homebrew'.", skillProficiencies: 'Skills always granted, exactly as on the sheet.', skillOptions: 'Skills the player can choose from.', skillChoices: 'How many of the skill options to choose.', talentId: 'Talent id always granted at level 1 (optional).', talentOptions: 'Talent ids the player chooses one from (optional).', languageChoices: 'How many extra languages the player picks.', talentCategories: 'Talent lists for Improvement levels (subclass: lists it adds).', resources: 'Feature uses that change at this level, e.g. Rage 3.', usesFrom: 'Optional: PB, or STR/DEX/CON/INT/WIS/CHA for that modifier, with an optional +N (e.g. PB+1). Min 1.', repeatable: 'Tick if it can be taken more than once.', slots: 'Total slots for circles 1-9, e.g. 3, 2.', armorProficiencies: 'Any of: Light, Medium, Heavy, Shields.', weaponProficiencies: 'Simple, Martial, and/or specific weapons (e.g. Rapier, Scimitar). Named weapons can also go in Other Proficiencies.', startingEquipment: 'Item ids from the Items list.', spellSlots: 'Total slots for circles 1-9, e.g. 4, 3, 2.', usesMax: '0 if it has no limited uses.', recharge: 'Short Rest, Long Rest or blank.', classId: 'Id of the parent class.', circle: '0 for cantrips.', subclassLevel: 'Level at which the subclass is chosen.' };
+const HINTS = { chosenSkillsExpertise: 'Tick if the chosen skills get expertise (double PB) rather than proficiency.', choicesOptional: "Tick if the player may choose fewer, because the rest can go to tools or other proficiencies the sheet doesn't track. The sheet then doesn't flag the choice.", saveProficiencies: 'Saving throws this grants proficiency in, e.g. WIS.', saveChoices: 'How many saving throws the player chooses proficiency in, e.g. 1 for Ability Mastery. 0 = none.', saveChoiceFrom: 'The saving throws to choose from. Leave empty for any.', skillChoiceFrom: 'The skills to choose from: skill names, or an ability code for all of its skills (WIS = any Wisdom skill). Leave empty for any skill.', expertiseIfProficient: 'Tick if a skill granted here becomes expertise when the character is already proficient in it from somewhere else.', skillExpertise: 'Skills this grants expertise in.', expertiseChoices: "How many skills the player chooses expertise in, from skills they're proficient in. 0 = none.", hpBonus: 'Raises maximum hit points: a number, or a number per level with an optional adjustment, e.g. "1/level" (Dwarven Toughness), "2/level", "1/level-2" (+1 at 3rd level and +1 each level after) or "5". Can grow with level: "5; 11:10".', autoPick: "Tick if characters know it automatically (e.g. a class's own martial actions): it is added when they gain the feature.", extraPicks: 'Extra picks for a feature that picks class options, as kind and number, e.g. "Eldritch Invocation 2". The number can grow with level: "Binding 1; 11:2".', pickKind: 'For a feature that picks several class options (e.g. Eldritch Invocations): the kind to pick from, exactly as on the Class Options list. Several kinds can be separated by commas.', pickCount: 'How many to pick, by level, e.g. "2; 5:3; 7:4". Used with Pick Kind. Blank for no limit (e.g. martial actions you know).', kind: 'e.g. Eldritch Invocation. Must match the Pick Kind of the feature that picks it.', milestones: 'Benefits by rank: Least (levels 1-4), Lesser (5-10), Greater (11-16), Superior (17-20).', rank: 'Least, Lesser, Greater or Superior.', extends: 'Optional: the id of an entry this one expands (e.g. syderean). Its new traits and choose-one options are added to that entry, which is then listed once.', itemType: 'e.g. Wondrous Item, Weapon (longsword), Armor (plate), Armor (shield), Ring, Potion.', rarity: 'Common, Uncommon, Rare, Very Rare, Legendary, Fabled, Artifact or Varies.', attunement: "Who can attune, if limited, e.g. 'by a spellcaster'. Blank if anyone can.", id: 'Unique key. Reusing a built-in id overrides that entry.', source: "Book or homebrew label, e.g. 'Player's Guide', 'Homebrew'.", skillProficiencies: 'Skills always granted, exactly as on the sheet.', skillOptions: 'Skills the player can choose from.', skillChoices: 'How many of the skill options to choose.', talentId: 'Talent id always granted at level 1 (optional).', talentOptions: 'Talent ids the player chooses one from (optional).', languageChoices: 'How many extra languages the player picks.', talentCategories: 'Talent lists for Improvement levels (subclass: lists it adds).', resources: 'Feature uses that change at this level, e.g. Rage 3.', usesFrom: 'Optional: PB, or STR/DEX/CON/INT/WIS/CHA for that modifier, with an optional +N (e.g. PB+1). Min 1.', repeatable: 'Tick if it can be taken more than once.', slots: 'Total slots for circles 1-9, e.g. 3, 2.', armorProficiencies: 'Any of: Light, Medium, Heavy, Shields.', weaponProficiencies: 'Simple, Martial, and/or specific weapons (e.g. Rapier, Scimitar). Named weapons can also go in Other Proficiencies.', startingEquipment: 'Item ids from the Items list.', spellSlots: 'Total slots for circles 1-9, e.g. 4, 3, 2.', usesMax: '0 if it has no limited uses.', recharge: 'Short Rest, Long Rest or blank.', classId: 'Id of the parent class.', circle: '0 for cantrips.', subclassLevel: 'Level at which the subclass is chosen.' };
 /** Fills fields added in later versions so they show up in the editor. */
 function withDefaults(kind, e) {
   const d = Object.assign(BLANK[kind](), e);
@@ -1395,8 +1519,11 @@ function bindChange(el) {
 function cur() { return C(); }
 const A = {
   go(r) { if (r === 'list') { S.route = 'list'; } else S.route = r; S.notice = ''; },
-  open(id) { S.charId = id; S.route = 'sheet'; S.tab = 'main'; S.notice = ''; S.castMsg = ''; const c = C(); if (c && (refreshFeatureRules(c) | syncHpBonus(c, true))) persist(); },
+  open(id) { S.charId = id; S.route = 'sheet'; S.tab = 'main'; S.notice = ''; S.castMsg = ''; const c = C(); if (c && (refreshFeatureRules(c) | syncHpBonus(c, true) | reviewGrants(c))) persist(); },
   dismissHp() { cur().hpBonusNotice = ''; save(); },
+  grantPick(a) { toggleGrantPick(cur(), a); save(); },
+  dismissGrant() { cur().grantNotice = ''; save(); }, // saving throw and skill choices (TVCS-126/127)
+  wGrantPick(a) { const w = S.wiz, p = buildCharacter(w); w.grantChoices = w.grantChoices || {}; p.grantChoices = w.grantChoices; toggleGrantPick(p, a); w.grantChoices = p.grantChoices; },
   startCreate() { S.wiz = newWizard(); S.route = 'create'; },
   dupChar(id) { const c = clone(S.chars.find(x => x.id === id)); c.id = uid(); c.name += ' (copy)'; c.updated = new Date().toISOString(); S.chars.push(c); persist(); },
   delChar(id) { const c = S.chars.find(x => x.id === id); S.modal = { confirm: `Delete ${c.name}? This can't be undone.`, yes: 'Delete', danger: true, then() { S.chars = S.chars.filter(x => x.id !== id); persist(); } }; },
@@ -1407,7 +1534,7 @@ const A = {
   rollSkill(s) { d20(`${s} check`, skB(cur(), s)); },
   rollInit() { d20('Initiative', initB(cur())); },
   toggleSave(i) { const c = cur(); c.saveProficiencies[+i] = !c.saveProficiencies[+i]; save(); },
-  cycleSkill(s) { const c = cur(), order = ['None', 'Proficient', 'Expertise'], next = order[(order.indexOf(skP(c, s)) + 1) % 3]; if (next === 'None') delete c.skills[s]; else c.skills[s] = next; save(); },
+  cycleSkill(s) { const c = cur(), order = ['None', 'Proficient', 'Expertise'], next = order[(order.indexOf(ownSkP(c, s)) + 1) % 3]; /* own mark only (TVCS-127) */ if (next === 'None') delete c.skills[s]; else c.skills[s] = next; save(); },
   toggle(f) { const c = cur(); c[f] = !c[f]; save(); },
   setLuck(n) { const c = cur(); c.luck = c.luck === +n ? +n - 1 : +n; save(); },
   setDS(n) { const c = cur(); c.deathSuccesses = c.deathSuccesses === +n ? +n - 1 : +n; save(); },

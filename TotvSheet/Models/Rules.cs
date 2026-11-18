@@ -82,10 +82,11 @@ public static class CharacterCalc
     public static int Prof(this Character c) => Rules.ProficiencyBonus(c.Level);
 
     public static int SaveBonus(this Character c, Ability a) =>
-        c.Mod(a) + (c.SaveProficiencies[(int)a] ? c.Prof() : 0);
+        c.Mod(a) + (c.IsSaveProficient(a) ? c.Prof() : 0);
 
+    /// <summary>A skill's proficiency from the player's own marks and from content (TVCS-127); the higher wins.</summary>
     public static ProfLevel SkillProf(this Character c, string skill) =>
-        c.Skills.TryGetValue(skill, out var p) ? p : ProfLevel.None;
+        c.SkillLevels().GetValueOrDefault(skill);
 
     public static int SkillBonus(this Character c, string skill)
     {

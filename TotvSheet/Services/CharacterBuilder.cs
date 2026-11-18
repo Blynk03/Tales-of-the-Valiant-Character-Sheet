@@ -26,6 +26,8 @@ public class CreationChoices
     public TalentDef? Talent { get; set; }
     /// <summary>Options picked for "choose one" traits, keyed by <see cref="CharacterBuilder.ChoiceKey"/> (TVCS-108).</summary>
     public Dictionary<string, string> TraitChoices { get; set; } = new();
+    /// <summary>Picks for saving throw and skill choices granted by the lineage, class features or talent (TVCS-126/127).</summary>
+    public Dictionary<string, List<string>> GrantChoices { get; set; } = new();
 
     public int FinalScore(Ability a)
     {
@@ -152,6 +154,8 @@ public static class CharacterBuilder
 
         c.OtherProficiencies = string.Join("; ", other);
         foreach (var f in c.Features) AddAutoPicks(c, f, content);
+        c.GrantChoices = ch.GrantChoices.ToDictionary(kv => kv.Key, kv => kv.Value.ToList()); // TVCS-126/127
+        c.GrantsReviewed = true; // a new character's own marks never come from these grants
         c.SyncHpBonus(); // hit point bonuses from the lineage, class or talent (TVCS-121)
         return c;
     }

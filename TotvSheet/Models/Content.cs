@@ -139,6 +139,28 @@ public class FeatureEffects
     public bool UnarmedNeedsNoArmor { get; set; }
     [Hint("Raises maximum hit points: a number, or a number per level with an optional adjustment, e.g. \"1/level\" (Dwarven Toughness), \"2/level\", \"1/level-2\" (+1 at 3rd level and +1 each level after) or \"5\". Can grow with level: \"5; 11:10\".")]
     public string HpBonus { get; set; } = "";
+    [Hint("Saving throws this grants proficiency in, e.g. WIS.")]
+    public List<Ability> SaveProficiencies { get; set; } = new();
+    [Hint("How many saving throws the player chooses proficiency in, e.g. 1 for Ability Mastery. 0 = none.")]
+    public int SaveChoices { get; set; }
+    [Hint("The saving throws to choose from. Leave empty for any.")]
+    public List<Ability> SaveChoiceFrom { get; set; } = new();
+    [Hint("Skills this grants proficiency in, e.g. Religion.")]
+    public List<string> SkillProficiencies { get; set; } = new();
+    [Hint("How many skills the player chooses proficiency in. 0 = none.")]
+    public int SkillChoices { get; set; }
+    [Hint("The skills to choose from: skill names, or an ability code for all of its skills (WIS = any Wisdom skill). Leave empty for any skill.")]
+    public List<string> SkillChoiceFrom { get; set; } = new();
+    [Hint("Tick if a skill granted here becomes expertise when the character is already proficient in it from somewhere else (\"proficiency, or expertise if you already have it\").")]
+    public bool ExpertiseIfProficient { get; set; }
+    [Hint("Tick if the chosen skills get expertise (double PB) rather than proficiency (\"one of Insight or Perception, with double PB\").")]
+    public bool ChosenSkillsExpertise { get; set; }
+    [Hint("Skills this grants expertise in.")]
+    public List<string> SkillExpertise { get; set; } = new();
+    [Hint("How many skills the player chooses expertise in, from skills they're proficient in, e.g. 2 for Expertise. 0 = none.")]
+    public int ExpertiseChoices { get; set; }
+    [Hint("Tick if the player may choose fewer than the numbers above, because the rest can go to tools or other proficiencies the sheet doesn't track (\"two skills or tools\"). The sheet then doesn't flag the choice as unfinished.")]
+    public bool ChoicesOptional { get; set; }
     [Hint("Extra picks for a feature that picks class options, as kind and number, e.g. \"Eldritch Invocation 2\". The number can grow with level: \"Binding 1; 11:2\".")]
     public List<string> ExtraPicks { get; set; } = new();
 }

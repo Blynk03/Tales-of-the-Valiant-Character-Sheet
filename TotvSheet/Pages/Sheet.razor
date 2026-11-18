@@ -69,6 +69,28 @@ else
     {
         <p class="text-sm mb-2" style="color:var(--good)">@notice</p>
     }
+    if (!string.IsNullOrEmpty(C.GrantNotice))
+    {
+        <div class="text-sm mb-2 flex items-start gap-1 needs-pick-text" role="status">
+            <span class="flex-1">@C.GrantNotice</span>
+            <button type="button" class="icon-btn" title="Dismiss" aria-label="Dismiss the skill note" @onclick="DismissGrantNotice">✕</button>
+        </div>
+    }
+    @* Saving throw and skill choices that content asks for and the player hasn't made yet (TVCS-126/127). *@
+    if (C.PendingChoices() is { Count: > 0 } pending)
+    {
+        <p class="text-sm mb-2 needs-pick-text" role="status">
+            Choices to make:
+            @foreach (var (p, i) in pending.Select((p, i) => (p, i)))
+            {
+                var talentChoice = p.Source.Key.StartsWith("Talent|");
+                var go = talentChoice ? "main" : "features";
+                @(i > 0 ? "; " : " ")
+                <button type="button" class="link" @onclick="() => tab = go">@p.Source.Label: @C.Missing(p) @Grants.KindLabel(p.Kind)@(C.Missing(p) == 1 || p.Kind == GrantKind.Expertise ? "" : "s")</button>
+                <span class="muted"> (@(talentChoice ? "Talents box, Main tab" : "Features tab"))</span>
+            }
+        </p>
+    }
 
     switch (tab)
     {
@@ -115,9 +137,15 @@ else
         // Characters made before their content had rules for unarmored AC, speed, unarmed strikes or "choose one"
         // options pick them up here (TVCS-108/109/110).
         if (C is not null && (CharacterBuilder.RefreshFeatureRules(C, Content) | CharacterBuilder.FixWeaponProficiency(C, Content)
-                              | C.SyncHpBonus(explain: true)))
+                              | C.SyncHpBonus(explain: true) | C.ReviewGrants()))
             await Characters.SaveAsync(C);
         loaded = true;
+    }
+
+    private async Task DismissGrantNotice()
+    {
+        C!.GrantNotice = "";
+        await Save();
     }
 
     private async Task Save()

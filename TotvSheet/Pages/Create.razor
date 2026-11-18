@@ -183,7 +183,7 @@
                             var picked = ch.ClassSkills.Contains(skill);
                             <button type="button" class="btn btn-sm @(picked || fromBg ? "btn-primary" : "")"
                                     disabled="@(fromBg || (!picked && ch.ClassSkills.Count >= chosen.SkillChoices))"
-                                    title="@(fromBg ? "Already granted by your heritage or background" : "")" @onclick="() => ToggleSkill(skill)">@skill</button>
+                                    title="@(fromBg ? "Already granted by your lineage, heritage or background" : "")" @onclick="() => ToggleSkill(skill)">@skill</button>
                         }
                     </div>
                     <p class="muted text-sm mt-1">@ch.ClassSkills.Count of @chosen.SkillChoices chosen.</p>
@@ -354,6 +354,7 @@
 
             default:
                 var preview = CharacterBuilder.Create(ch, Content);
+                preview.GrantChoices = ch.GrantChoices; // so choices made below are kept in ch
                 <h2 class="box-title text-left">Review</h2>
                 <div class="grid sm:grid-cols-2 gap-4">
                     <div>
@@ -372,13 +373,20 @@
                         </div>
                     </div>
                     <div class="text-sm space-y-1">
-                        <div><span class="lbl">Skills</span> @string.Join(", ", preview.Skills.Keys.OrderBy(k => k))</div>
+                        <div><span class="lbl">Skills</span> @string.Join(", ", preview.SkillLevels().Where(kv => kv.Value > ProfLevel.None).Select(kv => kv.Value == ProfLevel.Expertise ? $"{kv.Key} (expertise)" : kv.Key).OrderBy(k => k))</div>
+                        <div><span class="lbl">Saves</span> @string.Join(", ", Rules.Abilities.Where(preview.IsSaveProficient))</div>
                         <div><span class="lbl">Features</span> @string.Join(", ", preview.Features.Select(f => f.Name))</div>
                         <div><span class="lbl">Talents</span> @(preview.Talents.Count == 0 ? "—" : string.Join(", ", preview.Talents.Select(t => t.Name)))</div>
                         <div><span class="lbl">Equipment</span> @string.Join(", ", preview.Weapons.Select(w => w.Name).Concat(preview.Armor.Select(x => x.Name)).Concat(preview.Gear.Select(g => g.Name)))</div>
                         <div><span class="lbl">Languages</span> @preview.Languages</div>
                     </div>
                 </div>
+                @* Saving throw and skill choices from lineage traits, 1st-level class features or the talent (TVCS-126/127). *@
+                if (preview.Choices().Any())
+                {
+                    <h3 class="box-title text-left mt-5">Proficiency choices</h3>
+                    <GrantChoices C="preview" Sources="preview.GrantSources()" Changed="@(() => { })" />
+                }
                 if (Problems().Any())
                 {
                     <ul class="mt-4 text-sm" style="color:var(--danger)">
@@ -479,6 +487,12 @@
         if (NeedsBackgroundTalent()) yield return "Background talent not chosen.";
         if (ch.HeritageSkills.Count < HeritageSkillsNeeded()) yield return "Heritage skills not chosen.";
         if (method == "roll" && (ch.PlusTwo is null || ch.PlusOne is null || !RolledBonusValid())) yield return "Rolled score bonus not chosen.";
+        if (ch.Lineage is not null && ch.Class is not null)
+        {
+            var c = CharacterBuilder.Create(ch, Content);
+            c.GrantChoices = ch.GrantChoices;
+            foreach (var p in c.PendingChoices()) yield return $"{p.Source.Label}: choose {Grants.KindLabel(p.Kind)}.";
+        }
     }
 
     private int SkillsNeeded()
@@ -521,6 +535,13 @@
     {
         var set = new HashSet<string>(ch.HeritageSkills);
         if (ch.Heritage is { } her) set.UnionWith(her.SkillProficiencies);
+        // Skills that lineage and heritage traits (or their chosen options) grant outright (TVCS-127).
+        foreach (var t in (ch.Lineage?.Traits ?? new()).Concat(ch.Heritage?.Traits ?? new()).Where(t => t.Level <= 1))
+        {
+            if (t.Effects is { } e && e.SkillProficiencies.Count > 0 && !e.ExpertiseIfProficient) set.UnionWith(Grants.SkillsFrom(e.SkillProficiencies));
+            foreach (var o in t.Options.Where(o => ch.TraitChoices.ContainsValue(o.Name)))
+                if (o.Effects is { } oe && oe.SkillProficiencies.Count > 0 && !oe.ExpertiseIfProficient) set.UnionWith(Grants.SkillsFrom(oe.SkillProficiencies));
+        }
         if (ch.Background is { } bg)
         {
             set.UnionWith(bg.SkillProficiencies);

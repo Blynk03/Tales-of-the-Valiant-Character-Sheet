@@ -91,6 +91,10 @@ input[type=number].field::-webkit-inner-spin-button { opacity: .4; }
 }
 .pip.on { background: var(--ink); }
 .pip.exp { background: var(--ink); box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--ink); }
+/* Proficiency from a lineage trait, feature or talent rather than the player's own mark (TVCS-126/127). */
+.pip.granted { background-image: radial-gradient(circle, var(--card) 0 28%, transparent 30%); }
+.grant-src { margin-left: auto; font-size: .7rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 50%; }
+.needs-pick-text { color: var(--warn, #b8862b); }
 .pip.lg { width: 1.6rem; height: 1.6rem; font: 700 .8rem "Crimson Pro"; color: var(--ink); display: grid; place-items: center; }
 .pip.lg.on { color: var(--card); }
 .pip.luck { border-color: var(--accent); }

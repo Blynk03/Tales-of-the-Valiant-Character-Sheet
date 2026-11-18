@@ -34,6 +34,15 @@ public class Character
     public int[] Scores { get; set; } = { 10, 10, 10, 10, 10, 10 };
     public bool[] SaveProficiencies { get; set; } = new bool[6];
     public Dictionary<string, ProfLevel> Skills { get; set; } = new();
+    /// <summary>The player's picks for saving throw and skill choices granted by content (TVCS-126/127), by
+    /// <see cref="Grants.StoreKey"/>. Saves and skills granted by content are worked out from these and the character's
+    /// features; <see cref="SaveProficiencies"/> and <see cref="Skills"/> hold only what the player set.</summary>
+    public Dictionary<string, List<string>> GrantChoices { get; set; } = new();
+    /// <summary>True once the sheet has checked this character's own skill marks against content grants (TVCS-127);
+    /// false for a character from before grants existed.</summary>
+    public bool GrantsReviewed { get; set; }
+    /// <summary>A one-time note when a content grant may double up with a skill the player had already marked by hand.</summary>
+    public string GrantNotice { get; set; } = "";
     public int Luck { get; set; }
     /// <summary>Luck can be gained once per turn; cleared by "New turn" in the roll tray.</summary>
     public bool LuckGainedThisTurn { get; set; }

@@ -931,7 +931,11 @@
        "description": "Double your proficiency bonus for two chosen skills (sample text).",
        "usesMax": 0,
        "recharge": "",
-       "usesFrom": ""
+       "usesFrom": "",
+       "effects": {
+        "expertiseChoices": 2,
+        "choicesOptional": true
+       }
       },
       {
        "name": "Sneak Attack",

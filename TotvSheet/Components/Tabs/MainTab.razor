@@ -212,6 +212,7 @@
                             <button type="button" class="icon-btn ml-auto" title="Remove talent" @onclick="() => RemoveTalent(talent)">✕</button>
                         </div>
                         <div class="text-sm muted">@talent.Description</div>
+                        <GrantChoices C="C" Sources="C.GrantSourcesOf(talent)" Changed="Save" />
                     </div>
                 }
                 <div class="flex gap-1.5 mt-2">

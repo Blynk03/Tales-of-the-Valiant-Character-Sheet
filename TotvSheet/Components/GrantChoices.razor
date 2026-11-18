@@ -1,0 +1,79 @@
+@* Choices that a feature, option, pick or talent asks for: saving throws, skills, or skills for expertise (TVCS-126/127).
+   Picks are kept on the character (GrantChoices); what they grant is worked out from them on the sheet. *@
+@foreach (var choice in Sources.SelectMany(s => C.ChoicesOf(s)))
+{
+    var ch = choice;
+    var picked = C.Picked(ch);
+    var missing = C.Missing(ch);
+    <div class="mt-1.5" role="group" aria-label="@($"{ch.Source.Label}: choose {ch.Count} {Grants.KindLabel(ch.Kind)}")">
+        <div class="lbl @(missing > 0 ? "needs-pick-text" : "")">
+            @ch.Source.Label: choose @ch.Count @Grants.KindLabel(ch.Kind)@(ch.Count == 1 || ch.Kind == GrantKind.Expertise ? "" : "s")
+            @if (ch.Kind == GrantKind.Skill && ch.Source.Effects.ChosenSkillsExpertise)
+            {
+                <span class="muted"> (with expertise)</span>
+            }
+            else if (ch.Kind == GrantKind.Skill && ch.Source.Effects.ExpertiseIfProficient)
+            {
+                <span class="muted"> (expertise if you're already proficient)</span>
+            }
+            @if (ch.Source.Effects.ChoicesOptional)
+            {
+                <span class="muted"> (optional: the rest can be tools)</span>
+            }
+        </div>
+        @if (ch.Options.Count == 0)
+        {
+            <p class="muted text-sm">@(ch.Kind == GrantKind.Expertise ? "You aren't proficient in any skills yet." : "Nothing to choose from.")</p>
+        }
+        <div class="flex flex-wrap gap-1 mt-0.5">
+            @foreach (var o in ch.Options)
+            {
+                var option = o;
+                var on = picked.Contains(option);
+                var have = !on && Has(ch, option);
+                <button type="button" class="btn btn-sm @(on ? "btn-primary" : "")" aria-pressed="@(on ? "true" : "false")"
+                        disabled="@(!on && picked.Count >= ch.Count)" title="@(have ? HaveNote(ch) : "")"
+                        @onclick="() => Toggle(ch, option)">@option@(have ? " ✓" : "")</button>
+            }
+        </div>
+        @if (missing > 0)
+        {
+            <p class="text-xs needs-pick-text mt-0.5">@picked.Count of @Math.Min(ch.Count, ch.Options.Count) chosen. ✓ = you already have it.</p>
+        }
+    </div>
+}
+@foreach (var note in C.DuplicateNotes().Where(n => Sources.Any(s => n.Contains($"from {s.Label} adds"))))
+{
+    <p class="text-xs mt-1" style="color:var(--danger)">@note If the rules let you, choose another.</p>
+}
+
+@code {
+    [Parameter, EditorRequired] public Character C { get; set; } = default!;
+    [Parameter, EditorRequired] public IEnumerable<GrantSource> Sources { get; set; } = Array.Empty<GrantSource>();
+    [Parameter] public EventCallback Changed { get; set; }
+
+    /// <summary>True if the character already has this from somewhere else.</summary>
+    private bool Has(GrantChoice ch, string option) => ch.Kind switch
+    {
+        GrantKind.Save => Enum.TryParse<Ability>(option, out var a) && C.IsSaveProficient(a),
+        GrantKind.Skill when ch.Source.Effects.ChosenSkillsExpertise => C.SkillProf(option) == ProfLevel.Expertise,
+        GrantKind.Skill => C.SkillProf(option) >= ProfLevel.Proficient,
+        _ => C.SkillProf(option) == ProfLevel.Expertise,
+    };
+
+    private static string HaveNote(GrantChoice ch) => ch.Kind switch
+    {
+        GrantKind.Skill when ch.Source.Effects.ExpertiseIfProficient => "You're already proficient, so this gives expertise",
+        GrantKind.Expertise => "You already have expertise in this",
+        GrantKind.Skill when ch.Source.Effects.ChosenSkillsExpertise => "You already have expertise in this",
+        _ => "You're already proficient in this",
+    };
+
+    private async Task Toggle(GrantChoice ch, string option)
+    {
+        var picked = C.Picked(ch);
+        if (!picked.Remove(option) && picked.Count < ch.Count) picked.Add(option);
+        C.SetPicks(ch, picked);
+        await Changed.InvokeAsync();
+    }
+}
