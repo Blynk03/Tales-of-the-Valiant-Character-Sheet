@@ -199,6 +199,7 @@
                     <div class="box-title mt-3">Conditions</div>
                     <textarea class="area" rows="2" placeholder="e.g. Poisoned, Prone" @bind="C.Conditions" @bind:after="Save"></textarea>
                 </Box>
+                <DefensesBox C="C" Changed="Save" />
             </div>
 
             <Box Title="Talents">

@@ -56,6 +56,8 @@
     private bool Has(GrantChoice ch, string option) => ch.Kind switch
     {
         GrantKind.Save => Enum.TryParse<Ability>(option, out var a) && C.IsSaveProficient(a),
+        GrantKind.Resistance => C.DefenseSummary() is var d && (d.Resistances.Concat(d.Immunities)).Any(x => x.Type == option),
+        GrantKind.Immunity => C.DefenseSummary().Immunities.Any(x => x.Type == option),
         GrantKind.Skill when ch.Source.Effects.ChosenSkillsExpertise => C.SkillProf(option) == ProfLevel.Expertise,
         GrantKind.Skill => C.SkillProf(option) >= ProfLevel.Proficient,
         _ => C.SkillProf(option) == ProfLevel.Expertise,
@@ -64,6 +66,8 @@
     private static string HaveNote(GrantChoice ch) => ch.Kind switch
     {
         GrantKind.Skill when ch.Source.Effects.ExpertiseIfProficient => "You're already proficient, so this gives expertise",
+        GrantKind.Resistance => "You already resist this (or are immune)",
+        GrantKind.Immunity => "You're already immune to this",
         GrantKind.Expertise => "You already have expertise in this",
         GrantKind.Skill when ch.Source.Effects.ChosenSkillsExpertise => "You already have expertise in this",
         _ => "You're already proficient in this",

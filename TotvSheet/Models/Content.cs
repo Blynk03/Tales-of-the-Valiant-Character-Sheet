@@ -159,6 +159,22 @@ public class FeatureEffects
     public List<string> SkillExpertise { get; set; } = new();
     [Hint("How many skills the player chooses expertise in, from skills they're proficient in, e.g. 2 for Expertise. 0 = none.")]
     public int ExpertiseChoices { get; set; }
+    [Hint("Damage resistances this grants, e.g. Poison. Put a level first for one gained later, e.g. \"9: Poison\".")]
+    public List<string> Resistances { get; set; } = new();
+    [Hint("Damage immunities this grants, e.g. Fire, or \"15: Psychic\" from 15th level. An immunity replaces a resistance to the same type.")]
+    public List<string> Immunities { get; set; } = new();
+    [Hint("Damage vulnerabilities this gives, e.g. Fire (Anabagua's Fire Weakness).")]
+    public List<string> Vulnerabilities { get; set; } = new();
+    [Hint("Vulnerabilities this takes away, e.g. Fire (the Floral Resistance talent).")]
+    public List<string> RemovesVulnerabilities { get; set; } = new();
+    [Hint("How many damage resistances the player chooses, e.g. 1 for \"resistance to a damage type of your choice\". 0 = none.")]
+    public int ResistanceChoices { get; set; }
+    [Hint("The damage types to choose a resistance from. Leave empty for any type.")]
+    public List<string> ResistanceChoiceFrom { get; set; } = new();
+    [Hint("How many damage immunities the player chooses. 0 = none.")]
+    public int ImmunityChoices { get; set; }
+    [Hint("The damage types to choose an immunity from. Leave empty for any type.")]
+    public List<string> ImmunityChoiceFrom { get; set; } = new();
     [Hint("Tick if the player may choose fewer than the numbers above, because the rest can go to tools or other proficiencies the sheet doesn't track (\"two skills or tools\"). The sheet then doesn't flag the choice as unfinished.")]
     public bool ChoicesOptional { get; set; }
     [Hint("Extra picks for a feature that picks class options, as kind and number, e.g. \"Eldritch Invocation 2\". The number can grow with level: \"Binding 1; 11:2\".")]

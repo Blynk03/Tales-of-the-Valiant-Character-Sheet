@@ -1,0 +1,73 @@
+@* Damage resistances, immunities and vulnerabilities (TVCS-125): from lineage and heritage traits, features, options,
+   picks and talents, plus the player's own (from magic items, spells or GM rulings). *@
+@{ var d = C.DefenseSummary(); }
+<Box Title="Defenses">
+    @if (d.IsEmpty)
+    {
+        <p class="muted text-sm">No damage resistances, immunities or vulnerabilities.</p>
+    }
+    @foreach (var (label, list, own) in new[] { ("Resistant", d.Resistances, C.OwnResistances), ("Immune", d.Immunities, C.OwnImmunities), ("Vulnerable", d.Vulnerabilities, C.OwnVulnerabilities) })
+    {
+        if (list.Count == 0) continue;
+        var ownList = own;
+        <div class="flex flex-wrap items-center gap-1 mt-1" aria-label="@label">
+            <span class="lbl" style="min-width:4.5rem">@label</span>
+            @foreach (var e in list)
+            {
+                var entry = e;
+                var from = string.Join(", ", entry.Sources);
+                <span class="chip defense @(label == "Vulnerable" ? "bad" : "")" title="@($"{entry.Type} ({from})")">
+                    @entry.Type <span class="grant-src" style="margin-left:.25rem;max-width:none">@from</span>
+                    @if (entry.Own)
+                    {
+                        <button type="button" class="icon-btn" style="font-size:.7rem" title="@($"Remove your own {entry.Type}")"
+                                aria-label="@($"Remove your own {label.ToLowerInvariant()} {entry.Type}")" @onclick="() => RemoveOwn(ownList, entry.Type)">✕</button>
+                    }
+                </span>
+            }
+        </div>
+    }
+    @foreach (var n in d.Notes)
+    {
+        <p class="text-xs muted mt-1">@n</p>
+    }
+    <div class="flex gap-1.5 mt-2">
+        <select class="select text-sm" style="width:auto" aria-label="Kind of defense to add" @bind="addKind">
+            <option value="res">Resistance</option>
+            <option value="imm">Immunity</option>
+            <option value="vul">Vulnerability</option>
+        </select>
+        <input class="field text-sm" list="damage-types" placeholder="Damage type, e.g. fire" aria-label="Damage type to add" @bind="addType" @bind:event="oninput" />
+        <datalist id="damage-types">
+            @foreach (var t in Defenses.DamageTypes)
+            {
+                <option value="@t"></option>
+            }
+        </datalist>
+        <button type="button" class="btn btn-sm" disabled="@string.IsNullOrWhiteSpace(addType)" @onclick="AddOwn">Add</button>
+    </div>
+</Box>
+
+@code {
+    [Parameter, EditorRequired] public Character C { get; set; } = default!;
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private string addKind = "res";
+    private string addType = "";
+
+    private async Task AddOwn()
+    {
+        var t = Defenses.Normalize(addType);
+        if (t.Length == 0) return;
+        var list = addKind switch { "imm" => C.OwnImmunities, "vul" => C.OwnVulnerabilities, _ => C.OwnResistances };
+        if (!list.Any(x => Defenses.Normalize(x) == t)) list.Add(t);
+        addType = "";
+        await Changed.InvokeAsync();
+    }
+
+    private async Task RemoveOwn(List<string> list, string type)
+    {
+        list.RemoveAll(x => Defenses.Normalize(x).Equals(type, StringComparison.OrdinalIgnoreCase));
+        await Changed.InvokeAsync();
+    }
+}

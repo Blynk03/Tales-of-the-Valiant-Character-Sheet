@@ -5,7 +5,7 @@ namespace TotvSheet.Models;
 public record GrantSource(string Key, string Label, FeatureEffects Effects);
 
 /// <summary>The kinds of choice a grant can ask for (TVCS-126/127).</summary>
-public enum GrantKind { Save, Skill, Expertise }
+public enum GrantKind { Save, Skill, Expertise, Resistance, Immunity }
 
 /// <summary>One proficiency the character gets from content, e.g. WIS from Ability Mastery or Religion from Temple Training.</summary>
 public record Grant(string Item, string Source, ProfLevel Level, bool Chosen);
@@ -56,6 +56,8 @@ public static class Grants
     {
         GrantKind.Save => (e.SaveChoiceFrom.Count > 0 ? e.SaveChoiceFrom.Distinct() : Rules.Abilities).Select(a => a.ToString()).ToList(),
         GrantKind.Skill => SkillsFrom(e.SkillChoiceFrom),
+        GrantKind.Resistance => Defenses.TypesFrom(e.ResistanceChoiceFrom),
+        GrantKind.Immunity => Defenses.TypesFrom(e.ImmunityChoiceFrom),
         _ => Rules.Skills.Select(s => s.Name).Where(s => c.SkillLevels(withExpertisePicks: false).GetValueOrDefault(s) >= ProfLevel.Proficient).ToList(),
     };
 
@@ -80,6 +82,8 @@ public static class Grants
     {
         GrantKind.Save => e.SaveChoices,
         GrantKind.Skill => e.SkillChoices,
+        GrantKind.Resistance => e.ResistanceChoices,
+        GrantKind.Immunity => e.ImmunityChoices,
         _ => e.ExpertiseChoices,
     };
 
@@ -90,7 +94,7 @@ public static class Grants
     /// returned, since expertise options depend on the other kinds' picks).</summary>
     public static IEnumerable<GrantChoice> ChoicesOf(this Character c, GrantSource s, GrantKind? only = null)
     {
-        foreach (var kind in new[] { GrantKind.Save, GrantKind.Skill, GrantKind.Expertise })
+        foreach (var kind in Enum.GetValues<GrantKind>())
             if ((only is null || only == kind) && CountOf(s.Effects, kind) > 0)
                 yield return new(s, kind, CountOf(s.Effects, kind), c.ChoiceOptions(s.Effects, kind));
     }
@@ -197,17 +201,24 @@ public static class Grants
         foreach (var ch in c.Choices())
             foreach (var pick in c.Picked(ch))
             {
-                bool Has() => ch.Kind == GrantKind.Save ? c.IsSaveProficient(Enum.Parse<Ability>(pick)) : false;
-                var before = ch.Kind == GrantKind.Save ? (object)Has() : c.SkillProf(pick);
+                object Value() => ch.Kind switch
+                {
+                    GrantKind.Save => c.IsSaveProficient(Enum.Parse<Ability>(pick)),
+                    GrantKind.Resistance or GrantKind.Immunity => c.DefenseOf(pick),
+                    _ => c.SkillProf(pick),
+                };
+                var before = Value();
                 var saved = c.GrantChoices[ch.StoreKey];
                 c.GrantChoices[ch.StoreKey] = saved.Where(x => x != pick).ToList();
-                var without = ch.Kind == GrantKind.Save ? (object)Has() : c.SkillProf(pick);
+                var without = Value();
                 c.GrantChoices[ch.StoreKey] = saved;
                 if (!Equals(before, without)) continue;
                 notes.Add(ch.Kind switch
                 {
                     GrantKind.Save => $"The {pick} save from {ch.Source.Label} adds nothing: you're already proficient.",
                     GrantKind.Skill => $"{pick} from {ch.Source.Label} adds nothing: you're already proficient.",
+                    GrantKind.Resistance => $"{pick} resistance from {ch.Source.Label} adds nothing: you already have it.",
+                    GrantKind.Immunity => $"{pick} immunity from {ch.Source.Label} adds nothing: you're already immune.",
                     _ => $"{pick} expertise from {ch.Source.Label} adds nothing: you already have expertise.",
                 });
             }
@@ -242,12 +253,15 @@ public static class Grants
     }
 
     /// <summary>True if these rules ask the player to choose a save or skill.</summary>
-    public static bool AsksChoice(FeatureEffects? e) => e is not null && (e.SaveChoices > 0 || e.SkillChoices > 0 || e.ExpertiseChoices > 0);
+    public static bool AsksChoice(FeatureEffects? e) =>
+        e is not null && (e.SaveChoices > 0 || e.SkillChoices > 0 || e.ExpertiseChoices > 0 || e.ResistanceChoices > 0 || e.ImmunityChoices > 0);
 
     public static string KindLabel(GrantKind kind) => kind switch
     {
         GrantKind.Save => "saving throw",
         GrantKind.Skill => "skill",
+        GrantKind.Resistance => "damage resistance",
+        GrantKind.Immunity => "damage immunity",
         _ => "skill for expertise",
     };
 }

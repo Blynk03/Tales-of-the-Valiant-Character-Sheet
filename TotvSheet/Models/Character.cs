@@ -38,6 +38,11 @@ public class Character
     /// <see cref="Grants.StoreKey"/>. Saves and skills granted by content are worked out from these and the character's
     /// features; <see cref="SaveProficiencies"/> and <see cref="Skills"/> hold only what the player set.</summary>
     public Dictionary<string, List<string>> GrantChoices { get; set; } = new();
+    /// <summary>Damage resistances, immunities and vulnerabilities the player added by hand, e.g. from a magic item or a
+    /// GM ruling (TVCS-125). Those from content are worked out from the character's features.</summary>
+    public List<string> OwnResistances { get; set; } = new();
+    public List<string> OwnImmunities { get; set; } = new();
+    public List<string> OwnVulnerabilities { get; set; } = new();
     /// <summary>True once the sheet has checked this character's own skill marks against content grants (TVCS-127);
     /// false for a character from before grants existed.</summary>
     public bool GrantsReviewed { get; set; }

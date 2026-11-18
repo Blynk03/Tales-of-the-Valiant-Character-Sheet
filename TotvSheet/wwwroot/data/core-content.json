@@ -40,7 +40,12 @@
      "description": "Advantage on saves against poison and resistance to poison damage (sample text).",
      "usesMax": 0,
      "recharge": "",
-     "usesFrom": ""
+     "usesFrom": "",
+     "effects": {
+      "resistances": [
+       "Poison"
+      ]
+     }
     }
    ]
   },
@@ -136,7 +141,10 @@
      "description": "Resistance to one damage type tied to your draconic ancestry (sample text).",
      "usesMax": 0,
      "recharge": "",
-     "usesFrom": ""
+     "usesFrom": "",
+     "effects": {
+      "resistanceChoices": 1
+     }
     }
    ]
   },
@@ -231,7 +239,14 @@
      "description": "Resistance to radiant or necrotic damage, based on your origin (sample text).",
      "usesMax": 0,
      "recharge": "",
-     "usesFrom": ""
+     "usesFrom": "",
+     "effects": {
+      "resistanceChoices": 1,
+      "resistanceChoiceFrom": [
+       "Radiant",
+       "Necrotic"
+      ]
+     }
     }
    ]
   },
