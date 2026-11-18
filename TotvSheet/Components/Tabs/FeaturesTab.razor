@@ -55,7 +55,7 @@
                         <FeaturePicks C="C" Feature="feature" Changed="Save" />
                     }
                     @* Saving throw and skill choices from the feature, its chosen option or its picks (TVCS-126/127). *@
-                    <GrantChoices C="C" Sources="Grants.GrantSourcesOf(feature)" Changed="Save" />
+                    <GrantChoices C="C" Sources="C.GrantSourcesOf(feature)" Changed="Save" />
                     @if (C.UsesMaxOf(feature) > 0)
                     {
                         <div class="flex items-center gap-2 mt-1">

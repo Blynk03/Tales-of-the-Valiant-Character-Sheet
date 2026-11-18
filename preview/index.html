@@ -3253,8 +3253,10 @@ function gsnap(c) {
   let s = grantCache.get(c); if (!s || s.key !== key) { s = { key }; grantCache.set(c, s); } return s;
 }
 const KINDS_G = ['Save', 'Skill', 'Expertise', 'Resistance', 'Immunity'];
-function grantSourcesOf(f) {
-  const key = `${f.source}|${f.name}`, out = [];
+/** A feature's rules; two features with the same source and name each get their own key ("Rogue|Expertise", then "…|2"). */
+function grantSourcesOf(c, f) {
+  const copy = c.features.slice(0, c.features.indexOf(f)).filter(x => x.name === f.name && x.source === f.source).length + 1;
+  const key = copy === 1 ? `${f.source}|${f.name}` : `${f.source}|${f.name}|${copy}`, out = [];
   if (f.effects) out.push({ key, label: f.name, e: f.effects });
   const o = (f.options || []).find(o => o.name === f.chosen);
   if (o && o.effects) out.push({ key: `${key}|${o.name}`, label: f.name, e: o.effects });
@@ -3267,7 +3269,7 @@ function grantSourcesOfTalent(c, t) {
   const copy = c.talents.slice(0, c.talents.indexOf(t)).filter(x => x.name === t.name).length + 1;
   return [{ key: copy === 1 ? `Talent|${t.name}` : `Talent|${t.name}|${copy}`, label: t.name, e: t.effects }];
 }
-const grantSources = c => (c.features || []).flatMap(grantSourcesOf).concat((c.talents || []).flatMap(t => grantSourcesOfTalent(c, t)));
+const grantSources = c => (c.features || []).flatMap(f => grantSourcesOf(c, f)).concat((c.talents || []).flatMap(t => grantSourcesOfTalent(c, t)));
 /** Skill names from skill names and ability codes ("WIS" = every Wisdom skill); empty = every skill. */
 function skillsFrom(list) {
   const xs = (list || []).map(x => String(x || '').trim()).filter(Boolean);
@@ -3330,7 +3332,7 @@ function duplicateNotes(c) {
     grantCache.set(c, snap); // "before" comes from the real picks' snapshot
     const val = () => ch.kind === 'Save' ? isSaveProf(c, pick) : ch.kind === 'Resistance' || ch.kind === 'Immunity' ? defenseOf(c, pick) : skP(c, pick);
     const before = val(), k = storeKey(ch), saved = c.grantChoices[k];
-    c.grantChoices[k] = saved.filter(x => x !== pick); const without = val(); c.grantChoices[k] = saved;
+    let without; try { c.grantChoices[k] = saved.filter(x => x !== pick); without = val(); } finally { c.grantChoices[k] = saved; }
     if (before === without) notes.push(ch.kind === 'Save' ? `The ${pick} save from ${ch.source.label} adds nothing: you're already proficient.`
       : ch.kind === 'Skill' ? `${pick} from ${ch.source.label} adds nothing: you're already proficient.` : ch.kind === 'Resistance' ? `${pick} resistance from ${ch.source.label} adds nothing: you already have it.`
       : ch.kind === 'Immunity' ? `${pick} immunity from ${ch.source.label} adds nothing: you're already immune.` : `${pick} expertise from ${ch.source.label} adds nothing: you already have expertise.`);
@@ -3343,7 +3345,11 @@ function reviewGrants(c) {
   if (c.grantsReviewed) return false;
   c.grantsReviewed = true;
   const raised = [...new Set(skillGrants(c).filter(g => g.level === 'Expertise' && ownSkP(c, g.item) === 'Proficient' && grantSources(c).some(s => s.label === g.source && s.e.expertiseIfProficient)).map(g => `${g.item} (${g.source})`))];
-  if (raised.length) c.grantNotice = `Now shown with expertise: ${raised.join(', ')}. These give expertise when you're already proficient. If you had only marked the skill because of that feature or talent, tap its dot to clear your own mark.`;
+  const notes = [];
+  if (raised.length) notes.push(`Now shown with expertise: ${raised.join(', ')}. These give expertise when you're already proficient. If you had only marked the skill because of that feature or talent, tap its dot to clear your own mark.`);
+  const asks = [...new Set(pendingChoices(c).filter(p => p.kind === 'Save' || p.kind === 'Skill').map(p => p.source.label))];
+  if (asks.length) notes.push(`${asks.join(', ')} now ${asks.length === 1 ? 'asks' : 'ask'} for your choice. If you had already marked that save or skill by hand, pick the same one, then tap its dot to clear your own mark, so it isn't counted twice.`);
+  if (notes.length) c.grantNotice = notes.join(' ');
   return true;
 }
 const kindLabel = (k, n = 1) => n === 1 ? ({ Save: 'saving throw', Skill: 'skill', Resistance: 'damage resistance', Immunity: 'damage immunity' }[k] || 'skill for expertise')
@@ -3363,7 +3369,7 @@ function grantChoicesHtml(c, sources, act) {
       ${miss ? `<p class="text-xs needs-pick-text mt-0.5">${pk.length} of ${Math.min(ch.count, ch.options.length)} chosen. ✓ = you already have it.</p>` : ''}</div>`;
   }).join('');
   const notes = duplicateNotes(c).filter(n => sources.some(s => n.includes(`from ${s.label} adds`)));
-  return html + notes.map(n => `<p class="text-xs mt-1" style="color:var(--danger)">${esc(n)} If the rules let you, choose another.</p>`).join('');
+  return html + notes.map(n => `<p class="text-xs mt-1" style="color:var(--danger)">${esc(n)} If you marked it by hand only because of this, tap its dot on the Main tab to clear your own mark; otherwise, if the rules let you, choose another.</p>`).join('');
 }
 /** Toggles one pick of a choice on a character (data-a from grantChoicesHtml). */
 function toggleGrantPick(c, a) {
@@ -3404,17 +3410,19 @@ function defenseSummaryCore(c) {
   groupDef(all.filter(x => x[0] === 'vul')).forEach(v => {
     const by = [...new Set(rm.filter(r => r[1].toLowerCase() === v.type.toLowerCase()).map(r => r[2]))];
     if (by.length) notes.push(`No ${v.type.toLowerCase()} vulnerability (${v.sources.join(', ')}): ${by.join(', ')} removes it.`);
-    else if (immune(v.type)) notes.push(`${v.type} immunity overrides the vulnerability (${v.sources.join(', ')}).`);
+    else if (immune(v.type)) { notes.push(`${v.type} immunity overrides the vulnerability (${v.sources.join(', ')}).`); if (v.sources.includes(OWN_SOURCE)) vul.push(v); }
     else vul.push(v);
   });
-  const res = groupDef(all.filter(x => x[0] === 'res')).filter(r => !immune(r.type));
-  res.filter(r => vul.some(v => v.type.toLowerCase() === r.type.toLowerCase())).forEach(r => notes.push(`${r.type} resistance and vulnerability cancel out: you take normal ${r.type.toLowerCase()} damage.`));
+  const allRes = groupDef(all.filter(x => x[0] === 'res')), own = r => r.sources.includes(OWN_SOURCE);
+  allRes.filter(r => own(r) && immune(r.type)).forEach(r => notes.push(`Your own ${r.type.toLowerCase()} resistance is covered by your ${r.type.toLowerCase()} immunity.`));
+  const res = allRes.filter(r => !immune(r.type) || own(r));
+  res.filter(r => !immune(r.type) && vul.some(v => v.type.toLowerCase() === r.type.toLowerCase() && !immune(v.type))).forEach(r => notes.push(`${r.type} resistance and vulnerability cancel out: you take normal ${r.type.toLowerCase()} damage.`));
   return { resistances: res, immunities: imm, vulnerabilities: vul, notes };
 }
 const defenseOf = (c, t) => { const d = defenseSummary(c), i = l => l.some(x => x.type.toLowerCase() === String(t).toLowerCase()); return `${i(d.immunities)}${i(d.resistances)}${i(d.vulnerabilities)}`; };
 function defensesBox(c) {
   const d = defenseSummary(c), empty = !d.resistances.length && !d.immunities.length && !d.vulnerabilities.length && !d.notes.length;
-  const row = (label, list, key) => list.length ? `<div class="flex flex-wrap items-center gap-1 mt-1" aria-label="${label}"><span class="lbl" style="min-width:4.5rem">${label}</span>${list.map(e => { const from = e.sources.join(', ');
+  const row = (label, list, key) => list.length ? `<div class="flex flex-wrap items-center gap-1 mt-1" role="group" aria-label="${label}"><span class="lbl" style="min-width:4.5rem">${label}</span>${list.map(e => { const from = e.sources.join(', ');
     return `<span class="chip defense ${key === 'vul' ? 'bad' : ''}" title="${esc(`${e.type} (${from})`)}">${esc(e.type)} <span class="grant-src" style="margin-left:.25rem;max-width:none">${esc(from)}</span>${e.sources.includes(OWN_SOURCE) ? `<button class="icon-btn" style="font-size:.7rem" data-act="rmDefense" data-a="${key}~~${esc(e.type)}" title="Remove your own ${esc(e.type)}" aria-label="Remove your own ${label.toLowerCase()} ${esc(e.type)}">✕</button>` : ''}</span>`; }).join('')}</div>` : '';
   return box('Defenses', `${empty ? '<p class="muted text-sm">No damage resistances, immunities or vulnerabilities.</p>' : ''}${row('Resistant', d.resistances, 'res')}${row('Immune', d.immunities, 'imm')}${row('Vulnerable', d.vulnerabilities, 'vul')}
     ${d.notes.map(n => `<p class="text-xs muted mt-1">${esc(n)}</p>`).join('')}
@@ -4120,7 +4128,7 @@ function abilityBlock(c, a) {
   const i = ABIL.indexOf(a), sFrom = saveSources(c, a);
   const skills = SKILLS.filter(s => s[1] === a).map(([name]) => {
     const p = skP(c, name), own = ownSkP(c, name), from = skillSources(c, name);
-    return `<div class="skill-row"><button class="pip ${p === 'Proficient' ? 'on' : p === 'Expertise' ? 'exp' : ''} ${PROF_RANK[p] > PROF_RANK[own] ? 'granted' : ''}" data-act="cycleSkill" data-a="${esc(name)}" title="${esc(from ? `${name}: ${p}, from ${from}. Your own mark: ${own} (click to change it)` : `${name}: ${p} (click to change)`)}"></button>
+    return `<div class="skill-row"><button class="pip ${p === 'Proficient' ? 'on' : p === 'Expertise' ? 'exp' : ''} ${PROF_RANK[p] > PROF_RANK[own] ? 'granted' : ''}" data-act="cycleSkill" data-a="${esc(name)}" title="${esc(from ? `${name}: ${p}, from ${from}. Your own mark: ${own} (click to change it)` : `${name}: ${p} (click to change)`)}" aria-label="${esc(from ? `${name}: ${p}, from ${from}. Your own mark: ${own}` : `${name}: ${p}`)}"></button>
       <button class="roll num bonus" data-act="rollSkill" data-a="${esc(name)}" title="Roll ${esc(name)}">${sg(skB(c, name))}</button><span>${esc(name)}</span>${from ? `<span class="grant-src" title="From ${esc(from)}">${esc(from)}</span>` : ''}</div>`;
   }).join('');
   return box(ABN[a], `<div class="flex justify-center"><button class="mod-circle num" data-act="rollCheck" data-a="${a}" title="Roll ${ABN[a]} check">${sg(M(c, a))}</button>
@@ -4205,7 +4213,7 @@ function featuresTab(c) {
     ${area(`c.features.${i}.description`, f.description, 2, 'style="min-height:3rem" aria-label="Description"')}
     ${(f.options || []).length ? (() => { const pk = f.options.find(o => o.name === f.chosen); return `<label class="lbl block mt-1.5">Your choice <select class="select text-sm ${pk ? '' : 'needs-pick'}" data-f="c.features.${i}.chosen" data-t="s" aria-label="${esc(f.name)} choice"><option value="">Choose one…</option>${f.options.map(o => `<option value="${esc(o.name)}" ${o.name === f.chosen ? 'selected' : ''}>${esc(o.name)}${o.source ? ' (' + esc(o.source) + ')' : ''}</option>`).join('')}</select></label>${pk && pk.description ? `<p class="text-sm mt-1">${esc(pk.description)}</p>` : ''}`; })() : ''}
     ${f.pickKind ? featurePicks(c, f, i) : ''}
-    ${grantChoicesHtml(c, grantSourcesOf(f), 'grantPick')}
+    ${grantChoicesHtml(c, grantSourcesOf(c, f), 'grantPick')}
     ${usesMax(c, f) > 0 ? `<div class="flex items-center gap-2 mt-1"><span class="lbl">Used</span>${pips('setUses:' + i, usesMax(c, f), f.usesSpent, '', false, 'Use')}<span class="muted text-xs ml-auto">${esc(f.recharge)}</span></div>` : ''}</div>`).join('');
   const weapons = c.weapons.map((w, i) => `<tr><td>${inp(`c.weapons.${i}.name`, w.name, 'font-semibold', 'aria-label="Name"')}</td><td>${inp(`c.weapons.${i}.damage`, w.damage, 'num w-16', 'aria-label="Damage dice"')}</td>
     <td>${inp(`c.weapons.${i}.damageType`, w.damageType, 'w-24', 'aria-label="Damage type"')}</td><td>${inp(`c.weapons.${i}.range`, w.range, 'w-20', 'aria-label="Range"')}</td>

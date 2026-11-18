@@ -13,7 +13,8 @@
     <div class="flex items-center gap-2 mt-2 pt-1.5" style="border-top:1px solid var(--ink-faint)">
         @{ var saveFrom = C.SaveSources(A); var own = C.SaveProficiencies[(int)A]; }
         <button type="button" class="pip @(own || saveFrom.Length > 0 ? "on" : "") @(saveFrom.Length > 0 && !own ? "granted" : "")"
-                title="@SaveTitle(own, saveFrom)" aria-pressed="@(own ? "true" : "false")" @onclick="ToggleSave"></button>
+                title="@SaveTitle(own, saveFrom)" aria-pressed="@(own ? "true" : "false")"
+                aria-label="@($"{A} save: {(own || saveFrom.Length > 0 ? "proficient" : "not proficient")}{(saveFrom.Length > 0 ? $" from {saveFrom}" : "")}. Your own mark")" @onclick="ToggleSave"></button>
         <button type="button" class="roll num" title="Roll save" @onclick="RollSave">@Rules.Signed(C.SaveBonus(A))</button>
         <span class="lbl">Save</span>
         @if (saveFrom.Length > 0)
@@ -29,7 +30,7 @@
         var ownProf = C.OwnSkillProf(name);
         var from = C.SkillSources(name);
         <div class="skill-row">
-            <button type="button" class="pip @PipClass(prof) @(prof > ownProf ? "granted" : "")" title="@SkillTitle(name, prof, ownProf, from)" @onclick="() => CycleSkill(name)"></button>
+            <button type="button" class="pip @PipClass(prof) @(prof > ownProf ? "granted" : "")" title="@SkillTitle(name, prof, ownProf, from)" aria-label="@SkillTitle(name, prof, ownProf, from)" @onclick="() => CycleSkill(name)"></button>
             <button type="button" class="roll num bonus" title="Roll @name" @onclick="() => RollSkill(name)">@Rules.Signed(C.SkillBonus(name))</button>
             <span>@name</span>
             @if (from.Length > 0)

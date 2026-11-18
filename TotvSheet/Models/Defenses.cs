@@ -93,11 +93,19 @@ public static class Defenses
         {
             var by = removes.Where(r => r.Type.Equals(v.Type, StringComparison.OrdinalIgnoreCase)).Select(r => r.Source).Distinct().ToList();
             if (by.Count > 0) notes.Add($"No {v.Type.ToLowerInvariant()} vulnerability ({string.Join(", ", v.Sources)}): {string.Join(", ", by)} removes it.");
-            else if (Immune(v.Type)) notes.Add($"{v.Type} immunity overrides the vulnerability ({string.Join(", ", v.Sources)}).");
+            else if (Immune(v.Type))
+            {
+                notes.Add($"{v.Type} immunity overrides the vulnerability ({string.Join(", ", v.Sources)}).");
+                if (v.Own) vul.Add(v); // still listed, so the player can remove their own entry
+            }
             else vul.Add(v);
         }
-        var res = Group(all.Where(x => x.Kind == K.Res)).Where(r => !Immune(r.Type)).ToList();
-        foreach (var r in res.Where(r => vul.Any(v => v.Type.Equals(r.Type, StringComparison.OrdinalIgnoreCase))))
+        var allRes = Group(all.Where(x => x.Kind == K.Res));
+        // An immunity hides a resistance to the same type, except the player's own, which stays so it can be removed.
+        foreach (var r in allRes.Where(r => r.Own && Immune(r.Type)))
+            notes.Add($"Your own {r.Type.ToLowerInvariant()} resistance is covered by your {r.Type.ToLowerInvariant()} immunity.");
+        var res = allRes.Where(r => !Immune(r.Type) || r.Own).ToList();
+        foreach (var r in res.Where(r => !Immune(r.Type) && vul.Any(v => v.Type.Equals(r.Type, StringComparison.OrdinalIgnoreCase) && !Immune(v.Type))))
             notes.Add($"{r.Type} resistance and vulnerability cancel out: you take normal {r.Type.ToLowerInvariant()} damage.");
         return new(res, imm, vul, notes);
     }

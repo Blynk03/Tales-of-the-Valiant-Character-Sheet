@@ -10,7 +10,7 @@
     {
         if (list.Count == 0) continue;
         var ownList = own;
-        <div class="flex flex-wrap items-center gap-1 mt-1" aria-label="@label">
+        <div class="flex flex-wrap items-center gap-1 mt-1" role="group" aria-label="@label">
             <span class="lbl" style="min-width:4.5rem">@label</span>
             @foreach (var e in list)
             {

@@ -33,6 +33,7 @@ public static class Grants
     private sealed class Snapshot
     {
         public required string Key;
+        public required object?[] Refs;
         public List<Grant>? SaveGrants, SkillGrants;
         public Dictionary<string, ProfLevel>? Levels, LevelsWithoutExpertisePicks;
         public List<GrantChoice>? Choices;
@@ -41,10 +42,11 @@ public static class Grants
     }
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Character, Snapshot> Cache = new();
 
-    private static string Fingerprint(Character c)
+    private static string Fingerprint(Character c, List<object?> refs)
     {
         var sb = new System.Text.StringBuilder();
-        static int Id(object? o) => o is null ? 0 : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(o);
+        // Rules objects are compared by reference (see Snap), so the text only notes where each one sits.
+        char Id(object? o) { refs.Add(o); return '#'; }
         sb.Append(c.Level).Append('|');
         foreach (var b in c.SaveProficiencies) sb.Append(b ? '1' : '0');
         foreach (var kv in c.Skills) sb.Append('|').Append(kv.Key).Append('=').Append((int)kv.Value);
@@ -62,9 +64,11 @@ public static class Grants
 
     private static Snapshot Snap(Character c)
     {
-        var key = Fingerprint(c);
-        if (Cache.TryGetValue(c, out var s) && s.Key == key) return s;
-        s = new Snapshot { Key = key };
+        var refs = new List<object?>();
+        var key = Fingerprint(c, refs);
+        if (Cache.TryGetValue(c, out var s) && s.Key == key && s.Refs.Length == refs.Count
+            && s.Refs.Zip(refs).All(x => ReferenceEquals(x.First, x.Second))) return s;
+        s = new Snapshot { Key = key, Refs = refs.ToArray() };
         Cache.AddOrUpdate(c, s);
         return s;
     }
@@ -75,11 +79,14 @@ public static class Grants
 
     /// <summary>Every source of rules on the character, with a stable key (mirrors <see cref="CharacterCalc.ActiveEffects"/>).</summary>
     public static IEnumerable<GrantSource> GrantSources(this Character c) =>
-        c.Features.SelectMany(GrantSourcesOf).Concat(c.Talents.SelectMany(t => c.GrantSourcesOf(t)));
+        c.Features.SelectMany(f => c.GrantSourcesOf(f)).Concat(c.Talents.SelectMany(t => c.GrantSourcesOf(t)));
 
-    public static IEnumerable<GrantSource> GrantSourcesOf(Feature f)
+    /// <summary>A feature's rules. Two features with the same source and name (homebrew "Expertise" at 1st and 6th
+    /// level) each get their own key, so each keeps its own choice: "Rogue|Expertise", then "Rogue|Expertise|2".</summary>
+    public static IEnumerable<GrantSource> GrantSourcesOf(this Character c, Feature f)
     {
-        var key = $"{f.Source}|{f.Name}";
+        var copy = c.Features.TakeWhile(x => !ReferenceEquals(x, f)).Count(x => x.Name == f.Name && x.Source == f.Source) + 1;
+        var key = copy == 1 ? $"{f.Source}|{f.Name}" : $"{f.Source}|{f.Name}|{copy}";
         if (f.Effects is { } e) yield return new(key, f.Name, e);
         if (f.Options.FirstOrDefault(o => o.Name == f.Chosen) is { Effects: { } oe } o) yield return new($"{key}|{o.Name}", f.Name, oe);
         if (f.PickKind.Length > 0)
@@ -267,9 +274,9 @@ public static class Grants
                 };
                 var before = Value();
                 var saved = c.GrantChoices[ch.StoreKey];
-                c.GrantChoices[ch.StoreKey] = saved.Where(x => x != pick).ToList();
-                var without = Value();
-                c.GrantChoices[ch.StoreKey] = saved;
+                object without;
+                try { c.GrantChoices[ch.StoreKey] = saved.Where(x => x != pick).ToList(); without = Value(); }
+                finally { c.GrantChoices[ch.StoreKey] = saved; }
                 if (!Equals(before, without)) continue;
                 notes.Add(ch.Kind switch
                 {
@@ -297,9 +304,16 @@ public static class Grants
             .Where(g => g.Level == ProfLevel.Expertise && c.OwnSkillProf(g.Item) == ProfLevel.Proficient
                         && c.GrantSources().Any(s => s.Label == g.Source && s.Effects.ExpertiseIfProficient))
             .Select(g => $"{g.Item} ({g.Source})").Distinct().ToList();
+        var notes = new List<string>();
         if (raised.Count > 0)
-            c.GrantNotice = $"Now shown with expertise: {string.Join(", ", raised)}. These give expertise when you're already proficient. " +
-                            "If you had only marked the skill because of that feature or talent, tap its dot to clear your own mark.";
+            notes.Add($"Now shown with expertise: {string.Join(", ", raised)}. These give expertise when you're already proficient. " +
+                      "If you had only marked the skill because of that feature or talent, tap its dot to clear your own mark.");
+        // A save or skill the player marked by hand for a feature that now asks for the choice would otherwise count twice.
+        var asks = c.PendingChoices().Where(p => p.Kind is GrantKind.Save or GrantKind.Skill).Select(p => p.Source.Label).Distinct().ToList();
+        if (asks.Count > 0)
+            notes.Add($"{string.Join(", ", asks)} now {(asks.Count == 1 ? "asks" : "ask")} for your choice. If you had already marked that save or skill by hand, " +
+                      "pick the same one, then tap its dot to clear your own mark, so it isn't counted twice.");
+        if (notes.Count > 0) c.GrantNotice = string.Join(" ", notes);
         return true;
     }
 

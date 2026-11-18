@@ -44,7 +44,7 @@
 }
 @foreach (var note in C.DuplicateNotes().Where(n => Sources.Any(s => n.Contains($"from {s.Label} adds"))))
 {
-    <p class="text-xs mt-1" style="color:var(--danger)">@note If the rules let you, choose another.</p>
+    <p class="text-xs mt-1" style="color:var(--danger)">@note If you marked it by hand only because of this, tap its dot on the Main tab to clear your own mark; otherwise, if the rules let you, choose another.</p>
 }
 
 @code {
