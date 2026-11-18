@@ -5,9 +5,9 @@
     var ch = choice;
     var picked = C.Picked(ch);
     var missing = C.Missing(ch);
-    <div class="mt-1.5" role="group" aria-label="@($"{ch.Source.Label}: choose {ch.Count} {Grants.KindLabel(ch.Kind)}")">
+    <div class="mt-1.5" role="group" aria-label="@($"{ch.Source.Label}: choose {ch.Count} {Grants.KindLabel(ch.Kind, ch.Count)}")">
         <div class="lbl @(missing > 0 ? "needs-pick-text" : "")">
-            @ch.Source.Label: choose @ch.Count @Grants.KindLabel(ch.Kind)@(ch.Count == 1 || ch.Kind == GrantKind.Expertise ? "" : "s")
+            @ch.Source.Label: choose @ch.Count @Grants.KindLabel(ch.Kind, ch.Count)
             @if (ch.Kind == GrantKind.Skill && ch.Source.Effects.ChosenSkillsExpertise)
             {
                 <span class="muted"> (with expertise)</span>

@@ -315,12 +315,18 @@ public static class Grants
     public static bool AsksChoice(FeatureEffects? e) =>
         e is not null && (e.SaveChoices > 0 || e.SkillChoices > 0 || e.ExpertiseChoices > 0 || e.ResistanceChoices > 0 || e.ImmunityChoices > 0);
 
-    public static string KindLabel(GrantKind kind) => kind switch
+    /// <summary>"1 saving throw", "2 skills for expertise", "1 damage immunity"...: the words for a count of picks.</summary>
+    public static string KindLabel(GrantKind kind, int count = 1) => (kind, count == 1) switch
     {
-        GrantKind.Save => "saving throw",
-        GrantKind.Skill => "skill",
-        GrantKind.Resistance => "damage resistance",
-        GrantKind.Immunity => "damage immunity",
-        _ => "skill for expertise",
+        (GrantKind.Save, true) => "saving throw",
+        (GrantKind.Save, false) => "saving throws",
+        (GrantKind.Skill, true) => "skill",
+        (GrantKind.Skill, false) => "skills",
+        (GrantKind.Resistance, true) => "damage resistance",
+        (GrantKind.Resistance, false) => "damage resistances",
+        (GrantKind.Immunity, true) => "damage immunity",
+        (GrantKind.Immunity, false) => "damage immunities",
+        (_, true) => "skill for expertise",
+        _ => "skills for expertise",
     };
 }

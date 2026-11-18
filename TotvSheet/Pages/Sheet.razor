@@ -86,7 +86,7 @@ else
                 var talentChoice = p.Source.Key.StartsWith("Talent|");
                 var go = talentChoice ? "main" : "features";
                 @(i > 0 ? "; " : " ")
-                <button type="button" class="link" @onclick="() => tab = go">@p.Source.Label: @C.Missing(p) @Grants.KindLabel(p.Kind)@(C.Missing(p) == 1 || p.Kind == GrantKind.Expertise ? "" : "s")</button>
+                <button type="button" class="link" @onclick="() => tab = go">@p.Source.Label: @C.Missing(p) @Grants.KindLabel(p.Kind, C.Missing(p))</button>
                 <span class="muted"> (@(talentChoice ? "Talents box, Main tab" : "Features tab"))</span>
             }
         </p>

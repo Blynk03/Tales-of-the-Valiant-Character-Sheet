@@ -187,7 +187,8 @@ function reviewGrants(c) {
   if (raised.length) c.grantNotice = `Now shown with expertise: ${raised.join(', ')}. These give expertise when you're already proficient. If you had only marked the skill because of that feature or talent, tap its dot to clear your own mark.`;
   return true;
 }
-const kindLabel = k => ({ Save: 'saving throw', Skill: 'skill', Resistance: 'damage resistance', Immunity: 'damage immunity' }[k] || 'skill for expertise');
+const kindLabel = (k, n = 1) => n === 1 ? ({ Save: 'saving throw', Skill: 'skill', Resistance: 'damage resistance', Immunity: 'damage immunity' }[k] || 'skill for expertise')
+  : ({ Save: 'saving throws', Skill: 'skills', Resistance: 'damage resistances', Immunity: 'damage immunities' }[k] || 'skills for expertise');
 const asksChoice = e => !!e && KINDS_G.some(k => countOf(e, k) > 0);
 /** The choice picker for some sources: act is the action that toggles a pick (data-a = store key + option). */
 function grantChoicesHtml(c, sources, act) {
@@ -196,7 +197,7 @@ function grantChoicesHtml(c, sources, act) {
   const note = ch => ch.kind === 'Resistance' ? 'You already resist this (or are immune)' : ch.kind === 'Immunity' ? "You're already immune to this" : ch.kind === 'Skill' && ch.source.e.chosenSkillsExpertise ? 'You already have expertise in this' : ch.kind === 'Skill' && ch.source.e.expertiseIfProficient ? "You're already proficient, so this gives expertise" : ch.kind === 'Expertise' ? 'You already have expertise in this' : "You're already proficient in this";
   const html = sources.flatMap(s => choicesOf(c, s)).map(ch => {
     const pk = picked(c, ch), miss = missingOf(c, ch), k = storeKey(ch);
-    return `<div class="mt-1.5" role="group" aria-label="${esc(ch.source.label)}: choose ${ch.count} ${kindLabel(ch.kind)}"><div class="lbl ${miss ? 'needs-pick-text' : ''}">${esc(ch.source.label)}: choose ${ch.count} ${kindLabel(ch.kind)}${ch.count === 1 || ch.kind === 'Expertise' ? '' : 's'}${ch.kind === 'Skill' && ch.source.e.chosenSkillsExpertise ? '<span class="muted"> (with expertise)</span>' : ch.kind === 'Skill' && ch.source.e.expertiseIfProficient ? '<span class="muted"> (expertise if you\'re already proficient)</span>' : ''}${ch.source.e.choicesOptional ? '<span class="muted"> (optional: the rest can be tools)</span>' : ''}</div>
+    return `<div class="mt-1.5" role="group" aria-label="${esc(ch.source.label)}: choose ${ch.count} ${kindLabel(ch.kind, ch.count)}"><div class="lbl ${miss ? 'needs-pick-text' : ''}">${esc(ch.source.label)}: choose ${ch.count} ${kindLabel(ch.kind, ch.count)}${ch.kind === 'Skill' && ch.source.e.chosenSkillsExpertise ? '<span class="muted"> (with expertise)</span>' : ch.kind === 'Skill' && ch.source.e.expertiseIfProficient ? '<span class="muted"> (expertise if you\'re already proficient)</span>' : ''}${ch.source.e.choicesOptional ? '<span class="muted"> (optional: the rest can be tools)</span>' : ''}</div>
       ${ch.options.length ? '' : `<p class="muted text-sm">${ch.kind === 'Expertise' ? "You aren't proficient in any skills yet." : 'Nothing to choose from.'}</p>`}
       <div class="flex flex-wrap gap-1 mt-0.5">${ch.options.map(o => { const on = pk.includes(o), hv = !on && has(ch, o);
         return `<button class="btn btn-sm ${on ? 'btn-primary' : ''}" aria-pressed="${on}" data-act="${act}" data-a="${esc(k + '~~' + o)}" ${!on && pk.length >= ch.count ? 'disabled' : ''} title="${hv ? note(ch) : ''}">${esc(o)}${hv ? ' ✓' : ''}</button>`; }).join('')}</div>
@@ -952,7 +953,7 @@ function sheetView(c) {
     ${S.notice ? `<p class="text-sm mb-2" style="color:var(--good)">${esc(S.notice)}</p>` : ''}
     ${c.grantNotice ? `<div class="text-sm mb-2 flex items-start gap-1 needs-pick-text" role="status"><span class="flex-1">${esc(c.grantNotice)}</span><button class="icon-btn" data-act="dismissGrant" title="Dismiss" aria-label="Dismiss the skill note">✕</button></div>` : ''}
     ${(() => { const pend = pendingChoices(c); return pend.length ? `<p class="text-sm mb-2 needs-pick-text" role="status">Choices to make: ${pend.map(p => { const t = p.source.key.startsWith('Talent|'), n = missingOf(c, p);
-      return `<button class="link" data-act="tab" data-a="${t ? 'main' : 'features'}">${esc(p.source.label)}: ${n} ${kindLabel(p.kind)}${n === 1 || p.kind === 'Expertise' ? '' : 's'}</button><span class="muted"> (${t ? 'Talents box, Main tab' : 'Features tab'})</span>`; }).join('; ')}</p>` : ''; })()}
+      return `<button class="link" data-act="tab" data-a="${t ? 'main' : 'features'}">${esc(p.source.label)}: ${n} ${kindLabel(p.kind, n)}</button><span class="muted"> (${t ? 'Talents box, Main tab' : 'Features tab'})</span>`; }).join('; ')}</p>` : ''; })()}
     ${content}${tray(c)}`;
 }
 
@@ -1378,7 +1379,7 @@ function createView() {
       <div class="grid sm:grid-cols-2 gap-2">${lib('talents').map(t => choice(w.talent === t.id, 'wTalent', t.id, `<div class="flex items-center gap-2"><b>${esc(t.name)}</b><span class="chip ml-auto">${esc(t.category)}</span></div><div class="text-sm muted">${esc(t.description)}</div>${t.prerequisite ? `<div class="text-xs mt-0.5">Prerequisite: ${esc(t.prerequisite)}</div>` : ''}`)).join('')}</div>`;
   } else {
     const p = buildCharacter(w); w.grantChoices = w.grantChoices || {}; p.grantChoices = w.grantChoices; // picks below are kept in the wizard
-    const probs = [!w.lineage && 'No lineage chosen.', !w.heritage && 'No heritage chosen.', !w.background && 'No background chosen.', !w.cls && 'No class chosen.', w.bgSkills.length < bgSkillsNeeded(w) && 'Background skills not chosen.', needsBgTalent(w) && 'Background talent not chosen.', w.herSkills.length < herSkillsNeeded(w) && 'Heritage skills not chosen.', w.method === 'roll' && !rolledOk(w) && 'Rolled score bonus not chosen.'].concat(w.lineage && w.cls ? pendingChoices(p).map(x => `${x.source.label}: choose ${kindLabel(x.kind)}.`) : []).filter(Boolean);
+    const probs = [!w.lineage && 'No lineage chosen.', !w.heritage && 'No heritage chosen.', !w.background && 'No background chosen.', !w.cls && 'No class chosen.', w.bgSkills.length < bgSkillsNeeded(w) && 'Background skills not chosen.', needsBgTalent(w) && 'Background talent not chosen.', w.herSkills.length < herSkillsNeeded(w) && 'Heritage skills not chosen.', w.method === 'roll' && !rolledOk(w) && 'Rolled score bonus not chosen.'].concat(w.lineage && w.cls ? pendingChoices(p).map(x => `${x.source.label}: choose ${missingOf(p, x)} ${kindLabel(x.kind, missingOf(p, x))}.`) : []).filter(Boolean);
     inner = `<h2 class="box-title text-left">Review</h2><div class="grid sm:grid-cols-2 gap-4"><div><div class="display font-extrabold text-2xl" style="color:var(--ink)">${esc(p.name)}</div><div>${esc(p.className)} 1 · ${esc(p.lineageName)} · ${esc(p.heritageName)} · ${esc(p.backgroundName)}</div>
       <div class="grid grid-cols-6 gap-1 mt-3 text-center">${ABIL.map((a, i) => `<div class="field-box" style="padding:.25rem"><div class="lbl">${a}</div><div class="num">${p.scores[i]}</div><div class="text-xs muted">${sg(mod(p.scores[i]))}</div></div>`).join('')}</div>
       <div class="flex gap-4 mt-3"><span>HP <b class="num">${p.maxHp}</b></span><span>AC <b class="num">${ac(p, !!wornShield(p))}</b></span><span>Speed <b class="num">${esc(p.speed)}</b></span></div></div>

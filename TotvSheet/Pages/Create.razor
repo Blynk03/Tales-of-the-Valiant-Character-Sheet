@@ -491,7 +491,7 @@
         {
             var c = CharacterBuilder.Create(ch, Content);
             c.GrantChoices = ch.GrantChoices;
-            foreach (var p in c.PendingChoices()) yield return $"{p.Source.Label}: choose {Grants.KindLabel(p.Kind)}.";
+            foreach (var p in c.PendingChoices()) yield return $"{p.Source.Label}: choose {c.Missing(p)} {Grants.KindLabel(p.Kind, c.Missing(p))}.";
         }
     }
 
