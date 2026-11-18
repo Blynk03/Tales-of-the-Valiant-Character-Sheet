@@ -3244,6 +3244,14 @@ function activeEffects(c) {
 // ---------- saving throws and skills granted by content (TVCS-126/127), mirror of Models/Grants.cs ----------
 // Worked out from the character's features each time; c.saveProficiencies and c.skills keep only the player's own marks.
 const PROF_RANK = { None: 0, Proficient: 1, Expertise: 2 };
+// Results are kept per character until anything they depend on changes (the sheet asks for them many times per render).
+const grantCache = new WeakMap();
+function gsnap(c) {
+  const key = JSON.stringify([c.level, c.skills, c.saveProficiencies, c.grantChoices, c.ownResistances, c.ownImmunities, c.ownVulnerabilities,
+    (c.features || []).map(f => [f.name, f.source, f.chosen, f.pickKind, f.effects, ((f.options || []).find(o => o.name === f.chosen) || {}).effects || null, f.pickKind ? (f.picks || []).map(p => [p.name, p.effects]) : 0]),
+    (c.talents || []).map(t => [t.name, t.effects])]);
+  let s = grantCache.get(c); if (!s || s.key !== key) { s = { key }; grantCache.set(c, s); } return s;
+}
 const KINDS_G = ['Save', 'Skill', 'Expertise', 'Resistance', 'Immunity'];
 function grantSourcesOf(f) {
   const key = `${f.source}|${f.name}`, out = [];
@@ -3279,11 +3287,12 @@ function choiceOptions(c, e, kind) {
 }
 const storeKey = ch => `${ch.source.key}#${ch.kind}`;
 const choicesOf = (c, s, only) => KINDS_G.filter(k => (!only || only === k) && countOf(s.e, k) > 0).map(kind => ({ source: s, kind, count: countOf(s.e, kind), options: choiceOptions(c, s.e, kind) }));
-const grantChoiceList = c => grantSources(c).flatMap(s => choicesOf(c, s));
+const grantChoiceList = c => { const s = gsnap(c); return s.choices || (s.choices = grantSources(c).flatMap(x => choicesOf(c, x))); };
 const picked = (c, ch) => [...new Set(((c.grantChoices || {})[storeKey(ch)] || []).filter(x => ch.options.includes(x)))].slice(0, ch.count);
 const missingOf = (c, ch) => ch.source.e.choicesOptional ? 0 : Math.max(0, Math.min(ch.count, ch.options.length) - picked(c, ch).length);
 const pendingChoices = c => grantChoiceList(c).filter(ch => missingOf(c, ch) > 0);
-function saveGrants(c) {
+function saveGrants(c) { const s = gsnap(c); return s.saves || (s.saves = saveGrantsCore(c)); }
+function saveGrantsCore(c) {
   const out = [];
   grantSources(c).forEach(s => { [...new Set(s.e.saveProficiencies || [])].forEach(a => out.push({ item: a, source: s.label, level: 'Proficient', chosen: false }));
     choicesOf(c, s, 'Save').forEach(ch => picked(c, ch).forEach(a => out.push({ item: a, source: s.label, level: 'Proficient', chosen: true }))); });
@@ -3303,10 +3312,11 @@ function skillGrantsCore(c, withExp) {
   });
   return out;
 }
-const skillGrants = c => skillGrantsCore(c, true);
-function skillLevels(c, withExp = true) {
+const skillGrants = c => { const s = gsnap(c); return s.skills || (s.skills = skillGrantsCore(c, true)); };
+function skillLevels(c, withExp = true) { const s = gsnap(c), k = withExp ? 'levels' : 'levelsNoExp'; return s[k] || (s[k] = skillLevelsCore(c, withExp)); }
+function skillLevelsCore(c, withExp) {
   const lv = Object.assign({}, c.skills);
-  skillGrantsCore(c, withExp).forEach(g => { if (PROF_RANK[g.level] > PROF_RANK[lv[g.item] || 'None']) lv[g.item] = g.level; });
+  (withExp ? skillGrants(c) : skillGrantsCore(c, false)).forEach(g => { if (PROF_RANK[g.level] > PROF_RANK[lv[g.item] || 'None']) lv[g.item] = g.level; });
   return lv;
 }
 const ownSkP = (c, s) => c.skills[s] || 'None';
@@ -3314,8 +3324,10 @@ const saveSources = (c, a) => [...new Set(saveGrants(c).filter(g => g.item === a
 const skillSources = (c, s) => [...new Set(skillGrants(c).filter(g => g.item === s).map(g => g.level === 'Expertise' ? `${g.source} (expertise)` : g.source))].join(', ');
 /** Picks that add nothing: taking the pick away wouldn't change the save or skill. */
 function duplicateNotes(c) {
+  const snap = gsnap(c); if (snap.dups) return snap.dups;
   const notes = [];
-  grantChoiceList(c).forEach(ch => picked(c, ch).forEach(pick => {
+  grantChoiceList(c).slice().forEach(ch => picked(c, ch).forEach(pick => {
+    grantCache.set(c, snap); // "before" comes from the real picks' snapshot
     const val = () => ch.kind === 'Save' ? isSaveProf(c, pick) : ch.kind === 'Resistance' || ch.kind === 'Immunity' ? defenseOf(c, pick) : skP(c, pick);
     const before = val(), k = storeKey(ch), saved = c.grantChoices[k];
     c.grantChoices[k] = saved.filter(x => x !== pick); const without = val(); c.grantChoices[k] = saved;
@@ -3323,7 +3335,8 @@ function duplicateNotes(c) {
       : ch.kind === 'Skill' ? `${pick} from ${ch.source.label} adds nothing: you're already proficient.` : ch.kind === 'Resistance' ? `${pick} resistance from ${ch.source.label} adds nothing: you already have it.`
       : ch.kind === 'Immunity' ? `${pick} immunity from ${ch.source.label} adds nothing: you're already immune.` : `${pick} expertise from ${ch.source.label} adds nothing: you already have expertise.`);
   }));
-  return [...new Set(notes)];
+  grantCache.set(c, snap); // the checks above changed picks for a moment
+  return snap.dups = [...new Set(notes)];
 }
 /** One-time check for an older character: a hand-marked skill that an "expertise if already proficient" grant now raises. */
 function reviewGrants(c) {
@@ -3383,7 +3396,8 @@ function groupDef(items) {
   return [...m.values()];
 }
 /** The Defenses line: immunity hides resistance/vulnerability; removed vulnerabilities become a note; resistance + vulnerability cancel. */
-function defenseSummary(c) {
+function defenseSummary(c) { const s = gsnap(c); return s.defenses || (s.defenses = defenseSummaryCore(c)); }
+function defenseSummaryCore(c) {
   const all = defenseItems(c), imm = groupDef(all.filter(x => x[0] === 'imm')), immune = t => imm.some(i => i.type.toLowerCase() === t.toLowerCase());
   const rm = all.filter(x => x[0] === 'rm'), notes = [], vul = [];
   groupDef(all.filter(x => x[0] === 'vul')).forEach(v => {

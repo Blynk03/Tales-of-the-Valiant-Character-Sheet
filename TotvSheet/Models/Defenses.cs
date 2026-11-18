@@ -78,7 +78,9 @@ public static class Defenses
     /// or feature takes away isn't shown, with a note saying what removed it. A resistance and a vulnerability to the same
     /// type are both shown, with a note that they cancel out.
     /// </summary>
-    public static DefenseSummary DefenseSummary(this Character c)
+    public static DefenseSummary DefenseSummary(this Character c) => Grants.CachedDefenses(c, () => Build(c));
+
+    private static DefenseSummary Build(Character c)
     {
         var all = All(c).ToList();
         var imm = Group(all.Where(x => x.Kind == K.Imm));

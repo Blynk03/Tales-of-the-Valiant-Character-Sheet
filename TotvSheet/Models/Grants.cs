@@ -25,6 +25,52 @@ public record GrantChoice(GrantSource Source, GrantKind Kind, int Count, List<st
 /// </summary>
 public static class Grants
 {
+    // ---------- caching ----------
+    // The sheet asks for saves, skills and defenses many times per render (18 skill rows, 6 saves, the choice pickers),
+    // and each answer depends on every feature. So results are kept per character until anything they depend on
+    // changes, which a cheap fingerprint detects: the level, the player's own marks, the picks, and which rules objects
+    // the features, options, picks and talents carry (refreshing rules from content replaces those objects).
+    private sealed class Snapshot
+    {
+        public required string Key;
+        public List<Grant>? SaveGrants, SkillGrants;
+        public Dictionary<string, ProfLevel>? Levels, LevelsWithoutExpertisePicks;
+        public List<GrantChoice>? Choices;
+        public DefenseSummary? Defenses;
+        public List<string>? DuplicateNotes;
+    }
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Character, Snapshot> Cache = new();
+
+    private static string Fingerprint(Character c)
+    {
+        var sb = new System.Text.StringBuilder();
+        static int Id(object? o) => o is null ? 0 : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(o);
+        sb.Append(c.Level).Append('|');
+        foreach (var b in c.SaveProficiencies) sb.Append(b ? '1' : '0');
+        foreach (var kv in c.Skills) sb.Append('|').Append(kv.Key).Append('=').Append((int)kv.Value);
+        foreach (var kv in c.GrantChoices) sb.Append("|g:").Append(kv.Key).Append('=').AppendJoin(',', kv.Value);
+        sb.Append("|r:").AppendJoin(',', c.OwnResistances).Append("|i:").AppendJoin(',', c.OwnImmunities).Append("|v:").AppendJoin(',', c.OwnVulnerabilities);
+        foreach (var f in c.Features)
+        {
+            sb.Append("|f:").Append(f.Source).Append('/').Append(f.Name).Append('/').Append(f.Chosen).Append('/').Append(f.PickKind)
+              .Append('/').Append(Id(f.Effects)).Append('/').Append(Id(f.Options)).Append('/').Append(f.Options.Count);
+            foreach (var p in f.Picks) sb.Append('+').Append(p.Name).Append(':').Append(Id(p.Effects));
+        }
+        foreach (var t in c.Talents) sb.Append("|t:").Append(t.Name).Append(':').Append(Id(t.Effects));
+        return sb.ToString();
+    }
+
+    private static Snapshot Snap(Character c)
+    {
+        var key = Fingerprint(c);
+        if (Cache.TryGetValue(c, out var s) && s.Key == key) return s;
+        s = new Snapshot { Key = key };
+        Cache.AddOrUpdate(c, s);
+        return s;
+    }
+
+    internal static DefenseSummary CachedDefenses(Character c, Func<DefenseSummary> build) => Snap(c).Defenses ??= build();
+
     public static string StoreKey(string sourceKey, GrantKind kind) => $"{sourceKey}#{kind}";
 
     /// <summary>Every source of rules on the character, with a stable key (mirrors <see cref="CharacterCalc.ActiveEffects"/>).</summary>
@@ -88,7 +134,7 @@ public static class Grants
     };
 
     /// <summary>The choices the character's sources ask for, in order.</summary>
-    public static IEnumerable<GrantChoice> Choices(this Character c) => c.GrantSources().SelectMany(s => c.ChoicesOf(s));
+    public static IReadOnlyList<GrantChoice> Choices(this Character c) => Snap(c).Choices ??= c.GrantSources().SelectMany(s => c.ChoicesOf(s)).ToList();
 
     /// <summary>A source's choices; with <paramref name="only"/>, just that kind (options are worked out only for the kinds
     /// returned, since expertise options depend on the other kinds' picks).</summary>
@@ -113,7 +159,9 @@ public static class Grants
     public static List<GrantChoice> PendingChoices(this Character c) => c.Choices().Where(ch => c.Missing(ch) > 0).ToList();
 
     /// <summary>Saving throw proficiencies from content: fixed ones, then chosen ones.</summary>
-    public static List<Grant> SaveGrants(this Character c)
+    public static List<Grant> SaveGrants(this Character c) => Snap(c).SaveGrants ??= c.SaveGrantsCore();
+
+    private static List<Grant> SaveGrantsCore(this Character c)
     {
         var list = new List<Grant>();
         foreach (var s in c.GrantSources())
@@ -131,7 +179,7 @@ public static class Grants
 
     /// <summary>Skill proficiencies and expertise from content. Order matters for "expertise if already proficient":
     /// plain grants come first, then upgrading ones (each sees what came before it), then expertise.</summary>
-    public static List<Grant> SkillGrants(this Character c) => c.SkillGrantsCore(withExpertisePicks: true);
+    public static List<Grant> SkillGrants(this Character c) => Snap(c).SkillGrants ??= c.SkillGrantsCore(withExpertisePicks: true);
 
     private static List<Grant> SkillGrantsCore(this Character c, bool withExpertisePicks)
     {
@@ -171,10 +219,17 @@ public static class Grants
     }
 
     /// <summary>Each skill's level from the player's own marks and from content (the higher wins).</summary>
-    public static Dictionary<string, ProfLevel> SkillLevels(this Character c, bool withExpertisePicks = true)
+    public static IReadOnlyDictionary<string, ProfLevel> SkillLevels(this Character c, bool withExpertisePicks = true)
+    {
+        var snap = Snap(c);
+        if (withExpertisePicks) return snap.Levels ??= LevelsCore(c, true);
+        return snap.LevelsWithoutExpertisePicks ??= LevelsCore(c, false);
+    }
+
+    private static Dictionary<string, ProfLevel> LevelsCore(Character c, bool withExpertisePicks)
     {
         var levels = new Dictionary<string, ProfLevel>(c.Skills);
-        foreach (var g in c.SkillGrantsCore(withExpertisePicks))
+        foreach (var g in (withExpertisePicks ? c.SkillGrants() : c.SkillGrantsCore(false)))
             if (g.Level > levels.GetValueOrDefault(g.Item)) levels[g.Item] = g.Level;
         return levels;
     }
@@ -197,10 +252,13 @@ public static class Grants
     /// </summary>
     public static List<string> DuplicateNotes(this Character c)
     {
+        var snap = Snap(c);
+        if (snap.DuplicateNotes is { } done) return done;
         var notes = new List<string>();
-        foreach (var ch in c.Choices())
+        foreach (var ch in c.Choices().ToList())
             foreach (var pick in c.Picked(ch))
             {
+                Cache.AddOrUpdate(c, snap); // "before" comes from the real picks' snapshot
                 object Value() => ch.Kind switch
                 {
                     GrantKind.Save => c.IsSaveProficient(Enum.Parse<Ability>(pick)),
@@ -222,7 +280,8 @@ public static class Grants
                     _ => $"{pick} expertise from {ch.Source.Label} adds nothing: you already have expertise.",
                 });
             }
-        return notes.Distinct().ToList();
+        Cache.AddOrUpdate(c, snap); // the checks above changed picks for a moment; keep the snapshot of the real ones
+        return snap.DuplicateNotes = notes.Distinct().ToList();
     }
 
     /// <summary>
