@@ -31,13 +31,13 @@
     {
         <p class="text-xs muted mt-1">@n</p>
     }
-    <div class="flex gap-1.5 mt-2">
+    <div class="flex flex-wrap gap-1.5 mt-2">
         <select class="select text-sm" style="width:auto" aria-label="Kind of defense to add" @bind="addKind">
             <option value="res">Resistance</option>
             <option value="imm">Immunity</option>
             <option value="vul">Vulnerability</option>
         </select>
-        <input class="field text-sm" list="damage-types" placeholder="Damage type, e.g. fire" aria-label="Damage type to add" @bind="addType" @bind:event="oninput" />
+        <input class="field text-sm" style="flex:1 1 7rem;min-width:7rem" list="damage-types" placeholder="Damage type, e.g. fire" aria-label="Damage type to add" @bind="addType" @bind:event="oninput" />
         <datalist id="damage-types">
             @foreach (var t in Defenses.DamageTypes)
             {
